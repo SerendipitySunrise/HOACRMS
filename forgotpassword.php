@@ -8,7 +8,6 @@ require 'PHPMailer/src/Exception.php';
 require 'PHPMailer/src/PHPMailer.php';
 require 'PHPMailer/src/SMTP.php';
 
-// Database Connection
 $host = "localhost";
 $username = "root";
 $password = "";
@@ -72,7 +71,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $mail->SMTPAuth = true;
 
                 $mail->Username = 'lagabanroz22@gmail.com';
-                $mail->Password = 'sdnf prko rmnx ktwv';
+                $mail->Password = 'zpcf ojvz zkqh dwuq';
 
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 $mail->Port = 587;
