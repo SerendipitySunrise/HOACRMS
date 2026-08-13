@@ -1,109 +1,78 @@
 <?php
-$host = "localhost";
-$username = "root";
-$password = "";
-$database = "hoacrms";
 
-$conn = mysqli_connect($host, $username, $password, $database);
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/validation.php';
 
-if (!$conn) {
-    die("Database connection failed.");
-}
+$message = '';
 
-$message = "";
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $fname = trim($_POST['fname'] ?? '');
+    $lname = trim($_POST['lname'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone-number'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $confirmPassword = $_POST['confirm-password'] ?? '';
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
-    $fname = trim($_POST['fname']);
-    $lname = trim($_POST['lname']);
-    $email = trim($_POST['email']);
-    $phone = trim($_POST['phone-number']);
-    $password = $_POST['password'];
-    $confirmPassword = $_POST['confirm-password'];
-
-    if (
-        empty($fname) ||
-        empty($lname) ||
-        empty($email) ||
-        empty($password) ||
-        empty($confirmPassword)
-    ) {
-
-        $message = "Please complete all required fields.";
-
-    }
-    elseif ($password != $confirmPassword) {
-
-        $message = "Passwords do not match.";
-
-    }
-    elseif (
-        strlen($password) < 8 ||
-        !preg_match('/[A-Z]/', $password) ||
-        !preg_match('/[a-z]/', $password) ||
-        !preg_match('/[0-9]/', $password) ||
-        !preg_match('/[\W]/', $password)
-    ) {
-
-        $message = "Password must be at least 8 characters and contain uppercase, lowercase, number, and special character.";
-
-    }
-    elseif (!preg_match('/^09\d{9}$/', $phone)) {
-
-        $message = "Please enter a valid Philippine phone number.";
-
-    }
-    else {
-        $stmt = mysqli_prepare($conn,
-        "SELECT UserID FROM users WHERE Email = ?");
-
-        mysqli_stmt_bind_param($stmt, "s", $email);
+    if ($fname === '' || $lname === '' || $email === '' || $password === '' || $confirmPassword === '') {
+        $message = 'Please complete all required fields.';
+    } elseif ($password !== $confirmPassword) {
+        $message = 'Passwords do not match.';
+    } elseif (($pwdError = validatePasswordStrength($password)) !== null) {
+        $message = $pwdError;
+    } elseif (($phoneError = validatePhilippinePhone($phone)) !== null) {
+        $message = $phoneError;
+    } else {
+        $stmt = mysqli_prepare($conn, 'SELECT UserID FROM users WHERE Email = ?');
+        mysqli_stmt_bind_param($stmt, 's', $email);
         mysqli_stmt_execute($stmt);
-
         $result = mysqli_stmt_get_result($stmt);
 
         if (mysqli_num_rows($result) > 0) {
-
-            $message = "Email is already registered.";
-
+            $message = 'Email is already registered.';
         } else {
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            $roleID = 3;
+            $sex = 'Not Specified';
 
-        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            mysqli_begin_transaction($conn);
 
-        $roleID = 3;         
-        $sex = "Not Specified"; 
+            $stmt = mysqli_prepare(
+                $conn,
+                'INSERT INTO users
+                (RoleID, FirstName, LastName, Email, Password, Sex, ContactNumber)
+                VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+            mysqli_stmt_bind_param(
+                $stmt,
+                'issssss',
+                $roleID,
+                $fname,
+                $lname,
+                $email,
+                $hashedPassword,
+                $sex,
+                $phone
+            );
 
-        $stmt = mysqli_prepare($conn,
-        "INSERT INTO users
-        (RoleID, FirstName, LastName, Email, Password, Sex, ContactNumber)
-        VALUES (?, ?, ?, ?, ?, ?, ?)");
+            if (!mysqli_stmt_execute($stmt)) {
+                mysqli_rollback($conn);
+                $message = 'Registration failed.';
+            } else {
+                $userId = (int) mysqli_insert_id($conn);
+                $patientStmt = mysqli_prepare($conn, 'INSERT INTO patients (UserID) VALUES (?)');
+                mysqli_stmt_bind_param($patientStmt, 'i', $userId);
 
-        mysqli_stmt_bind_param(
-            $stmt,
-            "issssss",
-            $roleID,
-            $fname,
-            $lname,
-            $email,
-            $hashedPassword,
-            $sex,
-            $phone
-        );
+                if (mysqli_stmt_execute($patientStmt)) {
+                    mysqli_commit($conn);
+                    header('Location: login.php?portal=patient');
+                    exit();
+                }
 
-        if (mysqli_stmt_execute($stmt)) {
-
-            header("Location: login.php");
-            exit();
-
-        } else {
-
-            $message = "Registration failed.";
-
+                mysqli_rollback($conn);
+                $message = 'Registration failed.';
+            }
         }
-
-}
     }
-
 }
 ?>
 
@@ -112,22 +81,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign Up - MediCare</title>
+    <title>Patient Sign Up - MediCare</title>
     <link rel="stylesheet" href="assets/css/signup_style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
     <div class="main-container">
+        <p style="margin-bottom: 16px; width:100%; text-align:center;"><a href="portal-select.php?action=register" style="color:#149385;text-decoration:none;font-size:14px;">&larr; Change registration type</a></p>
         <div class="brand-header">
             <div class="logo">
                 <img src="assets/images/logo.png" alt="MediCare Logo" class="logo-img">
             </div>
-            <h1>Create an Account</h1>
-            <p class="subtitle">Set up your portal in minutes</p>
+            <h1>Patient Registration</h1>
+            <p class="subtitle">Create your patient portal account</p>
         </div>
 
-        <?php if (!empty($message)): ?>
+        <?php if ($message !== ''): ?>
             <div style="background:#fee2e2;color:#991b1b;padding:12px;border-radius:8px;margin-bottom:20px;text-align:center;">
                 <?php echo htmlspecialchars($message); ?>
             </div>
@@ -160,7 +130,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <label for="phone-number" class="form-label">Phone Number</label>
                 <div class="input-wrapper">
                     <span class="input-icon-left"><i class="fas fa-phone"></i></span>
-                    <input type="number" id="phone-number" name="phone-number" placeholder="0912-3456-789" required>
+                    <input type="text" id="phone-number" name="phone-number" placeholder="09123456789" required maxlength="11">
                 </div>
             </div>
 
@@ -193,10 +163,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </label>
             </div>
 
-            <button type="submit" name="signup" id="signup-btn">Create Account</button>
+            <button type="submit" name="signup" id="signup-btn">Create Patient Account</button>
 
             <div class="form-footer">
-                Already have an account? <a href="login.php" class="login-link">Sign in</a>
+                Already have an account? <a href="login.php?portal=patient" class="login-link">Sign in</a>
             </div>
         </form>
     </div>

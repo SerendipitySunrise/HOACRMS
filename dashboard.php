@@ -1,11 +1,24 @@
 <?php
-session_start();
 
-// User must be logged in
-if (!isset($_SESSION['UserID'])) {
-    header("Location: login.php");
-    exit();
+require_once __DIR__ . '/includes/session.php';
+
+$role = $_SESSION['RoleName'] ?? '';
+
+switch ($role) {
+    case 'Admin':
+        header('Location: admin_dashboard.php');
+        break;
+    case 'Doctor':
+        header('Location: staff_dashboard.php');
+        break;
+    case 'Patient':
+        header('Location: patient_dashboard.php');
+        break;
+    default:
+        header('Location: login.php');
+        break;
 }
+<<<<<<< HEAD
 
 // 30 minutes = 1800 seconds
 $timeout =1800;
@@ -41,3 +54,6 @@ $_SESSION['LAST_ACTIVITY'] = time();
     <a href="includes/logout.php">Logout</a>
 </body>
 </html>
+=======
+exit;
+>>>>>>> 09fb0676c4a704c23e037e9d6e4464d2bf05591c

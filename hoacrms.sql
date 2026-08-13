@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Jul 24, 2026 at 08:06 AM
+-- Generation Time: Jul 24, 2026 at 02:27 PM
 -- Server version: 9.1.0
 -- PHP Version: 8.3.14
 
@@ -35,7 +35,14 @@ CREATE TABLE IF NOT EXISTS `admin` (
   `UpdatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`AdminID`),
   KEY `FK_Admin_Users` (`UserID`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `admin`
+--
+
+INSERT INTO `admin` (`AdminID`, `UserID`, `CreatedAt`, `UpdatedAt`) VALUES
+(1, 6, '2026-07-24 22:06:03', '2026-07-24 22:06:03');
 
 -- --------------------------------------------------------
 
@@ -49,7 +56,18 @@ CREATE TABLE IF NOT EXISTS `departments` (
   `DepartmentName` varchar(100) NOT NULL,
   PRIMARY KEY (`DepartmentID`),
   UNIQUE KEY `DepartmentName` (`DepartmentName`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `departments`
+--
+
+INSERT INTO `departments` (`DepartmentID`, `DepartmentName`) VALUES
+(1, 'Pediatrics'),
+(2, 'Obstetrics and Gynecology (OB-GYN)'),
+(3, 'Surgery'),
+(4, 'Nephrology'),
+(5, 'Internal Medicine / Pulmonology');
 
 -- --------------------------------------------------------
 
@@ -123,7 +141,15 @@ CREATE TABLE IF NOT EXISTS `staff` (
   PRIMARY KEY (`StaffID`),
   KEY `FK_Staff_Users` (`UserID`),
   KEY `FK_Staff_Departments` (`DepartmentID`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `staff`
+--
+
+INSERT INTO `staff` (`StaffID`, `UserID`, `DepartmentID`, `StaffRole`, `Specialization`, `AvailabilityStatus`, `ScheduleStart`, `ScheduleEnd`, `CreatedAt`, `UpdatedAt`) VALUES
+(1, 5, 1, 'Doctor', NULL, 'Available', NULL, NULL, '2026-07-24 22:02:07', '2026-07-24 22:02:07'),
+(2, 7, 5, 'Doctor', NULL, 'Available', NULL, NULL, '2026-07-24 22:24:26', '2026-07-24 22:24:26');
 
 -- --------------------------------------------------------
 
@@ -153,16 +179,19 @@ CREATE TABLE IF NOT EXISTS `users` (
   PRIMARY KEY (`UserID`),
   UNIQUE KEY `Email` (`Email`),
   KEY `FK_Users_Roles` (`RoleID`)
-) ENGINE=MyISAM AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `users`
 --
 
 INSERT INTO `users` (`UserID`, `RoleID`, `FirstName`, `MiddleName`, `LastName`, `Email`, `Password`, `Sex`, `DateOfBirth`, `ContactNumber`, `Address`, `Status`, `CreatedAt`, `FailedAttempts`, `LockUntil`, `ResetToken`, `TokenExpiry`) VALUES
-(2, 3, 'ROZ', NULL, 'LAGABAN', 'lagabanroz22@gmail.com', '$2y$10$FdNhw3LJEXKd0zRqdWD69eLZo9/IxMsKOqalarjEeU7Zz3NWkSlMy', 'Not Specified', NULL, '09913095266', NULL, 'Active', '2026-07-23 23:31:34', 2, NULL, '1ac4cd5b1cd498736c585e953f390e7e6328a55fc714e5f4a4c0ee3daf7e9a92', '2026-07-24 02:41:15'),
+(2, 3, 'ROZ', NULL, 'LAGABAN', 'lagabanroz22@gmail.com', '$2y$10$GJkWCjrPPEGRw8PCPRWFmefWye6Lma24Oca.XK.G/Q9LefqPVxBLu', 'Not Specified', NULL, '09913095266', NULL, 'Active', '2026-07-23 23:31:34', 0, NULL, NULL, NULL),
 (3, 3, 'ROZi', NULL, 'LAGABAN', 'lagabanroz@gmail.com', '$2y$10$.G/GbgoZBzj1iQiGYVgk1u70HA3tOm3PuxtFxKFqKBD6F5SvyJWZC', 'Not Specified', NULL, '09913095265', NULL, 'Active', '2026-07-23 23:36:00', 0, NULL, NULL, NULL),
-(4, 3, 'ROZii', NULL, 'LAGABAN', 'lagabanro@gmail.com', '$2y$10$BUg/Tfu2XClNq/Hq/mBnPuoDpLoGhZUPbARngVasAsGMWaWwpFsK.', 'Not Specified', NULL, '09913095264', NULL, 'Active', '2026-07-23 23:37:26', 0, NULL, '05f74c765b146243a13d91576fab2febc4a424f4cb4a1bd3436b2589b7d14ff7', '2026-07-23 18:01:06');
+(4, 3, 'ROZii', NULL, 'LAGABAN', 'lagabanro@gmail.com', '$2y$10$BUg/Tfu2XClNq/Hq/mBnPuoDpLoGhZUPbARngVasAsGMWaWwpFsK.', 'Not Specified', NULL, '09913095264', NULL, 'Active', '2026-07-23 23:37:26', 0, NULL, '05f74c765b146243a13d91576fab2febc4a424f4cb4a1bd3436b2589b7d14ff7', '2026-07-23 18:01:06'),
+(5, 2, 'RIAN', NULL, 'LAGABAN', 'lagabanrian@gmail.com', '$2y$10$qKGSy23Edh0vO3MdiBTWYuCcp.MEA8AR9oykygpwpwMTh65MNqA9C', 'Not Specified', NULL, '09123456789', NULL, 'Active', '2026-07-24 22:02:07', 0, NULL, NULL, NULL),
+(6, 1, 'Rion', NULL, 'Lagaban', 'lagabanrion@gmail.com', '$2y$10$NeHRS6.vel.qeLAqpaEnruWGztDodu6SClcU2H395q44jeUewtGra', 'Not Specified', NULL, '09987654321', NULL, 'Active', '2026-07-24 22:06:03', 0, NULL, NULL, NULL),
+(7, 2, 'Edrian', NULL, 'Bagohara', 'edrianbagohar@gmail.com', '$2y$10$2tMALSjSnQdi7ng/SPh7L.Q4tTnUUE9fexRn/5Qwikis377/Zm9xa', 'Not Specified', NULL, '09456789321', NULL, 'Active', '2026-07-24 22:24:26', 0, NULL, NULL, NULL);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
