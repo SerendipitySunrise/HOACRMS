@@ -8,7 +8,7 @@ if (!isset($_SESSION['UserID'])) {
 }
 
 // 30 minutes = 1800 seconds
-$timeout = 1800;
+$timeout =1800;
 
 // Check inactivity
 if (isset($_SESSION['LAST_ACTIVITY'])) {
@@ -38,6 +38,6 @@ $_SESSION['LAST_ACTIVITY'] = time();
     <h1>Dashboard</h1>
     <p>Welcome to your dashboard!</p>
 
-    <a href="logout.php">Logout</a>
+    <a href="includes/logout.php">Logout</a>
 </body>
 </html>

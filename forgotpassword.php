@@ -59,8 +59,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 die("Update Failed: " . mysqli_stmt_error($update));
             }
 
-            // Reset Link
-            $resetLink = "http://localhost/login-module/resetpassword.php?token=" . $token;
+            // Reset Link (builds from current folder so renaming won't break it)
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $baseUrl = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+            $resetLink = $baseUrl . '/resetpassword.php?token=' . $token;
 
             // Send Email
             $mail = new PHPMailer(true);
@@ -72,7 +74,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $mail->SMTPAuth = true;
 
                 $mail->Username = 'lagabanroz22@gmail.com';
-                $mail->Password = 'sdnf prko rmnx ktwv';
+                $mail->Password = 'zpcf ojvz zkqh dwuq';
 
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 $mail->Port = 587;

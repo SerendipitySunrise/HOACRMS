@@ -169,7 +169,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="input-wrapper">
                     <span class="input-icon-left"><i class="fas fa-lock"></i></span>
                     <input type="password" id="password" name="password" placeholder="Min. 8 characters" required>
-                    <span class="input-icon-right"><i class="fas fa-eye-slash"></i></span>
+                    <button type="button" class="input-icon-right" onclick="togglePassword('password')">
+                        <i class="fas fa-eye-slash"></i>
+                    </button>
                 </div>
             </div>
 
@@ -178,6 +180,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="input-wrapper">
                     <span class="input-icon-left"><i class="fas fa-check-circle"></i></span>
                     <input type="password" id="confirm-password" name="confirm-password" placeholder="Re-enter your password" required>
+                    <button type="button" class="input-icon-right" onclick="togglePassword('confirm-password')">
+                        <i class="fas fa-eye-slash"></i>
+                    </button>
                 </div>
             </div>
 
@@ -195,6 +200,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         </form>
     </div>
+
+<script>
+    function togglePassword(fieldId) {
+        const input = document.getElementById(fieldId);
+        const icon = input.parentElement.querySelector('.input-icon-right i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'fas fa-eye';
+        } else {
+            input.type = 'password';
+            icon.className = 'fas fa-eye-slash';
+        }
+    }
+</script>
 
 </body>
 </html>

@@ -13,8 +13,10 @@ if (!$conn) {
 }
 
 $message = "";
+$messageType = "error";
 if (isset($_GET['reset'])) {
     $message = "Password changed successfully. Please log in.";
+    $messageType = "success";
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -146,7 +148,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </div>
 
         <?php if(!empty($message)): ?>
-            <div class="error-message" style="background-color: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; width: 100%; text-align: center; font-size: 14px;">
+            <div class="error-message" style="background-color: <?php echo $messageType === 'success' ? '#dcfce7' : '#fee2e2'; ?>; color: <?php echo $messageType === 'success' ? '#166534' : '#991b1b'; ?>; padding: 12px; border-radius: 8px; margin-bottom: 20px; width: 100%; text-align: center; font-size: 14px;">
                 <?php echo htmlspecialchars($message); ?>
             </div>
         <?php endif; ?>
@@ -165,7 +167,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="input-wrapper">
                     <span class="input-icon-left"><i class="fas fa-lock"></i></span>
                     <input type="password" id="password" name="password" placeholder="Enter your password" required>
-                    <span class="input-icon-right"><i class="fas fa-eye-slash"></i></span>
+                    <button type="button" class="input-icon-right" onclick="togglePassword('password')">
+                        <i class="fas fa-eye-slash"></i>
+                    </button>
                 </div>
             </div>
 
@@ -180,6 +184,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         </form>
     </div>
+
+<script>
+    function togglePassword(fieldId) {
+        const input = document.getElementById(fieldId);
+        const icon = input.parentElement.querySelector('.input-icon-right i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'fas fa-eye';
+        } else {
+            input.type = 'password';
+            icon.className = 'fas fa-eye-slash';
+        }
+    }
+</script>
 
 </body>
 </html>
