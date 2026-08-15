@@ -15,10 +15,6 @@ function respond(bool $success, string $message): void
     exit();
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    respond(false, 'Invalid request method.');
-}
-
 if (!isset($_SESSION['UserID'])) {
     respond(false, 'Your session has expired. Please log in again.');
 }
@@ -34,8 +30,7 @@ $appointmentDate = trim($_POST['appointment_date'] ?? '');
 $appointmentTime = trim($_POST['appointment_time'] ?? '');
 $purpose = trim($_POST['purpose'] ?? '');
 
-if ($departmentID <= 0 || $appointmentDate === '' ||
-    $appointmentTime === '' || $purpose === '') {
+if ($departmentID <= 0 || !$appointmentDate || !$appointmentTime || !$purpose) {
     respond(false, 'Please complete all appointment details.');
 }
 
@@ -46,20 +41,17 @@ if (
     !$dateObject ||
     $dateObject->format('Y-m-d') !== $appointmentDate
 ) {
-    respond(false, 'Please select a valid appointment date.');
+    respond(false, 'Invalid appointment date.');
 }
-
-
 
 if (
     !$timeObject ||
     $timeObject->format('H:i:s') !== $appointmentTime
 ) {
-    respond(false, 'Please select a valid appointment time.');
+    respond(false, 'Invalid appointment time.');
 }
 
-$manilaTimezone = new DateTimeZone('Asia/Manila');
-$today = new DateTime('today', $manilaTimezone);
+$today = new DateTime('today');
 
 if ($dateObject < $today) {
     respond(false, 'Appointments cannot be booked for a past date.');
@@ -77,58 +69,49 @@ mysqli_stmt_bind_param($patientStmt, 'i', $userID);
 mysqli_stmt_execute($patientStmt);
 
 $patientResult = mysqli_stmt_get_result($patientStmt);
+$patient = mysqli_fetch_assoc($patientResult);
 
-if (mysqli_num_rows($patientResult) === 0) {
+if (!$patient) {
     respond(false, 'Patient record not found.');
 }
 
-$patient = mysqli_fetch_assoc($patientResult);
 $patientID = (int) $patient['PatientID'];
+$dayOfWeek = (int) $dateObject->format('N');
 
-$departmentStmt = mysqli_prepare(
+$scheduleStmt = mysqli_prepare(
     $conn,
-    'SELECT DepartmentID
-     FROM departments
+    'SELECT StartTime, EndTime
+     FROM department_schedules
      WHERE DepartmentID = ?
-     LIMIT 1'
+       AND DayOfWeek = ?'
 );
 
-mysqli_stmt_bind_param($departmentStmt, 'i', $departmentID);
-mysqli_stmt_execute($departmentStmt);
+mysqli_stmt_bind_param($scheduleStmt, 'ii', $departmentID, $dayOfWeek);
+mysqli_stmt_execute($scheduleStmt);
 
-$departmentResult = mysqli_stmt_get_result($departmentStmt);
+$scheduleResult = mysqli_stmt_get_result($scheduleStmt);
 
-if (mysqli_num_rows($departmentResult) === 0) {
-    respond(false, 'The selected department does not exist.');
+$allowedTimes = [];
+
+while ($schedule = mysqli_fetch_assoc($scheduleResult)) {
+    $start = new DateTime($schedule['StartTime']);
+    $end = new DateTime($schedule['EndTime']);
+
+    while ($start < $end) {
+        $allowedTimes[] = $start->format('H:i:s');
+        $start->modify('+30 minutes');
+    }
 }
 
-$staffStmt = mysqli_prepare(
-    $conn,
-    'SELECT StaffID
-     FROM staff
-     WHERE DepartmentID = ?
-       AND AvailabilityStatus = "Available"
-       AND StaffRole = "Doctor"
-     LIMIT 1'
-);
-
-mysqli_stmt_bind_param($staffStmt, 'i', $departmentID);
-mysqli_stmt_execute($staffStmt);
-
-$staffResult = mysqli_stmt_get_result($staffStmt);
-
-if (mysqli_num_rows($staffResult) === 0) {
-    respond(false, 'No available doctor is assigned to this department.');
+if (!in_array($appointmentTime, $allowedTimes, true)) {
+    respond(false, 'This appointment time is not available for the selected department.');
 }
 
-$staff = mysqli_fetch_assoc($staffResult);
-$staffID = (int) $staff['StaffID'];
-
-$checkStmt = mysqli_prepare(
+$patientConflictStmt = mysqli_prepare(
     $conn,
     'SELECT AppointmentID
      FROM appointments
-     WHERE StaffID = ?
+     WHERE PatientID = ?
        AND AppointmentDate = ?
        AND AppointmentTime = ?
        AND Status NOT IN ("Cancelled", "Completed")
@@ -136,20 +119,58 @@ $checkStmt = mysqli_prepare(
 );
 
 mysqli_stmt_bind_param(
-    $checkStmt,
+    $patientConflictStmt,
     'iss',
-    $staffID,
+    $patientID,
     $appointmentDate,
     $appointmentTime
 );
 
-mysqli_stmt_execute($checkStmt);
+mysqli_stmt_execute($patientConflictStmt);
 
-$checkResult = mysqli_stmt_get_result($checkStmt);
+$patientConflictResult = mysqli_stmt_get_result($patientConflictStmt);
 
-if (mysqli_num_rows($checkResult) > 0) {
-    respond(false, 'This time slot is already booked. Please choose another time.');
+if (mysqli_num_rows($patientConflictResult) > 0) {
+    respond(false, 'You already have an appointment at this date and time.');
 }
+
+$staffStmt = mysqli_prepare(
+    $conn,
+    'SELECT s.StaffID
+     FROM staff s
+     WHERE s.DepartmentID = ?
+       AND s.AvailabilityStatus = "Available"
+       AND s.StaffRole = "Doctor"
+       AND NOT EXISTS (
+           SELECT 1
+           FROM appointments a
+           WHERE a.StaffID = s.StaffID
+             AND a.AppointmentDate = ?
+             AND a.AppointmentTime = ?
+             AND a.Status NOT IN ("Cancelled", "Completed")
+       )
+     ORDER BY s.StaffID ASC
+     LIMIT 1'
+);
+
+mysqli_stmt_bind_param(
+    $staffStmt,
+    'iss',
+    $departmentID,
+    $appointmentDate,
+    $appointmentTime
+);
+
+mysqli_stmt_execute($staffStmt);
+
+$staffResult = mysqli_stmt_get_result($staffStmt);
+$staff = mysqli_fetch_assoc($staffResult);
+
+if (!$staff) {
+    respond(false, 'This time slot is fully booked. Please select another time.');
+}
+
+$staffID = (int) $staff['StaffID'];
 
 $insertStmt = mysqli_prepare(
     $conn,
