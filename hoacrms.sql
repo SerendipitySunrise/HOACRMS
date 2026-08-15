@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Aug 15, 2026 at 04:16 AM
+-- Generation Time: Aug 15, 2026 at 07:51 AM
 -- Server version: 9.1.0
 -- PHP Version: 8.3.14
 
@@ -160,6 +160,49 @@ INSERT INTO `departments` (`DepartmentID`, `DepartmentName`) VALUES
 (2, 'Obstetrics and Gynecology (OB-GYN)'),
 (1, 'Pediatrics'),
 (3, 'Surgery');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `department_schedules`
+--
+
+DROP TABLE IF EXISTS `department_schedules`;
+CREATE TABLE IF NOT EXISTS `department_schedules` (
+  `DepartmentScheduleID` int NOT NULL AUTO_INCREMENT,
+  `DepartmentID` int NOT NULL,
+  `DayOfWeek` tinyint NOT NULL,
+  `SessionName` varchar(20) NOT NULL,
+  `StartTime` time NOT NULL,
+  `EndTime` time NOT NULL,
+  PRIMARY KEY (`DepartmentScheduleID`),
+  UNIQUE KEY `unique_department_schedule` (`DepartmentID`,`DayOfWeek`,`SessionName`)
+) ENGINE=MyISAM AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `department_schedules`
+--
+
+INSERT INTO `department_schedules` (`DepartmentScheduleID`, `DepartmentID`, `DayOfWeek`, `SessionName`, `StartTime`, `EndTime`) VALUES
+(1, 5, 1, 'Morning', '08:00:00', '12:00:00'),
+(2, 5, 1, 'Afternoon', '13:00:00', '17:00:00'),
+(3, 5, 2, 'Morning', '08:00:00', '12:00:00'),
+(4, 5, 2, 'Afternoon', '13:00:00', '17:00:00'),
+(5, 5, 3, 'Morning', '08:00:00', '12:00:00'),
+(6, 5, 3, 'Afternoon', '13:00:00', '17:00:00'),
+(7, 5, 4, 'Morning', '08:00:00', '12:00:00'),
+(8, 5, 4, 'Afternoon', '13:00:00', '17:00:00'),
+(9, 5, 5, 'Morning', '08:00:00', '12:00:00'),
+(10, 5, 5, 'Afternoon', '13:00:00', '17:00:00'),
+(11, 4, 3, 'Afternoon', '13:00:00', '17:00:00'),
+(12, 2, 2, 'Afternoon', '13:00:00', '17:00:00'),
+(13, 1, 3, 'Morning', '08:00:00', '12:00:00'),
+(14, 1, 4, 'Morning', '08:00:00', '12:00:00'),
+(15, 1, 4, 'Afternoon', '13:00:00', '17:00:00'),
+(16, 1, 5, 'Morning', '08:00:00', '12:00:00'),
+(17, 1, 5, 'Afternoon', '13:00:00', '17:00:00'),
+(18, 3, 1, 'Morning', '08:00:00', '12:00:00'),
+(19, 3, 2, 'Morning', '08:00:00', '12:00:00');
 
 -- --------------------------------------------------------
 
@@ -345,7 +388,7 @@ CREATE TABLE IF NOT EXISTS `staff` (
   PRIMARY KEY (`StaffID`),
   KEY `FK_Staff_Users` (`UserID`),
   KEY `FK_Staff_Departments` (`DepartmentID`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `staff`
@@ -353,7 +396,8 @@ CREATE TABLE IF NOT EXISTS `staff` (
 
 INSERT INTO `staff` (`StaffID`, `UserID`, `DepartmentID`, `StaffRole`, `Specialization`, `AvailabilityStatus`, `ScheduleStart`, `ScheduleEnd`, `CreatedAt`, `UpdatedAt`) VALUES
 (1, 5, 1, 'Doctor', NULL, 'Available', NULL, NULL, '2026-07-24 22:02:07', '2026-07-24 22:02:07'),
-(2, 7, 5, 'Doctor', NULL, 'Available', NULL, NULL, '2026-07-24 22:24:26', '2026-07-24 22:24:26');
+(2, 7, 5, 'Doctor', NULL, 'Available', NULL, NULL, '2026-07-24 22:24:26', '2026-07-24 22:24:26'),
+(3, 9, 1, 'Doctor', 'Developmental-Behavioral', 'Available', NULL, NULL, '2026-08-15 13:59:03', '2026-08-15 13:59:03');
 
 -- --------------------------------------------------------
 
@@ -383,7 +427,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   PRIMARY KEY (`UserID`),
   UNIQUE KEY `Email` (`Email`),
   KEY `FK_Users_Roles` (`RoleID`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `users`
@@ -396,7 +440,8 @@ INSERT INTO `users` (`UserID`, `RoleID`, `FirstName`, `MiddleName`, `LastName`, 
 (5, 2, 'RIAN', NULL, 'LAGABAN', 'lagabanrian@gmail.com', '$2y$10$qKGSy23Edh0vO3MdiBTWYuCcp.MEA8AR9oykygpwpwMTh65MNqA9C', 'Not Specified', NULL, '09123456789', NULL, 'Active', '2026-07-24 22:02:07', 0, NULL, NULL, NULL),
 (6, 1, 'Rion', NULL, 'Lagaban', 'lagabanrion@gmail.com', '$2y$10$NeHRS6.vel.qeLAqpaEnruWGztDodu6SClcU2H395q44jeUewtGra', 'Not Specified', NULL, '09987654321', NULL, 'Active', '2026-07-24 22:06:03', 0, NULL, NULL, NULL),
 (7, 2, 'Edrian', NULL, 'Bagohara', 'edrianbagohar@gmail.com', '$2y$10$2tMALSjSnQdi7ng/SPh7L.Q4tTnUUE9fexRn/5Qwikis377/Zm9xa', 'Not Specified', NULL, '09456789321', NULL, 'Active', '2026-07-24 22:24:26', 0, NULL, NULL, NULL),
-(8, 3, 'Jedrick', NULL, 'Versoza', 'jedvesoza@gmail.com', '$2y$10$M.3mCghPzuQutueQsMfcAubXxDzz6Z1S6Q4BQfNbBDIw5SK/89Fce', 'Not Specified', NULL, '09456789321', NULL, 'Active', '2026-08-13 23:23:33', 0, NULL, NULL, NULL);
+(8, 3, 'Jedrick', NULL, 'Versoza', 'jedvesoza@gmail.com', '$2y$10$M.3mCghPzuQutueQsMfcAubXxDzz6Z1S6Q4BQfNbBDIw5SK/89Fce', 'Not Specified', NULL, '09456789321', NULL, 'Active', '2026-08-13 23:23:33', 0, NULL, NULL, NULL),
+(9, 2, 'Roxzia', NULL, 'Kim', 'RoxziaKim@gmai.com', '$2y$10$YTVYBlQfE5M3yC7Qq36MZ.57cnKoa9wrTuKMYXbSLwPScj0HSbVs.', 'Not Specified', NULL, '09369852147', NULL, 'Active', '2026-08-15 13:59:03', 0, NULL, NULL, NULL);
 
 --
 -- Constraints for dumped tables
