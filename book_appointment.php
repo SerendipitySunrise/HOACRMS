@@ -701,96 +701,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
     <div class="datetime-grid">
 
+    <div>
 
-        <!-- DATE -->
-
-        <div>
-
-            <div class="avail-days-label">
-
-                Select Appointment Date
-
-            </div>
-
-
-            <div class="date-grid">
-
-            </div>
-
+        <div class="avail-days-label">
+            Select Appointment Date
         </div>
 
-
-        <!-- TIME -->
-
-        <div>
-
-            <div class="timeslot-head">
-
-                <div>
-
-                    <div class="timeslot-label">
-                        Time Slot
-                    </div>
-
-                    <div class="timeslot-sub">
-                        Morning Slots
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="slot-grid">
-
-                <div class="slot-cell selected" data-slot="06:00:00">
-                    06:00 AM
-                </div>
-
-                <div class="slot-cell" data-slot="06:30:00">
-                    06:30 AM
-                </div>
-
-                <div class="slot-cell" data-slot="07:00:00">
-                    07:00 AM
-                </div>
-                <div class="slot-cell" data-slot="08:00:00">
-                    08:00 AM
-                </div>
-
-                <div class="slot-cell" data-slot="08:30:00">
-                    08:30 AM
-                </div>
-
-                <div class="slot-cell" data-slot="09:00:00">
-                    09:00 AM
-                </div>
-
-                <div class="slot-cell" data-slot="09:30:00">
-                    09:30 AM
-                </div>
-
-                <div class="slot-cell" data-slot="10:00:00">
-                    10:00 AM
-                </div>
-
-                <div class="slot-cell" data-slot="10:30:00">
-                    10:30 AM
-                </div>
-
-                <div class="slot-cell" data-slot="11:00:00">
-                    11:00 AM
-                </div>
-
-                <div class="slot-cell" data-slot="11:30:00">
-                    11:30 AM
-                </div>
-
-            </div>
-
-        </div>
+        <div class="date-grid" id="dateGrid"></div>
 
     </div>
+
+    <div>
+
+        <div class="timeslot-head">
+
+            <div>
+
+                <div class="timeslot-label">
+                    Time Slot
+                </div>
+
+                <div class="timeslot-sub" id="timeslotSub">
+                    Select a department and date first.
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="slot-grid" id="slotGrid"></div>
+
+    </div>
+
+</div>
 
 
     <!-- PURPOSE -->
@@ -943,112 +886,169 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 ========================================================= -->
 
 <script>
-
-
-
 let selectedDeptID = null;
-let selectedDept = "";
-let selectedDate = "";
-let selectedDisplayDate = "";
-let selectedSlot = "";
-loadBookedSlots();
+let selectedDept = '';
+let selectedDate = '';
+let selectedSlot = '';
 
+let departmentSchedules = [];
+let scheduleLoading = false;
 
+console.log(
+    'Booking script loaded. Department cards:',
+    document.querySelectorAll('.dept-card').length
+);
 
-const firstDate = document.querySelector('.date-cell.selected');
+function formatISODate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
 
-if (firstDate) {
-    selectedDate = firstDate.getAttribute('data-date');
+    return `${year}-${month}-${day}`;
 }
 
+function loadDepartmentSchedule() {
+    const dateGrid = document.getElementById('dateGrid');
+    const slotGrid = document.getElementById('slotGrid');
+    const timeslotSub = document.getElementById('timeslotSub');
 
-const firstSlot = document.querySelector('.slot-cell.selected');
+    scheduleLoading = true;
+    departmentSchedules = [];
+    selectedDate = '';
+    selectedSlot = '';
 
-if (firstSlot) {
-    selectedSlot = firstSlot.getAttribute('data-slot');
+    dateGrid.innerHTML = '';
+    slotGrid.innerHTML = '';
+    timeslotSub.textContent = 'Loading department schedule...';
+
+    const formData = new FormData();
+    formData.append('department_id', selectedDeptID);
+
+    fetch('get_department_schedule.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(async response => {
+        const rawResponse = await response.text();
+
+        let data;
+
+        try {
+            data = JSON.parse(rawResponse);
+        } catch {
+            throw new Error(
+                'The schedule endpoint returned an error instead of JSON: ' +
+                rawResponse.substring(0, 200)
+            );
+        }
+
+        if (!response.ok) {
+            throw new Error(data.message || `Server error ${response.status}`);
+        }
+
+        return data;
+    })
+    .then(data => {
+        if (!data.success) {
+            timeslotSub.textContent = data.message || 'Unable to load schedule.';
+            alert(data.message || 'Unable to load this department schedule.');
+            return;
+        }
+
+        if (Number(data.active_doctors) <= 0) {
+            timeslotSub.textContent = 'No active doctors are assigned.';
+            alert('No active doctors are currently assigned to this department.');
+            return;
+        }
+
+        departmentSchedules = data.schedules;
+        renderAvailableDates();
+    })
+    .catch(error => {
+        console.error(error);
+
+        timeslotSub.textContent = error.message;
+        alert(error.message);
+    })
+    .finally(() => {
+        scheduleLoading = false;
+    });
 }
 
-/*
-|--------------------------------------------------------------------------
-| DEPARTMENT SELECTION
-|--------------------------------------------------------------------------
-*/
+function renderAvailableDates() {
+    const dateGrid = document.getElementById('dateGrid');
+    const slotGrid = document.getElementById('slotGrid');
+    const timeslotSub = document.getElementById('timeslotSub');
 
-document.querySelectorAll('.dept-card').forEach(card => {
+    dateGrid.innerHTML = '';
+    slotGrid.innerHTML = '';
 
-    card.addEventListener('click', function () {
+    selectedDate = '';
+    selectedSlot = '';
 
-        document
-            .querySelectorAll('.dept-card')
-            .forEach(c => c.classList.remove('selected'));
+    timeslotSub.textContent = 'Select an available appointment date.';
 
-        this.classList.add('selected');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-        selectedDeptID =
-            this.getAttribute('data-dept-id');
+    let datesAdded = 0;
 
-        selectedDept =
-            this.getAttribute('data-dept');
+    for (let offset = 1; offset <= 60 && datesAdded < 7; offset++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + offset);
 
-    });
+        const hasSchedule = departmentSchedules.some(schedule => {
+            return Number(schedule.DayOfWeek) === date.getDay();
+        });
 
-});
+        if (!hasSchedule) {
+            continue;
+        }
 
+        const cell = document.createElement('div');
 
-/*
-|--------------------------------------------------------------------------
-| DATE SELECTION
-|--------------------------------------------------------------------------
-*/
+        cell.className = 'date-cell';
+        cell.dataset.date = formatISODate(date);
 
-document.querySelectorAll('.date-cell').forEach(cell => {
+        cell.innerHTML = `
+            <div class="dow">
+                ${date.toLocaleDateString('en-US', { weekday: 'short' })}
+            </div>
+            <div class="num">${date.getDate()}</div>
+            <div class="mon">
+                ${date.toLocaleDateString('en-US', { month: 'short' })}
+            </div>
+        `;
 
-    cell.addEventListener('click', () => {
+        cell.addEventListener('click', () => {
+            document
+                .querySelectorAll('.date-cell')
+                .forEach(item => item.classList.remove('selected'));
 
-        document
-            .querySelectorAll('.date-cell')
-            .forEach(c => c.classList.remove('selected'));
+            cell.classList.add('selected');
 
-        cell.classList.add('selected');
+            selectedDate = cell.dataset.date;
+            selectedSlot = '';
 
-        selectedDate = cell.getAttribute('data-date');
+            loadAvailableSlots();
+        });
 
-    });
-
-});
-
-
-/*
-|--------------------------------------------------------------------------
-| TIME SELECTION
-|--------------------------------------------------------------------------
-*/
-
-
-document.querySelectorAll('.slot-cell').forEach(cell => {
-
-    if (cell.classList.contains('disabled')) {
-    return;
-}
-
-    cell.addEventListener('click', () => {
-
-        document
-            .querySelectorAll('.slot-cell')
-            .forEach(c => c.classList.remove('selected'));
-
-        cell.classList.add('selected');
-
-        selectedSlot = cell.getAttribute('data-slot');
-
-    });
-
-});
-
-function loadBookedSlots() {
-    if (selectedDeptID === null || selectedDate === '') {
-        return;
+        dateGrid.appendChild(cell);
+        datesAdded++;
     }
+
+    if (datesAdded === 0) {
+        dateGrid.innerHTML = '<p>No future appointment dates are available.</p>';
+    }
+}
+
+function loadAvailableSlots() {
+    const slotGrid = document.getElementById('slotGrid');
+    const timeslotSub = document.getElementById('timeslotSub');
+
+    selectedSlot = '';
+    slotGrid.innerHTML = '';
+    timeslotSub.textContent = 'Loading available time slots...';
 
     const formData = new FormData();
     formData.append('department_id', selectedDeptID);
@@ -1061,94 +1061,121 @@ function loadBookedSlots() {
     .then(response => response.json())
     .then(data => {
         if (!data.success) {
-            alert(data.message || 'Unable to load available time slots.');
+            timeslotSub.textContent =
+                data.message || 'No time slots are available.';
             return;
         }
 
-        document.querySelectorAll('.slot-cell').forEach(cell => {
-            const isBooked = data.slots.includes(cell.dataset.slot);
+        timeslotSub.textContent =
+            `Each slot allows up to ${data.capacity} patient(s).`;
 
-            cell.classList.toggle('disabled', isBooked);
+        data.slots.forEach(slot => {
+            const cell = document.createElement('div');
 
-            if (isBooked && cell.classList.contains('selected')) {
-                cell.classList.remove('selected');
-                selectedSlot = '';
+            cell.className = 'slot-cell';
+            cell.dataset.slot = slot.time;
+
+            if (!slot.available) {
+                cell.classList.add('disabled');
+
+                cell.innerHTML = `
+                    <span class="slot-time">${slot.label}</span>
+                    <span class="slot-avail">
+                        <span class="avail-dot red"></span>Fully Booked
+                    </span>
+                `;
+            } else {
+                const remaining = slot.capacity - slot.booked;
+                const dotClass = remaining === 1 ? 'amber' : 'green';
+
+                cell.innerHTML = `
+                    <span class="slot-time">${slot.label}</span>
+                    <span class="slot-avail">
+                        <span class="avail-dot ${dotClass}"></span>${remaining} slot${remaining === 1 ? '' : 's'} left
+                    </span>
+                `;
+
+                cell.addEventListener('click', () => {
+                    document
+                        .querySelectorAll('.slot-cell')
+                        .forEach(item => item.classList.remove('selected'));
+
+                    cell.classList.add('selected');
+                    selectedSlot = cell.dataset.slot;
+                });
             }
+
+            slotGrid.appendChild(cell);
         });
+    })
+    .catch(() => {
+        timeslotSub.textContent = 'Unable to load time slots.';
     });
 }
-/*
-|--------------------------------------------------------------------------
-| NEXT FROM DEPARTMENT
-|--------------------------------------------------------------------------
-*/
+
+document.querySelectorAll('.dept-card').forEach(card => {
+    card.addEventListener('click', function () {
+        console.log('Department card clicked:', this.dataset.deptId);
+        document
+            .querySelectorAll('.dept-card')
+            .forEach(item => item.classList.remove('selected'));
+
+        this.classList.add('selected');
+
+        selectedDeptID = this.getAttribute('data-dept-id');
+        selectedDept = this.getAttribute('data-dept');
+
+        loadDepartmentSchedule();
+    });
+});
 
 function nextFromDepartment() {
-
     if (selectedDeptID === null) {
-
         alert('Please select a department first.');
+        return;
+    }
 
+    if (scheduleLoading) {
+        alert('Please wait while the department schedule loads.');
+        return;
+    }
+
+    if (departmentSchedules.length === 0) {
+        alert('No appointment schedule is available for this department.');
         return;
     }
 
     goStep(2);
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| NEXT TO CONFIRM
-|--------------------------------------------------------------------------
-*/
-
 function nextToConfirm() {
+    const purpose = document.getElementById('purpose').value.trim();
 
-    // Check department
     if (selectedDeptID === null) {
         alert('Please select a department first.');
         return;
     }
 
-    // Check date
-    if (selectedDate === "") {
+    if (!selectedDate) {
         alert('Please select an appointment date.');
         return;
-        
     }
 
-    // Check time
-    if (selectedSlot === "") {
+    if (!selectedSlot) {
         alert('Please select an appointment time.');
         return;
     }
 
-    // Get purpose
-    const purpose = document
-        .getElementById('purpose')
-        .value
-        .trim();
-
-    // Check purpose
-    if (purpose === "") {
+    if (!purpose) {
         alert('Please enter the purpose of your appointment.');
         return;
     }
 
-    // Display information on confirmation page
-    document.getElementById('confirm-dept').textContent =
-        selectedDept;
+    document.getElementById('confirm-dept').textContent = selectedDept;
+    document.getElementById('confirm-date').textContent = selectedDate;
+    document.getElementById('confirm-time').textContent = selectedSlot;
+    document.getElementById('confirm-purpose').textContent = purpose;
 
-    document.getElementById('confirm-date').textContent =
-        selectedDate;
-
-    document.getElementById('confirm-time').textContent =
-        selectedSlot;
-
-    document.getElementById('confirm-purpose').textContent =
-        purpose;
-
-    // Go to Step 3
     goStep(3);
 }
 
@@ -1186,97 +1213,49 @@ function confirmBooking() {
     });
 }
 
-
-
-/*
-|--------------------------------------------------------------------------
-| STEPPER
-|--------------------------------------------------------------------------
-*/
-
 function updateStepper(step) {
-
     for (let i = 1; i <= 3; i++) {
+        const indicator = document.getElementById('step-ind-' + i);
 
-        const ind =
-            document.getElementById('step-ind-' + i);
-
-        ind.classList.remove(
-            'active',
-            'done'
-        );
+        indicator.classList.remove('active', 'done');
 
         if (i < step) {
-
-            ind.classList.add('done');
-
+            indicator.classList.add('done');
         } else if (i === step) {
-
-            ind.classList.add('active');
-
+            indicator.classList.add('active');
         }
-
     }
-
 
     for (let i = 1; i <= 2; i++) {
+        const line = document.getElementById('line-' + i);
 
-        const line =
-            document.getElementById('line-' + i);
-
-        line.classList.toggle(
-            'done',
-            i < step
-        );
-
+        line.classList.toggle('done', i < step);
     }
-
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| CHANGE STEP
-|--------------------------------------------------------------------------
-*/
-
 function goStep(step) {
-
     for (let i = 1; i <= 3; i++) {
-
-        const panel =
-            document.getElementById('step-' + i);
+        const panel = document.getElementById('step-' + i);
 
         if (panel) {
-
             panel.style.display = 'none';
-
         }
-
     }
-
 
     updateStepper(step);
 
-
-    const selectedPanel =
-        document.getElementById('step-' + step);
+    const selectedPanel = document.getElementById('step-' + step);
 
     if (selectedPanel) {
-
         selectedPanel.style.display = 'block';
-
     }
-
 
     window.scrollTo({
         top: 0,
         behavior: 'smooth'
     });
-
 }
 
 </script>
-
 </body>
 </html>

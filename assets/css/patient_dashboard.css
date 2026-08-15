@@ -931,20 +931,21 @@ body {
 }
 .change-session-link:hover { text-decoration: underline; }
 
+/* ---------- TIME SLOT CELLS ---------- */
 .slot-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .slot-cell {
   border: 1px solid var(--color-border);
-  border-radius: 9px;
-  padding: 10px 8px;
-  text-align: center;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--color-ink);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -954,8 +955,41 @@ body {
 .slot-cell.selected {
   background: var(--color-primary-tint);
   border-color: var(--color-primary-light);
-  color: var(--color-primary-hover);
 }
+
+.slot-time {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.slot-avail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-ink-soft);
+  white-space: nowrap;
+}
+
+.avail-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.avail-dot.green { background: #10b981; }
+.avail-dot.amber { background: #f59e0b; }
+.avail-dot.red { background: #ef4444; }
+
+.slot-cell.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: #f8fafc;
+}
+.slot-cell.disabled .slot-time { color: #94a3b8; }
 
 /* Confirm step */
 .confirm-summary {
@@ -990,12 +1024,6 @@ body {
   text-align: center;
   max-width: 420px;
   width: 100%;
-}
-
-.slot-cell.disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-    pointer-events: none;
 }
 
 .success-check {

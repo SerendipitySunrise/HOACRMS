@@ -5,18 +5,31 @@ require_once __DIR__ . '/includes/db.php';
 
 header('Content-Type: application/json');
 
-function respond(bool $success, array $slots = [], string $message = ''): void
+function respond(bool $success, array $data = [], string $message = ''): void
 {
-    echo json_encode([
+    $response = [
         'success' => $success,
-        'slots' => $slots,
         'message' => $message
-    ]);
+    ];
 
+    foreach ($data as $key => $value) {
+        $response[$key] = $value;
+    }
+
+    echo json_encode($response);
     exit();
 }
 
-if (!isset($_SESSION['UserID']) || ($_SESSION['RoleName'] ?? '') !== 'Patient') {
+function timeLabel(string $time): string
+{
+    return date('g:i A', strtotime($time));
+}
+
+if (!isset($_SESSION['UserID'])) {
+    respond(false, [], 'Your session has expired. Please log in again.');
+}
+
+if (($_SESSION['RoleName'] ?? '') !== 'Patient') {
     respond(false, [], 'Unauthorized access.');
 }
 
@@ -24,50 +37,110 @@ $departmentID = (int) ($_POST['department_id'] ?? 0);
 $appointmentDate = trim($_POST['appointment_date'] ?? '');
 
 if ($departmentID <= 0 || $appointmentDate === '') {
-    respond(false, [], 'Missing appointment details.');
+    respond(false, [], 'Please select a department and appointment date.');
 }
 
-$staffStmt = mysqli_prepare(
+$dateObject = DateTime::createFromFormat('Y-m-d', $appointmentDate);
+
+if (
+    !$dateObject ||
+    $dateObject->format('Y-m-d') !== $appointmentDate
+) {
+    respond(false, [], 'Invalid appointment date.');
+}
+
+$dayOfWeek = (int) $dateObject->format('N');
+
+$doctorStmt = mysqli_prepare(
     $conn,
-    'SELECT StaffID
+    'SELECT COUNT(*) AS ActiveDoctorCount
      FROM staff
      WHERE DepartmentID = ?
        AND AvailabilityStatus = "Available"
-       AND StaffRole = "Doctor"
-     ORDER BY StaffID ASC
-     LIMIT 1'
+       AND StaffRole = "Doctor"'
 );
 
-mysqli_stmt_bind_param($staffStmt, 'i', $departmentID);
-mysqli_stmt_execute($staffStmt);
+mysqli_stmt_bind_param($doctorStmt, 'i', $departmentID);
+mysqli_stmt_execute($doctorStmt);
 
-$staffResult = mysqli_stmt_get_result($staffStmt);
-$staff = mysqli_fetch_assoc($staffResult);
+$doctorResult = mysqli_stmt_get_result($doctorStmt);
+$doctor = mysqli_fetch_assoc($doctorResult);
 
-if (!$staff) {
-    respond(false, [], 'No available doctor is assigned to this department.');
+$capacity = (int) $doctor['ActiveDoctorCount'];
+
+if ($capacity === 0) {
+    respond(false, [], 'No active doctors are currently assigned to this department.');
 }
 
-$staffID = (int) $staff['StaffID'];
-
-$slotStmt = mysqli_prepare(
+$scheduleStmt = mysqli_prepare(
     $conn,
-    'SELECT AppointmentTime
-     FROM appointments
-     WHERE StaffID = ?
-       AND AppointmentDate = ?
-       AND Status NOT IN ("Cancelled", "Completed")'
+    'SELECT StartTime, EndTime
+     FROM department_schedules
+     WHERE DepartmentID = ?
+       AND DayOfWeek = ?
+     ORDER BY StartTime ASC'
 );
 
-mysqli_stmt_bind_param($slotStmt, 'is', $staffID, $appointmentDate);
-mysqli_stmt_execute($slotStmt);
+mysqli_stmt_bind_param($scheduleStmt, 'ii', $departmentID, $dayOfWeek);
+mysqli_stmt_execute($scheduleStmt);
 
-$slotResult = mysqli_stmt_get_result($slotStmt);
+$scheduleResult = mysqli_stmt_get_result($scheduleStmt);
 
-$bookedSlots = [];
+$slotTimes = [];
 
-while ($slot = mysqli_fetch_assoc($slotResult)) {
-    $bookedSlots[] = $slot['AppointmentTime'];
+while ($schedule = mysqli_fetch_assoc($scheduleResult)) {
+    $start = new DateTime($schedule['StartTime']);
+    $end = new DateTime($schedule['EndTime']);
+
+    while ($start < $end) {
+        $slotTimes[] = $start->format('H:i:s');
+        $start->modify('+30 minutes');
+    }
 }
 
-respond(true, $bookedSlots);
+if (count($slotTimes) === 0) {
+    respond(false, [], 'This department has no service scheduled on the selected date.');
+}
+
+$bookedStmt = mysqli_prepare(
+    $conn,
+    'SELECT
+        AppointmentTime,
+        COUNT(*) AS BookedCount
+     FROM appointments
+     WHERE DepartmentID = ?
+       AND AppointmentDate = ?
+       AND Status NOT IN ("Cancelled", "Completed")
+     GROUP BY AppointmentTime'
+);
+
+mysqli_stmt_bind_param($bookedStmt, 'is', $departmentID, $appointmentDate);
+mysqli_stmt_execute($bookedStmt);
+
+$bookedResult = mysqli_stmt_get_result($bookedStmt);
+
+$bookedCounts = [];
+
+while ($booked = mysqli_fetch_assoc($bookedResult)) {
+    $bookedCounts[$booked['AppointmentTime']] =
+        (int) $booked['BookedCount'];
+}
+
+$slots = [];
+
+foreach ($slotTimes as $time) {
+    $bookedCount = $bookedCounts[$time] ?? 0;
+
+    $slots[] = [
+        'time' => $time,
+        'label' => timeLabel($time),
+        'booked' => $bookedCount,
+        'capacity' => $capacity,
+        'available' => $bookedCount < $capacity
+    ];
+}
+
+respond(true, [
+    'slots' => $slots,
+    'capacity' => $capacity
+]);
