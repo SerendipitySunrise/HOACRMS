@@ -10,23 +10,17 @@ if ($portal === null) {
     exit();
 }
 
-<<<<<<< HEAD
-$message = "";
-$messageType = "error";
-if (isset($_GET['reset'])) {
-    $message = "Password changed successfully. Please log in.";
-    $messageType = "success";
-=======
 $expectedRole = portalToRoleName($portal);
 $portalLabel = portalDisplayName($portal);
 
 $message = '';
+$messageType = 'error';
+
 if (isset($_GET['reset'])) {
     $message = 'Password changed successfully. Please log in.';
-}
-if (isset($_GET['expired'])) {
+    $messageType = 'success';
+} elseif (isset($_GET['expired'])) {
     $message = 'Session expired. Please log in again.';
->>>>>>> 09fb0676c4a704c23e037e9d6e4464d2bf05591c
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -81,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     case 'Admin':
                         header('Location: admin_dashboard.php');
                         break;
-                    case 'Doctor':
+                    case 'Staff':
                         header('Location: staff_dashboard.php');
                         break;
                     case 'Patient':
@@ -145,13 +139,8 @@ $registerLabel = $portal === 'patient' ? 'Create a patient account' : 'Register 
             <p class="subtitle"><?php echo htmlspecialchars($portalLabel); ?> portal — use your <?php echo htmlspecialchars(strtolower($portalLabel)); ?> account only</p>
         </div>
 
-<<<<<<< HEAD
         <?php if(!empty($message)): ?>
             <div class="error-message" style="background-color: <?php echo $messageType === 'success' ? '#dcfce7' : '#fee2e2'; ?>; color: <?php echo $messageType === 'success' ? '#166534' : '#991b1b'; ?>; padding: 12px; border-radius: 8px; margin-bottom: 20px; width: 100%; text-align: center; font-size: 14px;">
-=======
-        <?php if ($message !== ''): ?>
-            <div class="error-message" style="background-color: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; width: 100%; text-align: center; font-size: 14px;">
->>>>>>> 09fb0676c4a704c23e037e9d6e4464d2bf05591c
                 <?php echo htmlspecialchars($message); ?>
             </div>
         <?php endif; ?>

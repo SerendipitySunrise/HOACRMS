@@ -18,7 +18,6 @@ switch ($role) {
         header('Location: login.php');
         break;
 }
-<<<<<<< HEAD
 
 // 30 minutes = 1800 seconds
 $timeout =1800;
@@ -54,6 +53,3 @@ $_SESSION['LAST_ACTIVITY'] = time();
     <a href="includes/logout.php">Logout</a>
 </body>
 </html>
-=======
-exit;
->>>>>>> 09fb0676c4a704c23e037e9d6e4464d2bf05591c
