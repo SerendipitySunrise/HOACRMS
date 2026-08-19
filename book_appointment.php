@@ -523,7 +523,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
      STEPPER
 ========================================================= -->
 
-<div class="stepper">
+<div class="stepper" id="stepperBar">
 
     <div class="step active"
          id="step-ind-1">
@@ -871,6 +871,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
 </div>
 
+
+<!-- =========================================================
+     STEP 4 — SUCCESS
+========================================================= -->
+
+<div class="success-wrap"
+     id="step-4"
+     style="display:none;">
+
+    <div class="success-card">
+
+        <div class="success-check">
+            ✓
+        </div>
+
+        <h2>Appointment Booked</h2>
+
+        <p>Your appointment has been successfully submitted.</p>
+
+        <div class="success-summary">
+
+            <div class="confirm-row">
+                <span class="label">Department</span>
+                <span class="value" id="success-dept"></span>
+            </div>
+
+            <div class="confirm-row">
+                <span class="label">Date</span>
+                <span class="value" id="success-date"></span>
+            </div>
+
+            <div class="confirm-row">
+                <span class="label">Time</span>
+                <span class="value" id="success-time"></span>
+            </div>
+
+            <div class="confirm-row">
+                <span class="label">Purpose</span>
+                <span class="value" id="success-purpose"></span>
+            </div>
+
+        </div>
+
+        <div class="success-actions">
+
+            <a href="patient_dashboard.php"
+               class="btn-primary-solid"
+               style="text-decoration:none;">
+                Go to Dashboard
+            </a>
+
+            <a href="patient_appointment.php"
+               class="btn-outline"
+               style="text-decoration:none;">
+                My Appointments
+            </a>
+
+        </div>
+
+    </div>
+
+</div>
+
 </form>
 
 
@@ -1205,8 +1268,12 @@ function confirmBooking() {
             return;
         }
 
-        alert(data.message || 'Appointment booked successfully.');
-        window.location.href = 'patient_appointment.php';
+        document.getElementById('success-dept').textContent = selectedDept;
+        document.getElementById('success-date').textContent = selectedDate;
+        document.getElementById('success-time').textContent = selectedSlot;
+        document.getElementById('success-purpose').textContent = purpose;
+
+        goStep(4);
     })
     .catch(() => {
         alert('Something went wrong while booking the appointment.');
@@ -1234,7 +1301,9 @@ function updateStepper(step) {
 }
 
 function goStep(step) {
-    for (let i = 1; i <= 3; i++) {
+    const stepperBar = document.getElementById('stepperBar');
+
+    for (let i = 1; i <= 4; i++) {
         const panel = document.getElementById('step-' + i);
 
         if (panel) {
@@ -1242,12 +1311,22 @@ function goStep(step) {
         }
     }
 
-    updateStepper(step);
+    if (step === 4) {
+        if (stepperBar) {
+            stepperBar.style.display = 'none';
+        }
+    } else {
+        if (stepperBar) {
+            stepperBar.style.display = '';
+        }
+
+        updateStepper(step);
+    }
 
     const selectedPanel = document.getElementById('step-' + step);
 
     if (selectedPanel) {
-        selectedPanel.style.display = 'block';
+        selectedPanel.style.display = step === 4 ? 'flex' : 'block';
     }
 
     window.scrollTo({
