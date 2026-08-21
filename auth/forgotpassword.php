@@ -4,9 +4,9 @@ date_default_timezone_set('Asia/Manila');
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-require 'PHPMailer/src/Exception.php';
-require 'PHPMailer/src/PHPMailer.php';
-require 'PHPMailer/src/SMTP.php';
+require __DIR__ . '/../PHPMailer/src/Exception.php';
+require __DIR__ . '/../PHPMailer/src/PHPMailer.php';
+require __DIR__ . '/../PHPMailer/src/SMTP.php';
 
 $host = "localhost";
 $username = "root";
@@ -137,7 +137,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reset Password - MediCare</title>
-    <link rel="stylesheet" href="assets/css/forgotpassword_style.css">
+    <link rel="stylesheet" href="../assets/css/auth/forgotpassword.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -145,7 +145,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <div class="main-container">
     <div class="brand-header">
         <div class="logo">
-            <img src="assets/images/logo.png" alt="MediCare Logo" class="logo-img">
+            <img src="../assets/images/logo.png" alt="MediCare Logo" class="logo-img">
         </div>
         <h1>Reset Password</h1>
         <p class="subtitle">Enter your email and we'll send you a reset link</p>

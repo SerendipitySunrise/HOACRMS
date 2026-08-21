@@ -49,14 +49,14 @@ function escapeHtml(string $value): string
 function getPortalTarget(string $portal, string $action): string
 {
     if ($action === 'login') {
-        return 'login.php?portal=' . urlencode($portal);
+        return 'auth/login.php?portal=' . urlencode($portal);
     }
 
     return match ($portal) {
-        'patient' => 'signup.php',
-        'admin' => 'register_admin.php',
-        'staff', 'doctor' => 'register_staff.php',
-        default => 'signup.php',
+        'patient' => 'auth/signup.php',
+        'admin' => 'auth/register_admin.php',
+        'staff', 'doctor' => 'auth/register_staff.php',
+        default => 'auth/signup.php',
     };
 }
 
@@ -85,7 +85,7 @@ $pageSubtitle = $action === 'register'
 
     <link
         rel="stylesheet"
-        href="assets/css/portal_select_style.css"
+        href="assets/css/portal_select.css"
     >
 
     <link

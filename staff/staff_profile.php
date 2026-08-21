@@ -4,13 +4,13 @@ session_start();
 require_once __DIR__ . '/../includes/db.php';
 
 if (!isset($_SESSION['UserID'])) {
-    header('Location: ../login.php?portal=staff&expired=1');
+    header('Location: ../auth/login.php?portal=staff&expired=1');
     exit();
 }
 
 $sessionRole = strtolower(trim((string) ($_SESSION['RoleName'] ?? '')));
 if (!in_array($sessionRole, ['staff', 'nurse'], true)) {
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
@@ -39,7 +39,7 @@ $staff = mysqli_fetch_assoc($staffResult);
 
 if (!$staff) {
     session_destroy();
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
@@ -225,7 +225,7 @@ $scheduleDisplay = ($staff['ScheduleStart'] && $staff['ScheduleEnd'])
           <div class="user-role"><?php echo htmlspecialchars($staff['StaffRole']); ?></div>
         </div>
       </div>
-      <a class="sign-out" href="../logout.php" onclick="return confirm('Are you sure you want to sign out?');">
+      <a class="sign-out" href="../auth/logout.php" onclick="return confirm('Are you sure you want to sign out?');">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Sign Out
       </a>

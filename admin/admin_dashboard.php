@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/includes/session.php';
+require_once __DIR__ . '/../includes/session.php';
 requireRole('Admin');
 
 $displayName = htmlspecialchars(trim(($_SESSION['FirstName'] ?? '') . ' ' . ($_SESSION['LastName'] ?? '')));
@@ -16,6 +16,6 @@ $displayName = htmlspecialchars(trim(($_SESSION['FirstName'] ?? '') . ' ' . ($_S
     <h1>Admin Dashboard</h1>
     <p>Welcome, <?php echo $displayName; ?>.</p>
     <p>You are signed in as an <strong>Administrator</strong>.</p>
-    <p><a href="logout.php">Logout</a></p>
+    <p><a href="../auth/logout.php">Logout</a></p>
 </body>
 </html>

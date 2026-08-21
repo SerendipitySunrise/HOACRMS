@@ -66,7 +66,7 @@ $userID = $_SESSION['UserID']
 */
 
 if (!$userID) {
-    header('Location: ../login.php');
+    header('Location: ../auth/login.php');
     exit;
 }
 
@@ -671,7 +671,7 @@ $totalRecords = count($records);
 
 
         <a
-            href="../logout.php"
+            href="../auth/logout.php"
             class="sign-out"
             onclick="return confirm('Are you sure you want to sign out?');"
         >

@@ -9,13 +9,13 @@ require_once __DIR__ . '/../includes/db.php';
 
 // Make sure user is logged in
 if (!isset($_SESSION['UserID'])) {
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
 // Make sure this is a Staff account
 if (!isset($_SESSION['RoleName']) || $_SESSION['RoleName'] !== 'Staff') {
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
@@ -1239,7 +1239,7 @@ $staffName =
 
         <a
             class="sign-out"
-            href="../logout.php"
+            href="../auth/logout.php"
             onclick="return confirm('Are you sure you want to sign out?');"
         >
 

@@ -40,7 +40,7 @@ if (!isset($conn) || !$conn) {
 $userId = $_SESSION['UserID'] ?? $_SESSION['user_id'] ?? null;
 
 if (!$userId) {
-    header("Location: ../login.php");
+    header("Location: ../auth/login.php");
     exit;
 }
 
@@ -783,7 +783,7 @@ if (!empty($patients)) {
 
 
         <a
-            href="../logout.php"
+            href="../auth/logout.php"
             class="sign-out"
             onclick="return confirm('Are you sure you want to sign out?');"
         >

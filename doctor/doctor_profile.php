@@ -8,7 +8,7 @@ if (!isset($conn) || !$conn) {
 
 $userID = $_SESSION['UserID'] ?? $_SESSION['user_id'] ?? $_SESSION['userid'] ?? null;
 if (!$userID) {
-    header('Location: ../login.php?portal=doctor');
+    header('Location: ../auth/login.php?portal=doctor');
     exit;
 }
 $userID = (int)$userID;
@@ -43,7 +43,7 @@ $doctor = mysqli_fetch_assoc($doctorResult);
 
 if (!$doctor) {
     session_destroy();
-    header('Location: ../login.php?portal=doctor');
+    header('Location: ../auth/login.php?portal=doctor');
     exit;
 }
 
@@ -571,7 +571,7 @@ if (isset($_GET['updated'])) {
           <div class="user-role"><?php echo htmlspecialchars($doctor['DepartmentName']); ?></div>
         </div>
       </div>
-      <a class="sign-out" href="../logout.php" onclick="return confirm('Are you sure you want to sign out?');">
+      <a class="sign-out" href="../auth/logout.php" onclick="return confirm('Are you sure you want to sign out?');">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Sign Out
       </a>

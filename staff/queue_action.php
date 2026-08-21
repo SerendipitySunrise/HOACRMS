@@ -4,13 +4,13 @@ session_start();
 require_once __DIR__ . '/../includes/db.php';
 
 if (!isset($_SESSION['UserID'])) {
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
 $sessionRole = strtolower(trim((string) ($_SESSION['RoleName'] ?? '')));
 if (!in_array($sessionRole, ['staff', 'nurse'], true)) {
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 

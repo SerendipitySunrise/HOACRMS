@@ -1,10 +1,10 @@
 <?php
 session_start();
 
-require_once __DIR__ . '/includes/db.php';
-require_once __DIR__ . '/includes/config.php';
-require_once __DIR__ . '/includes/portal.php';
-require_once __DIR__ . '/includes/validation.php';
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/portal.php';
+require_once __DIR__ . '/../includes/validation.php';
 
 $message = '';
 $messageType = '';
@@ -132,20 +132,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Staff Registration - MediCare</title>
-    <link rel="stylesheet" href="assets/css/register_staff_style.css">
+    <link rel="stylesheet" href="../assets/css/auth/register_staff.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="main-container">
         <div class="back-link">
-            <a href="portal-select.php?action=register">
+            <a href="../portal-select.php?action=register">
                 <i class="fas fa-arrow-left"></i> Change registration type
             </a>
         </div>
 
         <div class="brand-header">
             <div class="logo">
-                <img src="assets/images/logo.png" alt="MediCare Logo" class="logo-img" onerror="this.style.display='none'">
+                <img src="../assets/images/logo.png" alt="MediCare Logo" class="logo-img" onerror="this.style.display='none'">
             </div>
             <h1>Staff Registration</h1>
             <p class="subtitle">Invitation-only staff account setup</p>

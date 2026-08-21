@@ -2,10 +2,10 @@
 
 session_start();
 
-require_once 'includes/db.php';
+require_once __DIR__ . '/../includes/db.php';
 
 if (!isset($_SESSION['UserID'])) {
-    header("Location: login.php");
+    header("Location: ../auth/login.php");
     exit();
 }
 
@@ -124,7 +124,7 @@ if (!empty($patient['CurrentMedication'])) {
 <title>My Profile — MediCare Patient Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/patient_dashboard.css">
+<link rel="stylesheet" href="../assets/css/patient/patient_dashboard.css">
 </head>
 <body>
 <div class="app">
@@ -182,7 +182,7 @@ if (!empty($patient['CurrentMedication'])) {
     <div class="sidebar-footer">
       <div class="sidebar-user">
         <?php if (!empty($patient['ProfilePhoto'])): ?>
-        <div class="user-avatar"><img src="<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Photo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+        <div class="user-avatar"><img src="../<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Photo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
         <?php else: ?>
         <div class="user-avatar"><?php echo $initials; ?></div>
         <?php endif; ?>
@@ -191,7 +191,7 @@ if (!empty($patient['CurrentMedication'])) {
           <div class="user-role">Patient</div>
         </div>
       </div>
-      <a class="sign-out" href="logout.php" onclick="return confirm('Are you sure you want to sign out?');">
+      <a class="sign-out" href="../auth/logout.php" onclick="return confirm('Are you sure you want to sign out?');">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Sign Out
       </a>
@@ -210,7 +210,7 @@ if (!empty($patient['CurrentMedication'])) {
       <div class="profile-banner-info">
         <div class="avatar-upload-wrapper" id="avatarWrapper">
           <?php if (!empty($patient['ProfilePhoto'])): ?>
-          <img class="profile-avatar profile-avatar-photo" id="avatarDisplay" src="<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Profile Photo">
+          <img class="profile-avatar profile-avatar-photo" id="avatarDisplay" src="../<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Profile Photo">
           <?php else: ?>
           <div class="profile-avatar" id="avatarDisplay"><?php echo $initials; ?></div>
           <?php endif; ?>
@@ -627,7 +627,7 @@ avatarInput.addEventListener('change', function() {
   const formData = new FormData();
   formData.append('avatar', file);
 
-  fetch('upload_avatar.php', {
+  fetch('../upload_avatar.php', {
     method: 'POST',
     body: formData
   })
@@ -636,7 +636,7 @@ avatarInput.addEventListener('change', function() {
     if (data.success && data.url) {
       const img = document.getElementById('avatarDisplay');
       if (img.tagName === 'IMG') {
-        img.src = data.url + '?t=' + Date.now();
+        img.src = '../' + data.url + '?t=' + Date.now();
       }
     } else {
       alert(data.message || 'Failed to upload photo.');

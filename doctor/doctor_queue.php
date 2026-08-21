@@ -38,7 +38,7 @@ if (!isset($conn) || !$conn) {
 ================================================================ */
 
 if (!isset($_SESSION['UserID'])) {
-    header('Location: ../login.php');
+    header('Location: ../auth/login.php');
     exit;
 }
 
@@ -1393,7 +1393,7 @@ if (isset($_GET['consult'])) {
 
 
         <a
-            href="../logout.php"
+            href="../auth/logout.php"
             class="sign-out"
             onclick="return confirm('Are you sure you want to sign out?');"
         >

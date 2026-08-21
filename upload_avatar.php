@@ -64,7 +64,7 @@ $ext = match($mimeType) {
 };
 
 $filename = 'avatar_' . $userID . '_' . time() . '.' . $ext;
-$uploadDir = __DIR__ . '/avatars';
+$uploadDir = __DIR__ . '/assets/images/avatars';
 
 if (!is_dir($uploadDir)) {
     mkdir($uploadDir, 0755, true);
@@ -92,7 +92,7 @@ if ($row && !empty($row['ProfilePhoto'])) {
 }
 
 // Update database
-$photoPath = 'avatars/' . $filename;
+$photoPath = 'assets/images/avatars/' . $filename;
 
 $updateStmt = mysqli_prepare($conn, 'UPDATE users SET ProfilePhoto = ? WHERE UserID = ?');
 mysqli_stmt_bind_param($updateStmt, 'si', $photoPath, $userID);

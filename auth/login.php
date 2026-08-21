@@ -2,7 +2,7 @@
 
 session_start();
 
-require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/../includes/db.php';
 
 $message = '';
 $messageType = 'error';
@@ -122,20 +122,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     switch ($userRole) {
 
                         case 'admin':
-                            header('Location: admin_dashboard.php');
+                            header('Location: ../admin/admin_dashboard.php');
                             exit();
 
                         case 'doctor':
-                            header('Location: doctor/doctor_dashboard.php');
+                            header('Location: ../doctor/doctor_dashboard.php');
                             exit();
 
                         case 'staff':
                         case 'nurse':
-                            header('Location: staff/staff_dashboard.php');
+                            header('Location: ../staff/staff_dashboard.php');
                             exit();
 
                         case 'patient':
-                            header('Location: patient_dashboard.php');
+                            header('Location: ../patient/patient_dashboard.php');
                             exit();
 
                         default:
@@ -217,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $loginTitle = 'Sign in to MediCare';
-$registerPath = 'portal-select.php?action=register';
+$registerPath = '../portal-select.php?action=register';
 $registerLabel = 'Create an account';
 
 ?>
@@ -238,7 +238,7 @@ $registerLabel = 'Create an account';
 
     <link
         rel="stylesheet"
-        href="assets/css/login_style.css"
+        href="../assets/css/auth/login.css"
     >
 
     <link
@@ -255,7 +255,7 @@ $registerLabel = 'Create an account';
 
             <p style="margin-bottom: 16px;">
                 <a
-                    href="index.php"
+                    href="../index.php"
                     style="color:#149385;text-decoration:none;font-size:14px;"
                 >
                     &larr; Back to home
@@ -264,7 +264,7 @@ $registerLabel = 'Create an account';
 
             <div class="logo">
                 <img
-                    src="assets/images/logo.png"
+                    src="../assets/images/logo.png"
                     alt="MediCare Logo"
                     class="logo-img"
                 >

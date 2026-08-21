@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/../includes/db.php';
 
 
 // ======================================================
@@ -9,12 +9,12 @@ require_once __DIR__ . '/includes/db.php';
 // ======================================================
 
 if (!isset($_SESSION['UserID'])) {
-    header('Location: login.php?portal=patient');
+    header('Location: ../auth/login.php?portal=patient');
     exit();
 }
 
 if (($_SESSION['RoleName'] ?? '') !== 'Patient') {
-    header('Location: portal-select.php?action=login');
+    header('Location: ../portal-select.php?action=login');
     exit();
 }
 
@@ -367,7 +367,7 @@ if ($hasQueue && $queueStatus === 'In Progress') {
 
 <link
     rel="stylesheet"
-    href="assets/css/patient_dashboard.css"
+    href="../assets/css/patient/patient_dashboard.css"
 >
 
 </head>
@@ -461,7 +461,7 @@ if ($hasQueue && $queueStatus === 'In Progress') {
             <div class="sidebar-user">
 
                 <?php if (!empty($patient['ProfilePhoto'])): ?>
-                <div class="user-avatar"><img src="<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Photo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+                <div class="user-avatar"><img src="../<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Photo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
                 <?php else: ?>
                 <div class="user-avatar">
 
@@ -489,7 +489,7 @@ if ($hasQueue && $queueStatus === 'In Progress') {
 
             <a
                 class="sign-out"
-                href="logout.php"
+                href="../auth/logout.php"
                 onclick="return confirm('Are you sure you want to sign out?');"
             >
 

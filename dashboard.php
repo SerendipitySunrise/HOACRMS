@@ -6,16 +6,16 @@ $role = $_SESSION['RoleName'] ?? '';
 
 switch ($role) {
     case 'Admin':
-        header('Location: admin_dashboard.php');
+        header('Location: admin/admin_dashboard.php');
         break;
     case 'Doctor':
-        header('Location: staff_dashboard.php');
+        header('Location: staff/staff_dashboard.php');
         break;
     case 'Patient':
-        header('Location: patient_dashboard.php');
+        header('Location: patient/patient_dashboard.php');
         break;
     default:
-        header('Location: login.php');
+        header('Location: auth/login.php');
         break;
 }
 
@@ -30,7 +30,7 @@ if (isset($_SESSION['LAST_ACTIVITY'])) {
         session_unset();
         session_destroy();
 
-        header("Location: login.php?expired=1");
+        header("Location: auth/login.php?expired=1");
         exit();
     }
 }
@@ -50,6 +50,6 @@ $_SESSION['LAST_ACTIVITY'] = time();
     <h1>Dashboard</h1>
     <p>Welcome to your dashboard!</p>
 
-    <a href="includes/logout.php">Logout</a>
+    <a href="auth/logout.php">Logout</a>
 </body>
 </html>

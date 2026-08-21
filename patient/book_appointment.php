@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/../includes/db.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -10,12 +10,12 @@ require_once __DIR__ . '/includes/db.php';
 */
 
 if (!isset($_SESSION['UserID'])) {
-    header('Location: login.php?portal=patient');
+    header('Location: ../auth/login.php?portal=patient');
     exit();
 }
 
 if (($_SESSION['RoleName'] ?? '') !== 'Patient') {
-    header('Location: portal-select.php?action=login');
+    header('Location: ../portal-select.php?action=login');
     exit();
 }
 
@@ -263,7 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
       rel="stylesheet">
 
 <link rel="stylesheet"
-      href="assets/css/patient_dashboard.css">
+      href="../assets/css/patient/patient_dashboard.css">
 
 </head>
 
@@ -363,7 +363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
         <div class="sidebar-user">
 
             <?php if (!empty($patient['ProfilePhoto'])): ?>
-            <div class="user-avatar"><img src="<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Photo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+            <div class="user-avatar"><img src="../<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Photo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
             <?php else: ?>
             <div class="user-avatar">
 
@@ -398,7 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
         </div>
 
 
-        <a href="logout.php"
+        <a href="../auth/logout.php"
            class="sign-out"
            style="text-decoration:none;"
            onclick="return confirm('Are you sure you want to sign out?');">
@@ -998,7 +998,7 @@ function loadDepartmentSchedule() {
     const formData = new FormData();
     formData.append('department_id', selectedDeptID);
 
-    fetch('get_department_schedule.php', {
+    fetch('../api/appointments/get_department_schedule.php', {
         method: 'POST',
         body: formData
     })
@@ -1128,7 +1128,7 @@ function loadAvailableSlots() {
     formData.append('department_id', selectedDeptID);
     formData.append('appointment_date', selectedDate);
 
-    fetch('get_booked_slots.php', {
+    fetch('../api/appointments/get_booked_slots.php', {
         method: 'POST',
         body: formData
     })
@@ -1272,7 +1272,7 @@ function confirmBooking() {
     formData.append('appointment_time', selectedSlot);
     formData.append('purpose', purpose);
 
-    fetch('save_appointment.php', {
+    fetch('../api/appointments/save_appointment.php', {
         method: 'POST',
         body: formData
     })

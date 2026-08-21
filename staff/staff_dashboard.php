@@ -7,13 +7,13 @@ require_once __DIR__ . '/../includes/db.php';
    AUTH GUARD
 ------------------------------------------------------- */
 if (!isset($_SESSION['UserID'])) {
-    header('Location: ../login.php?portal=staff&expired=1');
+    header('Location: ../auth/login.php?portal=staff&expired=1');
     exit();
 }
 
 $sessionRole = strtolower(trim((string) ($_SESSION['RoleName'] ?? '')));
 if (!in_array($sessionRole, ['staff', 'nurse'], true)) {
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
@@ -40,7 +40,7 @@ $staffInfo = mysqli_fetch_assoc($staffResult);
 if (!$staffInfo) {
     // Logged in as staff/nurse role but no matching staff record
     session_destroy();
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
@@ -271,7 +271,7 @@ function statusLabel(string $status): string
 
         <a
             class="sign-out"
-            href="../logout.php"
+            href="../auth/logout.php"
             onclick="return confirm('Are you sure you want to sign out?');"
         >
 

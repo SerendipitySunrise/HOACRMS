@@ -7,7 +7,7 @@ $logoutMessage = isset($_GET['logout']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MediCare — Patient Portal</title>
-    <link rel="stylesheet" href="assets/css/landing_style.css">
+    <link rel="stylesheet" href="assets/css/landing.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="landing-page">
@@ -26,7 +26,7 @@ $logoutMessage = isset($_GET['logout']);
             <li><a href="#contact">Contact</a></li>
         </ul>
         <div class="nav-actions">
-            <a href="login.php" class="nav-signin">Sign In</a>
+            <a href="auth/login.php" class="nav-signin">Sign In</a>
             <a href="portal-select.php?action=register" class="btn-primary">Get started</a>
         </div>
     </header>
@@ -125,7 +125,7 @@ $logoutMessage = isset($_GET['logout']);
         <p>Join thousands of patients who manage their healthcare with ease. Create your account today.</p>
         <div class="cta-buttons">
             <a href="portal-select.php?action=register" class="cta-btn-primary">Create Account</a>
-            <a href="login.php" class="cta-btn-secondary">Sign In</a>
+            <a href="auth/login.php" class="cta-btn-secondary">Sign In</a>
         </div>
     </section>
 

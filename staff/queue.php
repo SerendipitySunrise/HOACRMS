@@ -28,7 +28,7 @@ require_once __DIR__ . '/../includes/db.php';
 // ======================================================
 
 if (!isset($_SESSION['UserID'])) {
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
@@ -36,7 +36,7 @@ if (
     !isset($_SESSION['RoleName']) ||
     $_SESSION['RoleName'] !== 'Staff'
 ) {
-    header('Location: ../login.php?portal=staff');
+    header('Location: ../auth/login.php?portal=staff');
     exit();
 }
 
@@ -960,7 +960,7 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
 
         <a
-            href="../logout.php"
+            href="../auth/logout.php"
             class="sign-out"
             onclick="return confirm('Are you sure you want to sign out?');"
         >

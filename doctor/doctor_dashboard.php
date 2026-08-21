@@ -48,7 +48,7 @@ $userID = $_SESSION['UserID']
     ?? null;
 
 if (!$userID) {
-    header('Location: ../login.php?portal=doctor');
+    header('Location: ../auth/login.php?portal=doctor');
     exit;
 }
 
@@ -85,7 +85,7 @@ if ($roleName !== null && strcasecmp(trim((string)$roleName), 'Doctor') !== 0) {
 */
 
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
-    header('Location: ../logout.php');
+    header('Location: ../auth/logout.php');
     exit;
 }
 
@@ -880,7 +880,7 @@ function formatAppointmentTime($time)
 
 
         <a
-            href="../logout.php"
+            href="../auth/logout.php"
             class="sign-out"
             onclick="return confirm('Are you sure you want to sign out?');"
         >
