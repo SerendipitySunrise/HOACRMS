@@ -34,7 +34,8 @@ $patientStmt = mysqli_prepare(
         p.PatientID,
         p.UserID,
         u.FirstName,
-        u.LastName
+        u.LastName,
+        u.ProfilePhoto
      FROM patients p
      INNER JOIN users u ON p.UserID = u.UserID
      WHERE p.UserID = ?
@@ -361,6 +362,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
         <div class="sidebar-user">
 
+            <?php if (!empty($patient['ProfilePhoto'])): ?>
+            <div class="user-avatar"><img src="<?php echo htmlspecialchars($patient['ProfilePhoto']); ?>" alt="Photo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+            <?php else: ?>
             <div class="user-avatar">
 
                 <?php
@@ -371,6 +375,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
                 ?>
 
             </div>
+            <?php endif; ?>
 
             <div>
 
@@ -395,7 +400,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
         <a href="logout.php"
            class="sign-out"
-           style="text-decoration:none;">
+           style="text-decoration:none;"
+           onclick="return confirm('Are you sure you want to sign out?');">
 
             Sign Out
 
@@ -828,8 +834,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
         </div>
 
         <div class="confirm-row">
-            <span class="label">Purpose</span>
-            <span class="value" id="confirm-purpose"></span>
+            <span class="label">Session</span>
+            <span class="value" id="confirm-session"></span>
         </div>
 
     </div>
@@ -908,8 +914,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
             </div>
 
             <div class="confirm-row">
-                <span class="label">Purpose</span>
-                <span class="value" id="success-purpose"></span>
+                <span class="label">Session</span>
+                <span class="value" id="success-session"></span>
             </div>
 
         </div>
@@ -968,6 +974,11 @@ function formatISODate(date) {
     const day = String(date.getDate()).padStart(2, '0');
 
     return `${year}-${month}-${day}`;
+}
+
+function getSessionFromTime(timeStr) {
+    const hour = parseInt(timeStr.split(':')[0], 10);
+    return hour < 12 ? 'Morning' : 'Afternoon';
 }
 
 function loadDepartmentSchedule() {
@@ -1234,10 +1245,12 @@ function nextToConfirm() {
         return;
     }
 
+    const session = getSessionFromTime(selectedSlot);
+
     document.getElementById('confirm-dept').textContent = selectedDept;
     document.getElementById('confirm-date').textContent = selectedDate;
     document.getElementById('confirm-time').textContent = selectedSlot;
-    document.getElementById('confirm-purpose').textContent = purpose;
+    document.getElementById('confirm-session').textContent = session;
 
     goStep(3);
 }
@@ -1249,6 +1262,8 @@ function confirmBooking() {
         alert('Please complete all appointment details.');
         return;
     }
+
+    const session = getSessionFromTime(selectedSlot);
 
     const formData = new FormData();
 
@@ -1271,7 +1286,7 @@ function confirmBooking() {
         document.getElementById('success-dept').textContent = selectedDept;
         document.getElementById('success-date').textContent = selectedDate;
         document.getElementById('success-time').textContent = selectedSlot;
-        document.getElementById('success-purpose').textContent = purpose;
+        document.getElementById('success-session').textContent = session;
 
         goStep(4);
     })

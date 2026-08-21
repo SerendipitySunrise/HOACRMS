@@ -1,85 +1,188 @@
 <?php
 
-require_once __DIR__ . '/includes/portal.php';
+$action = strtolower(trim((string) ($_GET['action'] ?? 'login')));
 
-$action = strtolower(trim($_GET['action'] ?? 'login'));
 if (!in_array($action, ['login', 'register'], true)) {
     $action = 'login';
 }
 
-$isLogin = $action === 'login';
-$pageTitle = $isLogin ? 'Choose how to sign in' : 'Choose how to register';
-$pageLead = $isLogin
-    ? 'Select your role. You will only be able to sign in if your account matches that role.'
-    : 'Patients can register freely. Staff and admin need an invitation code from your clinic.';
-
 $portals = [
     [
         'key' => 'patient',
-        'icon' => 'fa-user-injured',
-        'title' => 'Patient',
-        'desc' => 'Access appointments, results, and your health records.',
-        'hint' => '',
+        'title' => 'Patient Portal',
+        'description' => 'Book appointments, view results, and manage your healthcare.',
+        'icon' => 'fa-user',
+        'hint' => 'For patients',
     ],
     [
         'key' => 'staff',
-        'icon' => 'fa-user-md',
-        'title' => 'Staff',
-        'desc' => 'For doctors, nurses, and clinic staff.',
-        'hint' => $isLogin ? '' : 'Invitation code required',
+        'title' => 'Staff Portal',
+        'description' => 'Manage appointments, patients, and daily clinic operations.',
+        'icon' => 'fa-user-nurse',
+        'hint' => 'For nurses and clinic staff',
+    ],
+    [
+        'key' => 'doctor',
+        'title' => 'Doctor Portal',
+        'description' => 'Review appointments, patient records, and clinical information.',
+        'icon' => 'fa-user-doctor',
+        'hint' => 'For doctors',
     ],
     [
         'key' => 'admin',
+        'title' => 'Administrator Portal',
+        'description' => 'Manage users, staff, reports, and system settings.',
         'icon' => 'fa-shield-halved',
-        'title' => 'Administrator',
-        'desc' => 'Manage the clinic system and users.',
-        'hint' => $isLogin ? '' : 'Invitation code required',
+        'hint' => 'Restricted access',
     ],
 ];
+
+function escapeHtml(string $value): string
+{
+    return htmlspecialchars(
+        $value,
+        ENT_QUOTES,
+        'UTF-8'
+    );
+}
+
+function getPortalTarget(string $portal, string $action): string
+{
+    if ($action === 'login') {
+        return 'login.php?portal=' . urlencode($portal);
+    }
+
+    return match ($portal) {
+        'patient' => 'signup.php',
+        'admin' => 'register_admin.php',
+        'staff', 'doctor' => 'register_staff.php',
+        default => 'signup.php',
+    };
+}
+
+$pageTitle = $action === 'register'
+    ? 'Create an Account'
+    : 'Choose Your Portal';
+
+$pageSubtitle = $action === 'register'
+    ? 'Select the type of account you want to create.'
+    : 'Select the portal that matches your account.';
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($pageTitle); ?> — MediCare</title>
-    <link rel="stylesheet" href="assets/css/portal_select_style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        <?php echo escapeHtml($pageTitle); ?> — MediCare
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="assets/css/portal_select_style.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    >
 </head>
+
 <body class="portal-select-page">
-    <div class="portal-select-wrap">
+
+    <main class="portal-select-wrap">
+
         <header class="portal-select-header">
-            <a href="index.php" class="home-link"><i class="fas fa-arrow-left"></i> Back to home</a>
+
+            <a href="index.php" class="home-link">
+                <i class="fas fa-arrow-left"></i>
+                Back to home
+            </a>
+
             <div class="logo">
-                <img src="assets/images/logo.png" alt="MediCare">
+                <img
+                    src="assets/images/logo.png"
+                    alt="MediCare Logo"
+                >
             </div>
-            <h1><?php echo htmlspecialchars($pageTitle); ?></h1>
-            <p><?php echo htmlspecialchars($pageLead); ?></p>
+
+            <h1>
+                <?php echo escapeHtml($pageTitle); ?>
+            </h1>
+
+            <p>
+                <?php echo escapeHtml($pageSubtitle); ?>
+            </p>
+
         </header>
 
-        <div class="portal-cards">
+        <section class="portal-cards">
+
             <?php foreach ($portals as $portal): ?>
+
                 <?php
-                if ($isLogin) {
-                    $href = 'login.php?portal=' . urlencode($portal['key']);
-                    $btnLabel = 'Sign in as ' . $portal['title'];
-                } else {
-                    $href = portalRegisterPath($portal['key']);
-                    $btnLabel = 'Register as ' . $portal['title'];
-                }
-                $cardClass = in_array($portal['key'], ['staff', 'admin'], true) ? 'portal-card staff-admin' : 'portal-card';
+                $target = getPortalTarget(
+                    $portal['key'],
+                    $action
+                );
                 ?>
-                <article class="<?php echo $cardClass; ?>">
-                    <div class="card-icon"><i class="fas <?php echo $portal['icon']; ?>"></i></div>
-                    <h2><?php echo htmlspecialchars($portal['title']); ?></h2>
-                    <p><?php echo htmlspecialchars($portal['desc']); ?></p>
-                    <a class="btn-portal" href="<?php echo htmlspecialchars($href); ?>"><?php echo htmlspecialchars($btnLabel); ?></a>
-                    <?php if ($portal['hint'] !== ''): ?>
-                        <p class="hint"><?php echo htmlspecialchars($portal['hint']); ?></p>
-                    <?php endif; ?>
+
+                <article class="portal-card
+                    <?php
+                    echo in_array(
+                        $portal['key'],
+                        ['staff', 'admin'],
+                        true
+                    )
+                        ? 'staff-admin'
+                        : '';
+                    ?>"
+                >
+
+                    <div class="card-icon">
+                        <i class="fas <?php
+                            echo escapeHtml($portal['icon']);
+                        ?>"></i>
+                    </div>
+
+                    <h2>
+                        <?php echo escapeHtml($portal['title']); ?>
+                    </h2>
+
+                    <p>
+                        <?php
+                        echo escapeHtml($portal['description']);
+                        ?>
+                    </p>
+
+                    <a
+                        href="<?php echo escapeHtml($target); ?>"
+                        class="btn-portal"
+                    >
+                        <?php
+                        echo $action === 'register'
+                            ? 'Register'
+                            : 'Sign In';
+                        ?>
+                    </a>
+
+                    <div class="hint">
+                        <?php echo escapeHtml($portal['hint']); ?>
+                    </div>
+
                 </article>
+
             <?php endforeach; ?>
-        </div>
-    </div>
+
+        </section>
+
+    </main>
+
 </body>
 </html>
