@@ -139,6 +139,31 @@ CREATE TABLE IF NOT EXISTS `consultations` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `vitals`
+--
+
+DROP TABLE IF EXISTS `vitals`;
+CREATE TABLE IF NOT EXISTS `vitals` (
+  `VitalID` int NOT NULL AUTO_INCREMENT,
+  `AppointmentID` int NOT NULL,
+  `PatientID` int NOT NULL,
+  `StaffID` int NOT NULL,
+  `BloodPressure` varchar(20) DEFAULT NULL,
+  `Temperature` decimal(4,1) DEFAULT NULL,
+  `PulseRate` int DEFAULT NULL,
+  `RespiratoryRate` int DEFAULT NULL,
+  `Weight` decimal(5,2) DEFAULT NULL,
+  `Height` decimal(5,2) DEFAULT NULL,
+  `OxygenSaturation` int DEFAULT NULL,
+  `RecordedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`VitalID`),
+  KEY `idx_vitals_patient` (`PatientID`),
+  KEY `idx_vitals_appointment` (`AppointmentID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `departments`
 --
 

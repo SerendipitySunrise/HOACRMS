@@ -122,7 +122,7 @@ $queueStmt = mysqli_prepare(
      INNER JOIN departments d ON a.DepartmentID = d.DepartmentID
      WHERE a.PatientID = ?
        AND q.QueueDate = ?
-       AND q.Status IN ("Waiting", "Called", "In Progress")
+       AND q.Status IN ("Waiting", "Called", "In Consultation")
      ORDER BY q.CreatedAt DESC
      LIMIT 1'
 );
@@ -139,7 +139,7 @@ if ($queue) {
         $conn,
         'SELECT QueueNumber
          FROM queue
-         WHERE Status IN ("Serving", "In Progress")
+         WHERE Status IN ("Serving", "In Consultation")
            AND QueueDate = ?
          ORDER BY QueueNumber ASC
          LIMIT 1'

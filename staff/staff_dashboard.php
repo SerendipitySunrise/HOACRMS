@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/status_constants.php';
 
 /* -------------------------------------------------------
    AUTH GUARD
@@ -64,7 +65,7 @@ $stmt = mysqli_prepare(
      FROM appointments
      WHERE DepartmentID = ?
        AND AppointmentDate = CURDATE()
-       AND Status != 'Cancelled'"
+       AND Status != '" . APPT_STATUS_CANCELLED . "'"
 );
 mysqli_stmt_bind_param($stmt, 'i', $departmentId);
 mysqli_stmt_execute($stmt);
@@ -91,7 +92,7 @@ $stmt = mysqli_prepare(
      INNER JOIN appointments a ON q.AppointmentID = a.AppointmentID
      WHERE a.DepartmentID = ?
        AND q.QueueDate = CURDATE()
-       AND q.Status != 'Completed'"
+       AND q.Status != '" . QUEUE_STATUS_COMPLETED . "'"
 );
 mysqli_stmt_bind_param($stmt, 'i', $departmentId);
 mysqli_stmt_execute($stmt);
@@ -105,7 +106,7 @@ $stmt = mysqli_prepare(
      INNER JOIN appointments a ON q.AppointmentID = a.AppointmentID
      WHERE a.DepartmentID = ?
        AND q.QueueDate = CURDATE()
-       AND q.Status = 'Completed'"
+       AND q.Status = '" . QUEUE_STATUS_COMPLETED . "'"
 );
 mysqli_stmt_bind_param($stmt, 'i', $departmentId);
 mysqli_stmt_execute($stmt);
@@ -123,7 +124,7 @@ $stmt = mysqli_prepare(
      INNER JOIN users u ON p.UserID = u.UserID
      WHERE a.DepartmentID = ?
        AND a.AppointmentDate = CURDATE()
-       AND a.Status != 'Cancelled'
+       AND a.Status != '" . APPT_STATUS_CANCELLED . "'
        AND a.AppointmentID NOT IN (
            SELECT AppointmentID FROM queue WHERE QueueDate = CURDATE()
        )
@@ -150,8 +151,8 @@ $stmt = mysqli_prepare(
      INNER JOIN departments d ON a.DepartmentID = d.DepartmentID
      WHERE a.DepartmentID = ?
        AND q.QueueDate = CURDATE()
-       AND q.Status != 'Completed'
-     ORDER BY FIELD(q.Status, 'InConsultation', 'Called', 'Waiting'), q.QueueNumber ASC"
+       AND q.Status != '" . QUEUE_STATUS_COMPLETED . "'
+     ORDER BY FIELD(q.Status, '" . QUEUE_STATUS_IN_CONSULTATION . "', '" . QUEUE_STATUS_CALLED . "', '" . QUEUE_STATUS_WAITING . "'), q.QueueNumber ASC"
 );
 mysqli_stmt_bind_param($stmt, 'i', $departmentId);
 mysqli_stmt_execute($stmt);
@@ -185,8 +186,8 @@ function formatTimeRange(string $time): string
 function statusLabel(string $status): string
 {
     return match (strtolower($status)) {
-        'inconsultation' => 'In Consultation',
-        'called' => 'called',
+        'inconsultation', 'in consultation' => 'In Consultation',
+        'called', 'in progress' => 'called',
         'waiting' => 'waiting',
         default => strtolower($status),
     };

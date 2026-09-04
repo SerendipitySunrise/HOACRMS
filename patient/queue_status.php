@@ -171,7 +171,7 @@ $nowServingStmt = mysqli_prepare(
 
      WHERE q.QueueDate = ?
 
-       AND q.Status IN ("Serving", "In Progress")
+       AND q.Status IN ("Serving", "In Consultation")
 
      ORDER BY q.QueueNumber ASC
 
@@ -225,7 +225,7 @@ if ($hasQueue && $queueNumber !== null) {
 
     } elseif (
         $queueStatus === 'Serving' ||
-        $queueStatus === 'In Progress'
+        $queueStatus === 'In Consultation'
     ) {
 
         $estimatedWait = 0;
@@ -259,7 +259,7 @@ if ($hasQueue) {
             break;
 
         case 'Serving':
-        case 'In Progress':
+        case 'In Consultation':
             $step = 3;
             break;
 
@@ -282,7 +282,7 @@ $elapsedSeconds = 0;
 
 if (
     $hasQueue &&
-    $queueStatus === 'In Progress' &&
+    $queueStatus === 'In Consultation' &&
     !empty($queue['QueueTime'])
 ) {
 
@@ -308,7 +308,7 @@ if ($hasQueue) {
     switch ($queueStatus) {
 
         case 'Serving':
-        case 'In Progress':
+        case 'In Consultation':
             $displayStatus = 'Now Serving';
             break;
 
@@ -335,7 +335,7 @@ if ($hasQueue) {
 
 $heroLabel = 'Queue Status';
 
-if ($hasQueue && $queueStatus === 'In Progress') {
+if ($hasQueue && $queueStatus === 'In Consultation') {
     $heroLabel = 'In Session';
 }
 
@@ -743,7 +743,7 @@ if ($hasQueue && $queueStatus === 'In Progress') {
 
                             } elseif (
                                 $queueStatus === 'Serving' ||
-                                $queueStatus === 'In Progress'
+                                $queueStatus === 'In Consultation'
                             ) {
 
                                 echo 'Now';
@@ -838,10 +838,10 @@ if ($hasQueue && $queueStatus === 'In Progress') {
                         <div class="step-circle">
                             <span>3</span>
                         </div>
-
                         <div class="step-label">
-                            In Progress
+                            In Consultation
                         </div>
+
 
                     </div>
 

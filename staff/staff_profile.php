@@ -37,11 +37,14 @@ function verifyCsrf(): bool {
 // but they will NOT be saved until the underlying columns exist. See the note
 // further down near the UPDATE query for the SQL to add them once you confirm
 // where you'd like this data stored.
+//
+// NOTE: s.EmployeeID, s.DateHired, s.AssignedDays and s.AssignedResponsibilities
+// do NOT exist on the `staff` table (defaults are derived below instead) — removed
+// so the page does not throw "Unknown column" on load.
 $staffStmt = mysqli_prepare(
     $conn,
-    "SELECT s.StaffID, s.EmployeeID, s.DepartmentID, s.StaffRole, s.Specialization,
+    "SELECT s.StaffID, s.DepartmentID, s.StaffRole, s.Specialization,
             s.ScheduleStart, s.ScheduleEnd, s.AvailabilityStatus,
-            s.DateHired, s.AssignedDays, s.AssignedResponsibilities,
             d.DepartmentName,
             u.UserID, u.FirstName, u.MiddleName, u.LastName, u.Email,
             u.Sex, u.DateOfBirth, u.ContactNumber, u.Address,
@@ -67,9 +70,7 @@ if (!$staff) {
 $initials = strtoupper(substr($staff['FirstName'], 0, 1) . substr($staff['LastName'], 0, 1));
 $displayName = trim($staff['FirstName'] . ' ' . $staff['LastName']);
 $staffIdFormatted = 'STF-' . str_pad($staff['StaffID'], 3, '0', STR_PAD_LEFT);
-$employeeIdFormatted = !empty($staff['EmployeeID'])
-    ? $staff['EmployeeID']
-    : 'EMP-' . date('Y') . '-' . str_pad($staff['StaffID'], 3, '0', STR_PAD_LEFT);
+$employeeIdFormatted = 'EMP-' . date('Y') . '-' . str_pad($staff['StaffID'], 3, '0', STR_PAD_LEFT);
 
 $dobFormatted = !empty($staff['DateOfBirth'])
     ? (new DateTime($staff['DateOfBirth']))->format('Y-m-d')
@@ -78,9 +79,7 @@ $dobDisplay = !empty($staff['DateOfBirth'])
     ? (new DateTime($staff['DateOfBirth']))->format('F j, Y')
     : '';
 
-$dateHiredDisplay = !empty($staff['DateHired'])
-    ? (new DateTime($staff['DateHired']))->format('F j, Y')
-    : '';
+$dateHiredDisplay = 'Not provided';
 
 $lastLoginDisplay = !empty($staff['LastLogin'])
     ? (new DateTime($staff['LastLogin']))->format('F j, Y, g:i A')

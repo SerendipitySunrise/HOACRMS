@@ -2,6 +2,8 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/status_constants.php';
+require_once __DIR__ . '/../includes/validation.php';
 
 // ======================================================
 // AUTHENTICATION
@@ -23,6 +25,20 @@ $today = date('Y-m-d');
 
 $message = '';
 $messageType = '';
+
+// Walk-in form field defaults (preserved + safely re-echoed on validation error)
+$fullName          = '';
+$dateOfBirth       = '';
+$gender            = 'Male';
+$phone             = '';
+$bloodType         = '';
+$allergies         = '';
+$currentMedication = '';
+$pastConditions    = '';
+$familyHistory     = '';
+$departmentId      = 0;
+$session           = 'morning';
+$reason            = '';
 
 // ======================================================
 // GET CURRENT LOGGED-IN STAFF MEMBER
@@ -92,7 +108,7 @@ if (
              FROM appointments
              WHERE AppointmentID = ?
              AND AppointmentDate = ?
-             AND Status NOT IN ('Cancelled', 'Completed')
+             AND Status NOT IN ('" . APPT_STATUS_CANCELLED . "', '" . APPT_STATUS_COMPLETED . "')
              LIMIT 1"
         );
 
@@ -209,7 +225,7 @@ if (
                     // --------------------------------------------------
                     $priorityLevel = 'Normal';
                     $queueTime = date('H:i:s');
-                    $queueStatus = 'Waiting';
+                    $queueStatus = QUEUE_STATUS_WAITING;
 
                     $queueStmt = mysqli_prepare(
                         $conn,
@@ -245,7 +261,7 @@ if (
                     // --------------------------------------------------
                     // 6. Update appointment status
                     // --------------------------------------------------
-                    $appointmentStatus = 'Checked In';
+                    $appointmentStatus = APPT_STATUS_CHECKED_IN;
 
                     $updateAppointmentStmt = mysqli_prepare(
                         $conn,
@@ -372,43 +388,91 @@ if (
     // Validate required fields
     // --------------------------------------------------
 
-    if (
-        $fullName === '' ||
-        $dateOfBirth === '' ||
-        $phone === '' ||
-        $departmentId <= 0 ||
-        $reason === ''
-    ) {
+    // --------------------------------------------------
+    // Sanitize free-text inputs (XSS + length control)
+    // --------------------------------------------------
 
-        $message =
-            'Please complete all required walk-in fields.';
+    $fullName        = sanitizeTextInput($fullName, 120);
+    $allergies       = sanitizeTextInput($allergies ?? '', 500) ?: null;
+    $currentMedication = sanitizeTextInput($currentMedication ?? '', 500) ?: null;
+    $pastConditions  = sanitizeTextInput($pastConditions ?? '', 1000) ?: null;
+    $familyHistory   = sanitizeTextInput($familyHistory ?? '', 1000) ?: null;
+    $reason          = sanitizeTextInput($reason, 500);
 
+    // --------------------------------------------------
+    // Collect validation errors
+    // --------------------------------------------------
+
+    $errors = [];
+
+    if ($fullName === '') {
+        $errors[] = 'Please enter the patient\'s full name.';
+    }
+
+    if ($dateOfBirth === '') {
+        $errors[] = 'Please enter the patient\'s date of birth.';
+    }
+
+    if ($phone === '') {
+        $errors[] = 'Please enter the patient\'s phone number.';
+    }
+
+    if ($departmentId <= 0) {
+        $errors[] = 'Please select a department.';
+    }
+
+    if ($reason === '') {
+        $errors[] = 'Please provide a reason for the visit.';
+    }
+
+    // --------------------------------------------------
+    // Validate phone number format
+    // --------------------------------------------------
+
+    if ($phone !== '') {
+        $normalizedPhone = normalizePhilippinePhone($phone);
+
+        if ($normalizedPhone === null) {
+            $errors[] = 'Please enter a valid Philippine phone number (e.g. 09171234567 or +63 917 123 4567).';
+        } else {
+            $phone = $normalizedPhone;
+        }
+    }
+
+    // --------------------------------------------------
+    // Validate date of birth (not future, age 0-120)
+    // --------------------------------------------------
+
+    if ($dateOfBirth !== '') {
+        $dobError = validateAgeInRange($dateOfBirth, 0, 120);
+
+        if ($dobError !== null) {
+            $errors[] = $dobError;
+        }
+    }
+
+    // --------------------------------------------------
+    // Validate gender
+    // --------------------------------------------------
+
+    if (!in_array($gender, ['Male', 'Female', 'Other'], true)) {
+        $errors[] = 'Please select a valid gender.';
+    }
+
+    // --------------------------------------------------
+    // If validation failed, stop here
+    // --------------------------------------------------
+
+    if (!empty($errors)) {
+
+        $message = $errors[0];
         $messageType = 'error';
 
     } else {
 
         // --------------------------------------------------
-        // Validate date of birth
+        // Split full name
         // --------------------------------------------------
-
-        $dobTimestamp =
-            strtotime($dateOfBirth);
-
-        if (
-            $dobTimestamp === false ||
-            $dateOfBirth > $today
-        ) {
-
-            $message =
-                'Please enter a valid date of birth.';
-
-            $messageType = 'error';
-
-        } else {
-
-            // --------------------------------------------------
-            // Split full name
-            // --------------------------------------------------
 
             $nameParts =
                 preg_split(
@@ -479,7 +543,10 @@ if (
 
                 $placeholderEmail =
                     'walkin_' .
-                    bin2hex(random_bytes(8)) .
+                    date('YmdHis') .
+                    '_' .
+                    sanitizeNameForEmail($firstName) .
+                    sanitizeNameForEmail($lastName) .
                     '@medicare.local';
 
                 $randomPassword =
@@ -591,7 +658,7 @@ if (
                         Purpose,
                         Status
                     )
-                    VALUES (?, NULL, ?, ?, ?, ?, "Checked In")'
+                    VALUES (?, NULL, ?, ?, ?, ?, "' . APPT_STATUS_CHECKED_IN . '")'
                 );
 
                 mysqli_stmt_bind_param(
@@ -625,7 +692,8 @@ if (
                         COALESCE(MAX(QueueNumber), 0) + 1
                         AS NextNum
                      FROM queue
-                     WHERE QueueDate = ?'
+                     WHERE QueueDate = ?
+                     FOR UPDATE'
                 );
 
                 mysqli_stmt_bind_param(
@@ -662,7 +730,7 @@ if (
                         QueueTime,
                         Status
                     )
-                    VALUES (?, ?, "Normal", ?, ?, "Waiting")'
+                    VALUES (?, ?, "Normal", ?, ?, "' . QUEUE_STATUS_WAITING . '")'
                 );
 
                 // Actual walk-in/check-in time
@@ -716,7 +784,6 @@ if (
             }
         }
     }
-}
 
 // ======================================================
 // DEPARTMENTS + SESSION SLOT ESTIMATES
@@ -738,7 +805,7 @@ $deptResult = mysqli_query(
             CASE
                 WHEN
                     a.AppointmentDate = CURDATE()
-                    AND a.Status != 'Cancelled'
+                    AND a.Status != '" . APPT_STATUS_CANCELLED . "'
                     AND a.AppointmentTime < '12:00:00'
                 THEN 1
                 ELSE 0
@@ -749,7 +816,7 @@ $deptResult = mysqli_query(
             CASE
                 WHEN
                     a.AppointmentDate = CURDATE()
-                    AND a.Status != 'Cancelled'
+                    AND a.Status != '" . APPT_STATUS_CANCELLED . "'
                     AND a.AppointmentTime >= '12:00:00'
                 THEN 1
                 ELSE 0
@@ -1898,6 +1965,7 @@ $staffName =
                         id="wi_full_name"
                         class="form-input"
                         placeholder="e.g. Juan dela Cruz"
+                        value="<?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>"
                         required
                     >
 
@@ -1919,6 +1987,7 @@ $staffName =
                             id="wi_date_of_birth"
                             class="form-input"
                             max="<?php echo $today; ?>"
+                            value="<?php echo htmlspecialchars($dateOfBirth, ENT_QUOTES, 'UTF-8'); ?>"
                             required
                         >
 
@@ -1970,6 +2039,7 @@ $staffName =
                             id="wi_phone"
                             class="form-input"
                             placeholder="+63 912 345 6789"
+                            value="<?php echo htmlspecialchars($phone, ENT_QUOTES, 'UTF-8'); ?>"
                             required
                         >
 
@@ -2034,6 +2104,7 @@ $staffName =
                         name="allergies"
                         class="form-input"
                         placeholder="None"
+                        value="<?php echo htmlspecialchars($allergies, ENT_QUOTES, 'UTF-8'); ?>"
                     >
 
                 </div>
@@ -2051,6 +2122,7 @@ $staffName =
                         name="current_medication"
                         class="form-input"
                         placeholder="None"
+                        value="<?php echo htmlspecialchars($currentMedication, ENT_QUOTES, 'UTF-8'); ?>"
                     >
 
                 </div>
@@ -2068,6 +2140,7 @@ $staffName =
                         name="past_conditions"
                         class="form-input"
                         placeholder="None"
+                        value="<?php echo htmlspecialchars($pastConditions, ENT_QUOTES, 'UTF-8'); ?>"
                     >
 
                 </div>
@@ -2088,6 +2161,7 @@ $staffName =
                         name="family_history"
                         class="form-input"
                         placeholder="None"
+                        value="<?php echo htmlspecialchars($familyHistory, ENT_QUOTES, 'UTF-8'); ?>"
                     >
 
                 </div>
@@ -2280,7 +2354,7 @@ $staffName =
                         class="form-input form-textarea"
                         required
                         placeholder="Briefly describe the patient's concern..."
-                    ></textarea>
+                    ><?php echo htmlspecialchars($reason, ENT_QUOTES, 'UTF-8'); ?></textarea>
 
                 </div>
 

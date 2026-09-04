@@ -6,7 +6,7 @@
  * Uses the real MySQL database.
  * Workflow:
  *
- * Waiting → Called → In Progress → Completed
+ * Waiting → Called → In Consultation → Completed
  *
  * Queue table:
  * QueueID
@@ -21,6 +21,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/status_constants.php';
 
 
 // ======================================================
@@ -116,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'SELECT QueueID
              FROM queue
              WHERE QueueDate = ?
-             AND Status = "Waiting"
+             AND Status = "' . QUEUE_STATUS_WAITING . '"
              ORDER BY
                 CASE
                     WHEN PriorityLevel = "Urgent" THEN 1
@@ -158,9 +159,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updateQueueStmt = mysqli_prepare(
                     $conn,
                     'UPDATE queue
-                     SET Status = "Called"
+                     SET Status = "' . QUEUE_STATUS_CALLED . '"
                      WHERE QueueID = ?
-                     AND Status = "Waiting"'
+                     AND Status = "' . QUEUE_STATUS_WAITING . '"'
                 );
 
                 mysqli_stmt_bind_param(
@@ -206,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $appointmentUpdateStmt = mysqli_prepare(
                         $conn,
                         'UPDATE appointments
-                         SET Status = "Called"
+                         SET Status = "' . APPT_STATUS_CALLED . '"
                          WHERE AppointmentID = ?'
                     );
 
@@ -250,14 +251,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'call') {
 
-            $queueStatus = 'Called';
+            $queueStatus = QUEUE_STATUS_CALLED;
 
             $stmt = mysqli_prepare(
                 $conn,
                 'UPDATE queue
                  SET Status = ?
                  WHERE QueueID = ?
-                 AND Status = "Waiting"'
+                 AND Status = "' . QUEUE_STATUS_WAITING . '"'
             );
 
             mysqli_stmt_bind_param(
@@ -305,7 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mysqli_prepare(
                             $conn,
                             'UPDATE appointments
-                             SET Status = "Called"
+                             SET Status = "' . APPT_STATUS_CALLED . '"
                              WHERE AppointmentID = ?'
                         );
 
@@ -341,24 +342,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         elseif ($action === 'start') {
 
-            $queueStatus = 'In Progress';
+            mysqli_begin_transaction($conn);
 
-            $stmt = mysqli_prepare(
-                $conn,
-                'UPDATE queue
-                 SET Status = ?
-                 WHERE QueueID = ?
-                 AND Status = "Called"'
-            );
+            try {
 
-            mysqli_stmt_bind_param(
-                $stmt,
-                'si',
-                $queueStatus,
-                $queueID
-            );
+                $queueStatus = QUEUE_STATUS_IN_CONSULTATION;
 
-            if (mysqli_stmt_execute($stmt)) {
+                $stmt = mysqli_prepare(
+                    $conn,
+                    'UPDATE queue
+                     SET Status = ?
+                     WHERE QueueID = ?
+                     AND Status = "' . QUEUE_STATUS_CALLED . '"'
+                );
+
+                mysqli_stmt_bind_param(
+                    $stmt,
+                    'si',
+                    $queueStatus,
+                    $queueID
+                );
+
+                if (!mysqli_stmt_execute($stmt)) {
+                    throw new Exception('Failed to start consultation.');
+                }
 
                 // Get appointment ID
                 $getAppointmentStmt = mysqli_prepare(
@@ -396,7 +403,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mysqli_prepare(
                             $conn,
                             'UPDATE appointments
-                             SET Status = "In Consultation"
+                             SET Status = "' . APPT_STATUS_IN_CONSULTATION . '"
                              WHERE AppointmentID = ?'
                         );
 
@@ -411,12 +418,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
 
+                mysqli_commit($conn);
+
                 $message =
                     'Consultation started.';
 
                 $messageType = 'success';
 
-            } else {
+            } catch (Exception $e) {
+
+                mysqli_rollback($conn);
 
                 $message =
                     'Unable to start consultation.';
@@ -432,24 +443,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         elseif ($action === 'complete') {
 
-            $queueStatus = 'Completed';
+            mysqli_begin_transaction($conn);
 
-            $stmt = mysqli_prepare(
-                $conn,
-                'UPDATE queue
-                 SET Status = ?
-                 WHERE QueueID = ?
-                 AND Status = "In Progress"'
-            );
+            try {
 
-            mysqli_stmt_bind_param(
-                $stmt,
-                'si',
-                $queueStatus,
-                $queueID
-            );
+                $queueStatus = QUEUE_STATUS_COMPLETED;
 
-            if (mysqli_stmt_execute($stmt)) {
+                $stmt = mysqli_prepare(
+                    $conn,
+                    'UPDATE queue
+                     SET Status = ?
+                     WHERE QueueID = ?
+                     AND Status = "' . QUEUE_STATUS_IN_CONSULTATION . '"'
+                );
+
+                mysqli_stmt_bind_param(
+                    $stmt,
+                    'si',
+                    $queueStatus,
+                    $queueID
+                );
+
+                if (!mysqli_stmt_execute($stmt)) {
+                    throw new Exception('Failed to complete consultation.');
+                }
 
                 // Get appointment ID
                 $getAppointmentStmt = mysqli_prepare(
@@ -487,7 +504,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mysqli_prepare(
                             $conn,
                             'UPDATE appointments
-                             SET Status = "Completed"
+                             SET Status = "' . APPT_STATUS_COMPLETED . '"
                              WHERE AppointmentID = ?'
                         );
 
@@ -502,16 +519,204 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
 
+                mysqli_commit($conn);
+
                 $message =
                     'Consultation completed.';
 
                 $messageType = 'success';
 
-            } else {
+            } catch (Exception $e) {
+
+                mysqli_rollback($conn);
 
                 $message =
                     'Unable to complete consultation.';
 
+                $messageType = 'error';
+            }
+        }
+
+        // ==============================================
+        // MARK AS NO-SHOW
+        // ==============================================
+
+        elseif ($action === 'no_show') {
+
+            $reason = isset($_POST['reason'])
+                ? trim((string) $_POST['reason'])
+                : '';
+            $reason = mb_substr($reason, 0, 255);
+
+            mysqli_begin_transaction($conn);
+
+            try {
+
+                // Resolve appointment / patient / department for this queue row
+                $infoStmt = mysqli_prepare(
+                    $conn,
+                    'SELECT q.AppointmentID, a.PatientID, a.DepartmentID
+                     FROM queue q
+                     INNER JOIN appointments a
+                        ON q.AppointmentID = a.AppointmentID
+                     WHERE q.QueueID = ?
+                     LIMIT 1'
+                );
+
+                mysqli_stmt_bind_param(
+                    $infoStmt,
+                    'i',
+                    $queueID
+                );
+
+                mysqli_stmt_execute($infoStmt);
+
+                $infoRow = mysqli_fetch_assoc(
+                    mysqli_stmt_get_result($infoStmt)
+                );
+
+                if (!$infoRow) {
+                    throw new Exception('Queue entry not found.');
+                }
+
+                $appointmentID = (int) $infoRow['AppointmentID'];
+                $patientID = (int) $infoRow['PatientID'];
+                $departmentID = (int) $infoRow['DepartmentID'];
+
+                // Update queue status
+                $queueStatus = QUEUE_STATUS_NO_SHOW;
+
+                $queueStmt = mysqli_prepare(
+                    $conn,
+                    'UPDATE queue
+                     SET Status = ?
+                     WHERE QueueID = ?'
+                );
+
+                mysqli_stmt_bind_param(
+                    $queueStmt,
+                    'si',
+                    $queueStatus,
+                    $queueID
+                );
+
+                if (!mysqli_stmt_execute($queueStmt)) {
+                    throw new Exception('Failed to update queue.');
+                }
+
+                // Update appointment status
+                $apptStatus = APPT_STATUS_NO_SHOW;
+
+                $apptStmt = mysqli_prepare(
+                    $conn,
+                    'UPDATE appointments
+                     SET Status = ?
+                     WHERE AppointmentID = ?'
+                );
+
+                mysqli_stmt_bind_param(
+                    $apptStmt,
+                    'si',
+                    $apptStatus,
+                    $appointmentID
+                );
+
+                mysqli_stmt_execute($apptStmt);
+
+                // Record no-show
+                $noShowDate = date('Y-m-d');
+
+                $noShowStmt = mysqli_prepare(
+                    $conn,
+                    'INSERT INTO no_shows
+                        (QueueID, AppointmentID, PatientID, DepartmentID,
+                         MarkedBy, NoShowReason, NoShowDate, FollowUpStatus)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, "Pending")'
+                );
+
+                mysqli_stmt_bind_param(
+                    $noShowStmt,
+                    'iiiiiss',
+                    $queueID,
+                    $appointmentID,
+                    $patientID,
+                    $departmentID,
+                    $currentUserID,
+                    $reason,
+                    $noShowDate
+                );
+
+                if (!mysqli_stmt_execute($noShowStmt)) {
+                    throw new Exception('Failed to record no-show.');
+                }
+
+                mysqli_commit($conn);
+
+                $message = 'Patient marked as no-show.';
+
+                $messageType = 'success';
+
+            } catch (Exception $e) {
+
+                mysqli_rollback($conn);
+
+                $message = 'Unable to mark patient as no-show.';
+
+                $messageType = 'error';
+            }
+        }
+
+        // ==============================================
+        // UPDATE NO-SHOW FOLLOW-UP
+        // ==============================================
+
+        elseif ($action === 'update_followup') {
+
+            $noShowID = (int) ($_POST['no_show_id'] ?? 0);
+            $followUpStatus = isset($_POST['followup_status'])
+                ? trim((string) $_POST['followup_status'])
+                : '';
+            $followUpNote = isset($_POST['followup_note'])
+                ? trim((string) $_POST['followup_note'])
+                : '';
+
+            $allowedStatuses = [
+                'Pending',
+                'Contacted',
+                'Rescheduled',
+                'Resolved'
+            ];
+
+            if ($noShowID > 0
+                && in_array($followUpStatus, $allowedStatuses, true)
+            ) {
+
+                $updateStmt = mysqli_prepare(
+                    $conn,
+                    'UPDATE no_shows
+                     SET FollowUpStatus = ?, FollowUpNote = ?
+                     WHERE NoShowID = ?'
+                );
+
+                mysqli_stmt_bind_param(
+                    $updateStmt,
+                    'ssi',
+                    $followUpStatus,
+                    $followUpNote,
+                    $noShowID
+                );
+
+                if (mysqli_stmt_execute($updateStmt)) {
+                    $message = 'Follow-up updated.';
+                    $messageType = 'success';
+                } else {
+                    $message = 'Unable to update follow-up.';
+                    $messageType = 'error';
+                }
+
+            } else {
+
+                $message = 'Invalid follow-up request.';
                 $messageType = 'error';
             }
         }
@@ -562,6 +767,7 @@ $queueStmt = mysqli_prepare(
         a.Purpose,
 
         p.PatientID,
+        a.DepartmentID,
 
         u.FirstName,
         u.MiddleName,
@@ -586,12 +792,12 @@ $queueStmt = mysqli_prepare(
 
      WHERE q.QueueDate = ?
 
-     ORDER BY
+         ORDER BY
         CASE
-            WHEN q.Status = "In Progress" THEN 1
-            WHEN q.Status = "Called" THEN 2
-            WHEN q.Status = "Waiting" THEN 3
-            WHEN q.Status = "Completed" THEN 4
+            WHEN q.Status = "' . QUEUE_STATUS_IN_CONSULTATION . '" THEN 1
+            WHEN q.Status = "' . QUEUE_STATUS_CALLED . '" THEN 2
+            WHEN q.Status = "' . QUEUE_STATUS_WAITING . '" THEN 3
+            WHEN q.Status = "' . QUEUE_STATUS_COMPLETED . '" THEN 4
             ELSE 5
         END,
         q.QueueTime ASC,
@@ -622,25 +828,34 @@ $waiting = [];
 $called = [];
 $inProgress = [];
 $completed = [];
+$noShows = [];
 
 foreach ($queue as $patient) {
 
     switch (strtolower($patient['Status'])) {
 
-        case 'waiting':
+        case strtolower(QUEUE_STATUS_WAITING):
             $waiting[] = $patient;
             break;
 
-        case 'called':
+        case strtolower(QUEUE_STATUS_CALLED):
             $called[] = $patient;
+            break;
+
+        case strtolower(QUEUE_STATUS_IN_CONSULTATION):
+            $inProgress[] = $patient;
             break;
 
         case 'in progress':
             $inProgress[] = $patient;
             break;
 
-        case 'completed':
+        case strtolower(QUEUE_STATUS_COMPLETED):
             $completed[] = $patient;
+            break;
+
+        case strtolower(QUEUE_STATUS_NO_SHOW):
+            $noShows[] = $patient;
             break;
     }
 }
@@ -654,6 +869,56 @@ $waitingCount = count($waiting);
 $calledCount = count($called);
 $inProgressCount = count($inProgress);
 $completedCount = count($completed);
+$noShowCount = count($noShows);
+
+
+// ======================================================
+// NO-SHOW LIST (for tracking panel)
+// ======================================================
+
+$noShowList = [];
+
+$noShowListStmt = mysqli_prepare(
+    $conn,
+    'SELECT
+        ns.NoShowID,
+        ns.NoShowDate,
+        ns.NoShowReason,
+        ns.FollowUpStatus,
+        ns.FollowUpNote,
+        q.QueueNumber,
+        d.DepartmentName,
+        u.FirstName,
+        u.LastName,
+        u.ContactNumber
+     FROM no_shows ns
+     LEFT JOIN queue q
+        ON ns.QueueID = q.QueueID
+     INNER JOIN departments d
+        ON ns.DepartmentID = d.DepartmentID
+     INNER JOIN patients p
+        ON ns.PatientID = p.PatientID
+     INNER JOIN users u
+        ON p.UserID = u.UserID
+     WHERE ns.NoShowDate = ?
+     ORDER BY ns.CreatedAt DESC,
+        ns.NoShowID DESC'
+);
+
+mysqli_stmt_bind_param(
+    $noShowListStmt,
+    's',
+    $today
+);
+
+mysqli_stmt_execute($noShowListStmt);
+
+$noShowListResult =
+    mysqli_stmt_get_result($noShowListStmt);
+
+while ($row = mysqli_fetch_assoc($noShowListResult)) {
+    $noShowList[] = $row;
+}
 
 
 // ======================================================
@@ -1035,7 +1300,7 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
     <div class="staff-stat-card">
 
         <div class="staff-stat-label">
-            In Progress
+            In Consultation
         </div>
 
         <div class="staff-stat-value teal">
@@ -1053,6 +1318,19 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
         <div class="staff-stat-value green">
             <?= $completedCount ?>
+        </div>
+
+    </div>
+
+
+    <div class="staff-stat-card">
+
+        <div class="staff-stat-label">
+            No-Show Today
+        </div>
+
+        <div class="staff-stat-value red">
+            <?= $noShowCount ?>
         </div>
 
     </div>
@@ -1336,6 +1614,14 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
                 <div class="queue-actions">
 
+                    <a
+                        class="btn-vitals"
+                        href="record_vitals.php?queue_id=<?= (int)$p['QueueID'] ?>"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        Vitals
+                    </a>
+
                     <form method="POST">
 
                         <input
@@ -1355,6 +1641,36 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
                             type="submit"
                         >
                             Call
+                        </button>
+
+                    </form>
+
+
+                    <form
+                        method="POST"
+                        class="no-show-form"
+                        onsubmit="return noShowConfirm(this);"
+                    >
+
+                        <input
+                            type="hidden"
+                            name="action"
+                            value="no_show"
+                        >
+
+                        <input
+                            type="hidden"
+                            name="queue_id"
+                            value="<?= (int)$p['QueueID'] ?>"
+                        >
+
+                        <input type="hidden" name="reason">
+
+                        <button
+                            class="btn-noshow"
+                            type="submit"
+                        >
+                            No Show
                         </button>
 
                     </form>
@@ -1449,6 +1765,14 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
                 <div class="queue-actions">
 
+                    <a
+                        class="btn-vitals"
+                        href="record_vitals.php?queue_id=<?= (int)$p['QueueID'] ?>"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        Vitals
+                    </a>
+
                     <form method="POST">
 
                         <input
@@ -1470,6 +1794,36 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
                             Start Consultation
 
+                        </button>
+
+                    </form>
+
+
+                    <form
+                        method="POST"
+                        class="no-show-form"
+                        onsubmit="return noShowConfirm(this);"
+                    >
+
+                        <input
+                            type="hidden"
+                            name="action"
+                            value="no_show"
+                        >
+
+                        <input
+                            type="hidden"
+                            name="queue_id"
+                            value="<?= (int)$p['QueueID'] ?>"
+                        >
+
+                        <input type="hidden" name="reason">
+
+                        <button
+                            class="btn-noshow"
+                            type="submit"
+                        >
+                            No Show
                         </button>
 
                     </form>
@@ -1504,7 +1858,7 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
         <div class="panel-head-title purple">
 
-            In Progress
+            In Consultation
 
         </div>
 
@@ -1706,9 +2060,191 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
 </div>
 
+
+<!-- =====================================================
+     NO-SHOW TRACKING
+====================================================== -->
+
+<div class="panel no-show-panel">
+
+    <div class="panel-head">
+
+        <div class="panel-head-title red">
+
+            No-Show Tracking
+
+        </div>
+
+        <span class="panel-head-meta">
+
+            Today's no-show records
+
+        </span>
+
+    </div>
+
+
+    <?php if (empty($noShowList)): ?>
+
+        <div class="empty-state">
+
+            No no-show patients today.
+
+        </div>
+
+    <?php else: ?>
+
+        <div class="queue-list">
+
+        <?php foreach ($noShowList as $ns): ?>
+
+            <div class="queue-list-row">
+
+                <div class="queue-badge">
+
+                    Q<?= str_pad(
+                        $ns['QueueNumber'] ?? 0,
+                        3,
+                        '0',
+                        STR_PAD_LEFT
+                    ) ?>
+
+                </div>
+
+
+                <div class="queue-info">
+
+                    <div class="queue-name">
+
+                        <?= htmlspecialchars(
+                            $ns['FirstName'] .
+                            ' ' .
+                            $ns['LastName']
+                        ) ?>
+
+                    </div>
+
+
+                    <div class="queue-sub">
+
+                        <?= htmlspecialchars(
+                            $ns['DepartmentName']
+                        ) ?>
+
+                        &bull;
+
+                        Follow-up:
+
+                        <span class="followup-status">
+
+                            <?= htmlspecialchars(
+                                $ns['FollowUpStatus']
+                            ) ?>
+
+                        </span>
+
+
+                        <?php if ($ns['NoShowReason'] !== ''): ?>
+
+                            <span class="sep">
+                                &bull;
+                            </span>
+
+                            <span class="followup-reason">
+
+                                <?= htmlspecialchars(
+                                    $ns['NoShowReason']
+                                ) ?>
+
+                            </span>
+
+                        <?php endif; ?>
+
+                    </div>
+
+                </div>
+
+
+                <div class="queue-actions">
+
+                    <form method="POST">
+
+                        <input
+                            type="hidden"
+                            name="action"
+                            value="update_followup"
+                        >
+
+                        <input
+                            type="hidden"
+                            name="no_show_id"
+                            value="<?= (int)$ns['NoShowID'] ?>"
+                        >
+
+                        <select
+                            name="followup_status"
+                            class="followup-select"
+                        >
+
+                            <?php foreach (
+                                ['Pending', 'Contacted', 'Rescheduled', 'Resolved']
+                                as $fs
+                            ): ?>
+
+                                <option
+                                    value="<?= $fs ?>"
+                                    <?= ($ns['FollowUpStatus'] === $fs)
+                                        ? 'selected'
+                                        : '' ?>
+                                >
+
+                                    <?= $fs ?>
+
+                                </option>
+
+                            <?php endforeach; ?>
+
+                        </select>
+
+
+                        <button
+                            class="btn-followup"
+                            type="submit"
+                        >
+                            Update
+                        </button>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        <?php endforeach; ?>
+
+        </div>
+
+    <?php endif; ?>
+
+</div>
+
 </main>
 
 </div>
+
+<script>
+  function noShowConfirm(form) {
+    var reason = prompt('Reason for no-show (optional):');
+    if (reason === null) {
+      return false;
+    }
+    var reasonInput = form.querySelector('input[name="reason"]');
+    if (reasonInput) {
+      reasonInput.value = reason;
+    }
+    return true;
+  }
+</script>
 
 </body>
 

@@ -196,6 +196,7 @@ body {
 .staff-stat-value.blue { color: var(--color-blue); }
 .staff-stat-value.orange { color: var(--color-orange); }
 .staff-stat-value.green { color: var(--color-green); }
+.staff-stat-value.red { color: var(--color-red); }
 
 /* Quick actions */
 .staff-quick-actions {
@@ -353,6 +354,86 @@ body {
 }
 .btn-complete:hover { background: #047857; }
 .btn-complete svg { width: 13px; height: 13px; }
+
+.btn-noshow {
+  background: #fff;
+  color: var(--color-red);
+  border: 1px solid #fecaca;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-family: var(--font-family);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-noshow:hover { background: var(--color-red); color: #fff; border-color: var(--color-red); }
+
+.btn-followup {
+  background: var(--color-blue);
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: var(--font-family);
+  font-weight: 700;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-followup:hover { background: var(--color-blue-hover); }
+
+.btn-vitals {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-family: var(--font-family);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+.btn-vitals:hover { background: var(--color-primary-hover); }
+.btn-vitals svg { width: 14px; height: 14px; }
+
+/* ---------- NO-SHOW PANEL ---------- */
+.panel-head-title.red { color: var(--color-red); }
+.panel-head-title.red svg { color: var(--color-red); }
+
+.no-show-panel {
+  margin-top: 20px;
+  width: 100%;
+}
+
+.followup-select {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-family);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  background: #fff;
+  cursor: pointer;
+}
+
+.followup-status {
+  font-weight: 700;
+  color: var(--color-red);
+}
+
+.followup-reason {
+  color: var(--color-ink-soft);
+  font-style: italic;
+}
+
+.no-show-panel .sep { color: var(--color-ink-soft); margin: 0 4px; }
 
 /* ---------- CHECK-IN PAGE ---------- */
 .staff-header-actions { display: flex; gap: 10px; flex-shrink: 0; }

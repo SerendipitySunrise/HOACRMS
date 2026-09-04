@@ -22,7 +22,9 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/status_constants.php';
 require_once __DIR__ . '/../includes/pdf_helper.php';
+require_once __DIR__ . '/../includes/vitals.php';
 
 
 /* ================================================================
@@ -545,7 +547,7 @@ if (
                 Notes = ?,
                 LabRequest = ?,
                 FollowUpDate = ?,
-                Status = 'Completed',
+                Status = '" . CONSULTATION_STATUS_COMPLETED . "',
                 BloodPressure = ?,
                 Temperature = NULLIF(?, ''),
                 PulseRate = NULLIF(?, ''),
@@ -629,7 +631,7 @@ if (
                 ?,
                 ?,
                 ?,
-                'Completed',
+                '" . CONSULTATION_STATUS_COMPLETED . "',
                 ?,
                 NULLIF(?, ''),
                 NULLIF(?, '')
@@ -800,7 +802,7 @@ if (
 
     $updateAppointmentSql = "
         UPDATE appointments
-        SET Status = 'Completed'
+        SET Status = '" . APPT_STATUS_COMPLETED . "'
         WHERE AppointmentID = ?
           AND StaffID = ?
     ";
@@ -986,7 +988,7 @@ if (
         'doctor_specialization' => $doctorSpecialization,
         'doctor_license' => '',
         'department' => $doctorDepartment,
-        'status' => 'Ongoing',
+        'status' => CONSULTATION_STATUS_ONGOING,
         'consultation_datetime' => date('F j, Y') . '  |  ' . date('g:i A'),
         'patient_name' => $patientName,
         'patient_id' => 'PT-' . str_pad((string)$patID, 3, '0', STR_PAD_LEFT),
@@ -1062,7 +1064,7 @@ if (
          FROM appointments
          WHERE StaffID = ?
            AND AppointmentDate = ?
-           AND Status NOT IN ('Cancelled','No-show')"
+           AND Status NOT IN ('" . APPT_STATUS_CANCELLED . "','" . APPT_STATUS_NO_SHOW . "')"
     );
 
     mysqli_stmt_bind_param($availStmt, 'is', $staffID, $checkDate);
@@ -1116,7 +1118,7 @@ if (
         "INSERT INTO appointments
             (PatientID, StaffID, DepartmentID, AppointmentDate,
              AppointmentTime, Purpose, Status)
-         VALUES (?, ?, ?, ?, ?, ?, 'Scheduled')"
+         VALUES (?, ?, ?, ?, ?, ?, '" . APPT_STATUS_SCHEDULED . "')"
     );
 
     mysqli_stmt_bind_param(
@@ -1338,7 +1340,7 @@ while ($row = mysqli_fetch_assoc($queueResult)) {
         SELECT COUNT(*) AS cnt
         FROM consultations
         WHERE PatientID = ?
-          AND Status = 'Ongoing'
+          AND Status = '" . CONSULTATION_STATUS_ONGOING . "'
           AND LabRequest IS NOT NULL
           AND TRIM(LabRequest) <> ''
     ";
@@ -1765,7 +1767,7 @@ if (isset($_GET['consult'])) {
                         ?,
                         ?,
                         ?,
-                        'Ongoing'
+                        CONSULTATION_STATUS_ONGOING
                     )
                 ";
 
@@ -1808,7 +1810,7 @@ if (isset($_GET['consult'])) {
 
                 $calledSql = "
                     UPDATE appointments
-                    SET Status = 'Called'
+                    SET Status = '" . APPT_STATUS_CALLED . "'
                     WHERE AppointmentID = ?
                       AND StaffID = ?
                 ";
@@ -2001,6 +2003,76 @@ if (isset($_GET['consult'])) {
 
             $consultPatient['pulse_rate'] =
                 $consultation['PulseRate'] ?? '';
+
+            /*
+             * Load nurse / staff recorded pre-consultation vitals (vitals table).
+             * These are stored separately from the consultation record so they
+             * can be captured before the doctor opens the visit.
+             */
+
+            $consultPatient['nurse_vitals'] = [];
+            $consultPatient['has_nurse_vitals'] = false;
+
+            $nurseVitalsStmt = mysqli_prepare(
+                $conn,
+                'SELECT BloodPressure, Temperature, PulseRate, RespiratoryRate,
+                        Weight, Height, OxygenSaturation, RecordedAt
+                 FROM vitals
+                 WHERE AppointmentID = ? AND PatientID = ?
+                 ORDER BY VitalID DESC
+                 LIMIT 5'
+            );
+
+            mysqli_stmt_bind_param(
+                $nurseVitalsStmt,
+                'ii',
+                $consultPatient['appointment_id'],
+                $consultPatient['patient_id']
+            );
+
+            mysqli_stmt_execute($nurseVitalsStmt);
+
+            $nurseVitalsResult =
+                mysqli_stmt_get_result($nurseVitalsStmt);
+
+            while ($nvRow = mysqli_fetch_assoc($nurseVitalsResult)) {
+                $consultPatient['nurse_vitals'][] = $nvRow;
+            }
+
+            if (!empty($consultPatient['nurse_vitals'])) {
+
+                $latestNV = $consultPatient['nurse_vitals'][0];
+
+                $consultPatient['has_nurse_vitals'] = true;
+
+                // Pre-fill the doctor form from the nurse's latest reading.
+                if (($latestNV['BloodPressure'] ?? '') !== '') {
+                    $consultPatient['blood_pressure'] =
+                        $latestNV['BloodPressure'];
+                }
+
+                if (($latestNV['Temperature'] ?? '') !== '') {
+                    $consultPatient['temperature'] =
+                        $latestNV['Temperature'];
+                }
+
+                if (($latestNV['PulseRate'] ?? '') !== '') {
+                    $consultPatient['pulse_rate'] =
+                        $latestNV['PulseRate'];
+                }
+
+                $consultPatient['respiratory_rate'] =
+                    $latestNV['RespiratoryRate'] ?? '';
+
+                $consultPatient['weight'] =
+                    $latestNV['Weight'] ?? '';
+
+                $consultPatient['height'] =
+                    $latestNV['Height'] ?? '';
+
+                $consultPatient['oxygen_saturation'] =
+                    $latestNV['OxygenSaturation'] ?? '';
+            }
 
             $consultPatient['follow_up_date'] =
                 $consultation['FollowUpDate'] ?? '';

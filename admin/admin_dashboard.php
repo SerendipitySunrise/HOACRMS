@@ -1,9 +1,61 @@
 <?php
 
 require_once __DIR__ . '/../includes/session.php';
+require_once __DIR__ . '/../includes/db.php';
 requireRole('Admin');
 
 $displayName = htmlspecialchars(trim(($_SESSION['FirstName'] ?? '') . ' ' . ($_SESSION['LastName'] ?? '')));
+
+// No-show statistics for the admin dashboard
+$noShowCountToday = 0;
+
+$noShowCountStmt = mysqli_prepare(
+    $conn,
+    'SELECT COUNT(*) AS c
+     FROM no_shows
+     WHERE NoShowDate = CURDATE()'
+);
+
+if ($noShowCountStmt) {
+    mysqli_stmt_execute($noShowCountStmt);
+    $noShowCountRow = mysqli_fetch_assoc(
+        mysqli_stmt_get_result($noShowCountStmt)
+    );
+    $noShowCountToday = (int) ($noShowCountRow['c'] ?? 0);
+}
+
+$recentNoShows = [];
+
+$recentNoShowStmt = mysqli_prepare(
+    $conn,
+    'SELECT
+        ns.NoShowID,
+        ns.NoShowDate,
+        ns.NoShowReason,
+        ns.FollowUpStatus,
+        d.DepartmentName,
+        u.FirstName,
+        u.LastName
+     FROM no_shows ns
+     INNER JOIN departments d
+        ON ns.DepartmentID = d.DepartmentID
+     INNER JOIN patients p
+        ON ns.PatientID = p.PatientID
+     INNER JOIN users u
+        ON p.UserID = u.UserID
+     ORDER BY ns.CreatedAt DESC,
+        ns.NoShowID DESC
+     LIMIT 10'
+);
+
+if ($recentNoShowStmt) {
+    mysqli_stmt_execute($recentNoShowStmt);
+    $recentNoShowResult =
+        mysqli_stmt_get_result($recentNoShowStmt);
+    while ($row = mysqli_fetch_assoc($recentNoShowResult)) {
+        $recentNoShows[] = $row;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -132,6 +184,10 @@ $displayName = htmlspecialchars(trim(($_SESSION['FirstName'] ?? '') . ' ' . ($_S
         <div class="admin-stat-value">6m</div>
         <div class="admin-stat-label">Avg Wait Time</div>
       </div>
+      <div class="admin-stat-card red">
+        <div class="admin-stat-value"><?= $noShowCountToday ?></div>
+        <div class="admin-stat-label">No-Shows Today</div>
+      </div>
     </div>
 
     <!-- Two column grid -->
@@ -231,6 +287,53 @@ $displayName = htmlspecialchars(trim(($_SESSION['FirstName'] ?? '') . ' ' . ($_S
       </section>
 
     </div>
+
+
+    <!-- Recent No-Shows -->
+    <section class="panel" style="margin-top:20px;">
+      <div class="panel-head">
+        <div class="panel-head-title">Recent No-Shows</div>
+        <div class="panel-head-meta">Latest <?= count($recentNoShows) ?> records</div>
+      </div>
+
+      <?php if (empty($recentNoShows)): ?>
+        <div style="color:var(--color-ink-soft);font-size:0.9rem;padding:8px 0;">
+          No no-show records yet.
+        </div>
+      <?php else: ?>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <?php foreach ($recentNoShows as $ns): ?>
+            <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--color-border);border-radius:10px;background:#fff;">
+              <div style="width:36px;height:36px;border-radius:50%;background:#fde2e2;color:var(--color-red);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0;">
+                <?= strtoupper(
+                    substr($ns['FirstName'], 0, 1) .
+                    substr($ns['LastName'], 0, 1)
+                ) ?>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:700;">
+                  <?= htmlspecialchars($ns['FirstName'] . ' ' . $ns['LastName']) ?>
+                </div>
+                <div style="font-size:0.78rem;color:var(--color-ink-soft);">
+                  <?= htmlspecialchars($ns['DepartmentName']) ?>
+                  &bull;
+                  <?= htmlspecialchars(date('M d, Y', strtotime($ns['NoShowDate']))) ?>
+                  <?php if ($ns['NoShowReason'] !== ''): ?>
+                    &bull;
+                    <span style="font-style:italic;">
+                      <?= htmlspecialchars($ns['NoShowReason']) ?>
+                    </span>
+                  <?php endif; ?>
+                </div>
+              </div>
+              <span style="font-size:0.72rem;font-weight:700;padding:4px 10px;border-radius:20px;background:#fde2e2;color:var(--color-red);flex-shrink:0;">
+                <?= htmlspecialchars($ns['FollowUpStatus']) ?>
+              </span>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </section>
 
   </main>
 </div>
