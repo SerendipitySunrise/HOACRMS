@@ -1,21 +1,18 @@
 <?php
 /**
- * search_patient.php — Patient Search (Doctor Portal)
+ * search_patient.php — Patient Search / Launchpad (Doctor Portal)
  *
- * REAL DATABASE VERSION
- *
- * Data sources:
- * users          -> patient's name, sex, DOB
- * patients       -> PatientID, blood type, allergies, medical information
- * appointments   -> appointment history
- * consultations  -> consultation history
- * staff          -> logged-in doctor's information
- * departments    -> doctor's department
+ * Lightweight search-and-launch interface:
+ *   - Search by name, ID, or phone
+ *   - Quick Lookup card: allergies, last visit, current medications
+ *   - [Start Consultation] → doctor_queue.php
+ *   - [View Full Record]   → records.php?patient_id=
  */
 
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+
 
 /*
 |--------------------------------------------------------------------------
@@ -32,9 +29,6 @@ if (!isset($conn) || !$conn) {
 |--------------------------------------------------------------------------
 | GET LOGGED-IN USER
 |--------------------------------------------------------------------------
-|
-| Your login system should store UserID in the session.
-|
 */
 
 $userId = $_SESSION['UserID'] ?? $_SESSION['user_id'] ?? null;
@@ -44,7 +38,7 @@ if (!$userId) {
     exit;
 }
 
-$userId = (int)$userId;
+$userId = (int) $userId;
 
 
 /*
@@ -89,7 +83,7 @@ if ($stmtDoctor) {
 
         $doctor = $doctorResult->fetch_assoc();
 
-        $doctorStaffId = (int)$doctor['StaffID'];
+        $doctorStaffId = (int) $doctor['StaffID'];
 
         $doctorName = 'Dr. ' .
             trim(
@@ -107,10 +101,12 @@ if ($stmtDoctor) {
 
 /*
 |--------------------------------------------------------------------------
-| GET ALL PATIENTS
+| GET ALL PATIENTS (streamlined)
 |--------------------------------------------------------------------------
 |
-| No dummy patients.
+| Only the fields needed for the launchpad:
+|   name, age, sex, phone, patient id, blood type,
+|   allergies, current medications, last visit date
 |
 */
 
@@ -122,19 +118,15 @@ $patientSql = "
         p.UserID,
         p.BloodType,
         p.Allergies,
-        p.CreatedAt,
+        p.CurrentMedication,
+        p.PastMedicalCondition,
 
         u.FirstName,
         u.MiddleName,
         u.LastName,
         u.Sex,
         u.DateOfBirth,
-
-        (
-            SELECT COUNT(*)
-            FROM appointments a
-            WHERE a.PatientID = p.PatientID
-        ) AS appointment_count,
+        u.ContactNumber,
 
         (
             SELECT COUNT(*)
@@ -143,22 +135,19 @@ $patientSql = "
         ) AS consultation_count,
 
         (
+            SELECT MAX(c.ConsultationDate)
+            FROM consultations c
+            WHERE c.PatientID = p.PatientID
+        ) AS last_visit_date,
+
+        (
             SELECT COUNT(*)
             FROM consultations c
             WHERE c.PatientID = p.PatientID
-              AND c.Treatment IS NOT NULL
-              AND TRIM(c.Treatment) <> ''
-        ) AS prescription_count,
-
-        (
-            SELECT MIN(
-                COALESCE(c.ConsultationDate, a.AppointmentDate)
-            )
-            FROM appointments a
-            LEFT JOIN consultations c
-                ON c.AppointmentID = a.AppointmentID
-            WHERE a.PatientID = p.PatientID
-        ) AS first_visit
+              AND c.Status = 'Ongoing'
+              AND c.LabRequest IS NOT NULL
+              AND TRIM(c.LabRequest) <> ''
+        ) AS lab_pending_count
 
     FROM patients p
 
@@ -192,14 +181,10 @@ function calculateAge($dateOfBirth)
     }
 
     try {
-
         $dob = new DateTime($dateOfBirth);
         $today = new DateTime();
-
         return $today->diff($dob)->y;
-
     } catch (Exception $e) {
-
         return null;
     }
 }
@@ -217,33 +202,75 @@ function formatName($first, $middle, $last)
 
 function formatPatientId($patientId)
 {
-    return 'PT-' . str_pad((string)$patientId, 3, '0', STR_PAD_LEFT);
+    return 'PT-' . str_pad((string) $patientId, 3, '0', STR_PAD_LEFT);
 }
 
 
-function formatDate($date)
+function formatCompactDate($date)
 {
     if (!$date) {
-        return 'N/A';
+        return null;
     }
 
     $timestamp = strtotime($date);
 
     if (!$timestamp) {
-        return htmlspecialchars($date);
+        return null;
     }
 
     return date('M j, Y', $timestamp);
 }
 
 
-function formatFirstVisit($date)
+function patientFlags(array $patient, bool $labPending = false): array
 {
-    if (!$date) {
-        return 'N/A';
+    $flags = [];
+
+    $allergies = '';
+
+    if (!empty($patient['allergies'])) {
+        $allergies = is_array($patient['allergies'])
+            ? implode(',', $patient['allergies'])
+            : trim((string) $patient['allergies']);
     }
 
-    return date('M Y', strtotime($date));
+    if (trim($allergies) !== '') {
+        $flags['allergy'] = 'Allergy';
+    }
+
+    $conditions = strtolower(trim((string) ($patient['past_medical_condition'] ?? '')));
+
+    $highRiskTerms = [
+        'diabetes',
+        'hypertension',
+        'high blood pressure',
+        'heart disease',
+        'cardiovascular',
+        'asthma',
+        'copd',
+        'cancer',
+        'malignancy',
+        'kidney disease',
+        'renal failure',
+        'stroke',
+        'seizure',
+        'epilepsy',
+        'hiv',
+        'hepatitis',
+    ];
+
+    foreach ($highRiskTerms as $term) {
+        if ($conditions !== '' && strpos($conditions, $term) !== false) {
+            $flags['high_risk'] = 'High Risk';
+            break;
+        }
+    }
+
+    if ($labPending) {
+        $flags['lab_pending'] = 'Lab Pending';
+    }
+
+    return $flags;
 }
 
 
@@ -275,291 +302,55 @@ while ($row = $resultPatients->fetch_assoc()) {
     $allergies = [];
 
     if (!empty($row['Allergies'])) {
-
-        /*
-         * If allergies are stored like:
-         *
-         * Penicillin, Seafood
-         *
-         * they will be displayed separately.
-         */
-
         $allergies = array_values(
             array_filter(
-                array_map(
-                    'trim',
-                    preg_split('/[,;\n]+/', $row['Allergies'])
-                )
+                array_map('trim', preg_split('/[,;\n]+/', $row['Allergies']))
             )
         );
     }
 
+    $currentMeds = trim($row['CurrentMedication'] ?? '');
 
     $patients[] = [
-        'id' => formatPatientId($row['PatientID']),
-        'patient_id' => (int)$row['PatientID'],
-        'name' => $patientName,
-        'age' => calculateAge($row['DateOfBirth']),
-        'sex' => $row['Sex'] ?? 'N/A',
-        'blood' => $row['BloodType'] ?: 'Not specified',
-
-        'allergies' => $allergies,
-
-        'appointments' => (int)$row['appointment_count'],
-        'consultations' => (int)$row['consultation_count'],
-        'prescriptions' => (int)$row['prescription_count'],
-
-        'first_visit' => formatFirstVisit($row['first_visit']),
-
-        'history' => []
+        'id'            => formatPatientId($row['PatientID']),
+        'patient_id'    => (int) $row['PatientID'],
+        'name'          => $patientName,
+        'age'           => calculateAge($row['DateOfBirth']),
+        'sex'           => $row['Sex'] ?? '',
+        'blood'         => $row['BloodType'] ?: '',
+        'phone'         => $row['ContactNumber'] ?? '',
+        'allergies'     => $allergies,
+        'medications'   => $currentMeds,
+        'last_visit'    => formatCompactDate($row['last_visit_date']),
+        'consultations' => (int) $row['consultation_count'],
+        'flags'         => patientFlags(
+            [
+                'allergies'              => $allergies,
+                'past_medical_condition' => $row['PastMedicalCondition'] ?? '',
+            ],
+            ((int)($row['lab_pending_count'] ?? 0)) > 0
+        ),
     ];
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| GET CONSULTATION HISTORY
-|--------------------------------------------------------------------------
-|
-| Get all consultation records for all loaded patients.
-|
-*/
-
-$historySql = "
-    SELECT
-        c.ConsultationID,
-        c.PatientID,
-        c.ConsultationDate,
-        c.ConsultationTime,
-        c.ChiefComplaint,
-        c.Diagnosis,
-        c.Treatment,
-        c.LabRequest,
-        c.Notes,
-        c.FollowUpDate,
-        c.Status,
-        c.BloodPressure,
-        c.Temperature,
-        c.PulseRate,
-
-        u.FirstName,
-        u.MiddleName,
-        u.LastName
-
-    FROM consultations c
-
-    INNER JOIN staff s
-        ON c.StaffID = s.StaffID
-
-    INNER JOIN users u
-        ON s.UserID = u.UserID
-
-    ORDER BY
-        c.ConsultationDate DESC,
-        c.ConsultationTime DESC
-";
-
-$resultHistory = $conn->query($historySql);
-
-if (!$resultHistory) {
-    die("Consultation history query failed: " . $conn->error);
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| MAP CONSULTATIONS TO PATIENTS
-|--------------------------------------------------------------------------
-*/
-
-$patientIndex = [];
-
-foreach ($patients as $index => $patient) {
-    $patientIndex[$patient['patient_id']] = $index;
-}
-
-
-while ($history = $resultHistory->fetch_assoc()) {
-
-    $patientId = (int)$history['PatientID'];
-
-    /*
-     * Only add history if this patient exists
-     * in our patient list.
-     */
-
-    if (!isset($patientIndex[$patientId])) {
-        continue;
-    }
-
-    $index = $patientIndex[$patientId];
-
-
-    $consultingDoctor = 'Doctor';
-
-    $consultingDoctor = 'Dr. ' .
-        trim(
-            $history['FirstName'] . ' ' .
-            ($history['MiddleName']
-                ? $history['MiddleName'] . ' '
-                : '') .
-            $history['LastName']
-        );
-
-
-    /*
-     * Build consultation note.
-     */
-
-    $noteParts = [];
-
-
-    if (!empty($history['ChiefComplaint'])) {
-        $noteParts[] =
-            'Chief Complaint: ' .
-            $history['ChiefComplaint'];
-    }
-
-
-    if (!empty($history['Diagnosis'])) {
-        $noteParts[] =
-            'Diagnosis: ' .
-            $history['Diagnosis'];
-    }
-
-
-    if (!empty($history['Treatment'])) {
-        $noteParts[] =
-            'Treatment: ' .
-            $history['Treatment'];
-    }
-
-
-    if (!empty($history['Notes'])) {
-        $noteParts[] =
-            'Notes: ' .
-            $history['Notes'];
-    }
-
-
-    if (empty($noteParts)) {
-        $noteParts[] = 'No consultation notes recorded.';
-    }
-
-
-    /*
-     * Tags
-     */
-
-    $tags = [];
-
-
-    if (!empty($history['Treatment'])) {
-        $tags[] = 'Treatment';
-    }
-
-
-    if (!empty($history['LabRequest'])) {
-        $tags[] = 'Lab Request';
-    }
-
-
-    if (!empty($history['FollowUpDate'])) {
-        $tags[] = 'Follow-up';
-    }
-
-
-    if (empty($tags)) {
-        $tags[] = 'Consultation';
-    }
-
-
-    /*
-     * Vitals
-     */
-
-    $vitals = [
-        'bp' => $history['BloodPressure'] ?: 'N/A',
-
-        'temp' =>
-            $history['Temperature'] !== null
-                ? $history['Temperature'] . ' °C'
-                : 'N/A',
-
-        'pulse' =>
-            $history['PulseRate'] !== null
-                ? $history['PulseRate'] . ' bpm'
-                : 'N/A'
-    ];
-
-
-    $patients[$index]['history'][] = [
-
-        'id' => (int)$history['ConsultationID'],
-
-        'date' => formatDate($history['ConsultationDate']),
-
-        'doctor' => $consultingDoctor,
-
-        'note' => implode(' ', $noteParts),
-
-        'diagnosis' => $history['Diagnosis'] ?: 'Not recorded',
-
-        'treatment' => $history['Treatment'] ?: 'Not recorded',
-
-        'lab' => $history['LabRequest'] ?: 'None requested',
-
-        'notes' => $history['Notes'] ?: '',
-
-        'status' => $history['Status'],
-
-        'follow_up' => $history['FollowUpDate']
-            ? formatDate($history['FollowUpDate'])
-            : null,
-
-        'tags' => $tags,
-
-        'vitals' => $vitals
-    ];
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| DEFAULT SELECTED PATIENT
+| DEFAULT SELECTED PATIENT (via ?patient_id=N)
 |--------------------------------------------------------------------------
 */
 
 $selectedPatientId = null;
 
-if (!empty($patients)) {
+if (!empty($patients) && isset($_GET['patient_id'])) {
 
-    /*
-     * If ?patient_id=5 is provided, select that patient.
-     */
+    $requestedPatientId = (int) $_GET['patient_id'];
 
-    if (isset($_GET['patient_id'])) {
-
-        $requestedPatientId = (int)$_GET['patient_id'];
-
-        foreach ($patients as $patient) {
-
-            if ($patient['patient_id'] === $requestedPatientId) {
-
-                $selectedPatientId = $patient['id'];
-
-                break;
-            }
+    foreach ($patients as $patient) {
+        if ($patient['patient_id'] === $requestedPatientId) {
+            $selectedPatientId = $patient['id'];
+            break;
         }
-    }
-
-
-    /*
-     * Otherwise select first patient.
-     */
-
-    if ($selectedPatientId === null) {
-        $selectedPatientId = $patients[0]['id'];
     }
 }
 
@@ -634,14 +425,7 @@ if (!empty($patients)) {
 
             <a href="doctor_dashboard.php">
 
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                     <path d="M9 22V12h6v10"/>
                 </svg>
@@ -652,19 +436,11 @@ if (!empty($patients)) {
 
         </li>
 
-
         <li class="nav-item">
 
             <a href="doctor_queue.php">
 
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M8 6h13M8 12h13M8 18h13"/>
                     <path d="M3 6h.01M3 12h.01M3 18h.01"/>
                 </svg>
@@ -675,19 +451,11 @@ if (!empty($patients)) {
 
         </li>
 
-
         <li class="nav-item">
 
             <a href="records.php">
 
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                     <polyline points="14 2 14 8 20 8"/>
                     <line x1="16" y1="13" x2="8" y2="13"/>
@@ -700,26 +468,13 @@ if (!empty($patients)) {
 
         </li>
 
-
         <li class="nav-item active">
 
             <a href="search_patient.php">
 
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="11" cy="11" r="8"/>
-                    <line
-                        x1="21"
-                        y1="21"
-                        x2="16.65"
-                        y2="16.65"
-                    />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
 
                 Search Patient
@@ -732,14 +487,7 @@ if (!empty($patients)) {
 
             <a href="doctor_profile.php">
 
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                     <circle cx="12" cy="7" r="4"/>
                 </svg>
@@ -752,8 +500,6 @@ if (!empty($patients)) {
 
     </ul>
 
-
-    <!-- SIDEBAR FOOTER -->
 
     <div class="sidebar-footer">
 
@@ -815,7 +561,7 @@ if (!empty($patients)) {
             </h1>
 
             <p>
-                Find patients and view their full medical history
+                Find a patient and launch their consultation
             </p>
 
         </div>
@@ -823,7 +569,7 @@ if (!empty($patients)) {
     </div>
 
 
-    <!-- SEARCH -->
+    <!-- SEARCH BAR -->
 
     <div class="search-bar-wrap">
 
@@ -848,7 +594,8 @@ if (!empty($patients)) {
             <input
                 type="text"
                 id="ps-search"
-                placeholder="Search by patient name or ID..."
+                placeholder="Search by name, patient ID, or phone number..."
+                autofocus
             >
 
         </div>
@@ -856,83 +603,107 @@ if (!empty($patients)) {
     </div>
 
 
-    <div class="search-grid">
+    <!-- RESULTS LIST -->
 
+    <div class="results-panel">
 
-        <!-- ==================================================
-             PATIENT RESULTS
-        ================================================== -->
+        <div class="results-panel-head">
 
-        <div class="results-panel">
+            Results
 
-            <div class="results-panel-head">
-
-                Results
-
-                <span
-                    class="count"
-                    id="results-count"
-                >
-                    (<?= count($patients) ?>)
-                </span>
-
-            </div>
-
-
-            <div
-                class="result-list"
-                id="result-list"
+            <span
+                class="count"
+                id="results-count"
             >
+                (<?= count($patients) ?>)
+            </span>
+
+        </div>
+
+
+        <div
+            class="result-list"
+            id="result-list"
+        >
+
+            <?php if (empty($patients)): ?>
+
+                <div class="results-empty">
+                    No patients found in the database.
+                </div>
+
+            <?php else: ?>
 
                 <?php foreach ($patients as $i => $p): ?>
 
                     <div
-                        class="result-item<?= $p['id'] === $selectedPatientId ? ' selected' : '' ?>"
+                        class="result-item<?= $selectedPatientId === $p['id'] ? ' selected' : '' ?>"
                         data-id="<?= htmlspecialchars($p['id']) ?>"
-                        data-patient-id="<?= (int)$p['patient_id'] ?>"
+                        data-patient-id="<?= (int) $p['patient_id'] ?>"
                         data-name="<?= htmlspecialchars(strtolower($p['name'])) ?>"
-                        onclick="selectPatient('<?= htmlspecialchars($p['id'], ENT_QUOTES) ?>', this)"
+                        data-phone="<?= htmlspecialchars(strtolower($p['phone'])) ?>"
+                        onclick="selectPatient(this)"
                     >
 
                         <div class="result-avatar">
-
                             <?= htmlspecialchars(initials($p['name'])) ?>
-
                         </div>
-
 
                         <div class="result-info">
 
                             <div class="result-name">
-
                                 <?= htmlspecialchars($p['name']) ?>
-
                             </div>
 
                             <div class="result-meta">
-
-                                Age
-                                <?= $p['age'] !== null ? (int)$p['age'] : 'N/A' ?>
-
-                                &nbsp;|&nbsp;
-
                                 <?= htmlspecialchars($p['id']) ?>
+
+                                <?php if ($p['last_visit']): ?>
+                                    &nbsp;&middot;&nbsp;
+                                    Last Visit:
+                                    <?= htmlspecialchars($p['last_visit']) ?>
+                                <?php endif; ?>
+                            </div>
+
+                            <?php if (!empty($p['flags'])): ?>
+
+                            <div class="patient-flags">
+
+                                <?php foreach ($p['flags'] as $fkey => $flabel): ?>
+
+                                <span class="pflag pflag--<?= htmlspecialchars($fkey) ?>">
+
+                                    <span class="pflag-icon">
+
+                                        <?php
+
+                                        $flagIcons = [
+                                            'allergy'    => '\u26a0',
+                                            'high_risk'  => '\u26a0',
+                                            'lab_pending'=> '\u25cf',
+                                        ];
+
+                                        echo $flagIcons[$fkey] ?? '\u25cf';
+
+                                        ?>
+
+                                    </span>
+
+                                    <?= htmlspecialchars($flabel) ?>
+
+                                </span>
+
+                                <?php endforeach; ?>
 
                             </div>
 
-                        </div>
+                            <?php endif; ?>
 
+                        </div>
 
                         <div class="result-arrow">
 
-                            <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M9 18l6-6-6-6"/>
                             </svg>
 
@@ -942,32 +713,34 @@ if (!empty($patients)) {
 
                 <?php endforeach; ?>
 
-            </div>
-
-
-            <div
-                class="results-empty"
-                id="results-empty"
-                style="<?= empty($patients) ? '' : 'display:none;' ?>"
-            >
-                No patients match your search.
-            </div>
+            <?php endif; ?>
 
         </div>
 
 
-        <!-- ==================================================
-             PATIENT DETAIL
-        ================================================== -->
-
         <div
-            class="patient-detail-panel"
-            id="patient-detail-panel"
+            class="results-empty"
+            id="results-empty"
+            style="display:none;"
         >
-
+            No patients match your search.
         </div>
 
     </div>
+
+
+    <!-- QUICK LOOKUP PANEL (JS-rendered) -->
+
+    <div class="patient-launchpad" id="patient-launchpad">
+
+        <div class="launchpad-empty" id="launchpad-empty">
+            Select a patient to view their quick lookup.
+        </div>
+
+        <div id="launchpad-content" style="display:none;"></div>
+
+    </div>
+
 
 </main>
 
@@ -975,7 +748,7 @@ if (!empty($patients)) {
 
 
 <!-- ==========================================================
-     PATIENT DATA
+     PATIENT DATA (JSON)
 ========================================================== -->
 
 <script id="patient-data" type="application/json">
@@ -993,6 +766,10 @@ if (!empty($patients)) {
 </script>
 
 
+<!-- ==========================================================
+     JAVASCRIPT
+========================================================== -->
+
 <script>
 
 const patients =
@@ -1000,8 +777,14 @@ const patients =
         document.getElementById('patient-data').textContent
     );
 
-const detailPanel =
-    document.getElementById('patient-detail-panel');
+const launchpadEmpty =
+    document.getElementById('launchpad-empty');
+
+const launchpadContent =
+    document.getElementById('launchpad-content');
+
+let activePatientId =
+    null;
 
 
 /*
@@ -1016,7 +799,8 @@ function escapeHtml(value) {
         return '';
     }
 
-    const div = document.createElement('div');
+    const div =
+        document.createElement('div');
 
     div.textContent = String(value);
 
@@ -1049,316 +833,183 @@ function getInitials(name) {
 
 /*
 |--------------------------------------------------------------------------
-| Render Patient
+| Render Quick Lookup
 |--------------------------------------------------------------------------
 */
 
-function renderPatient(patient) {
+function renderQuickLookup(patient) {
 
     if (!patient) {
 
-        detailPanel.innerHTML = `
-            <div class="patient-detail-empty">
-                Select a patient to view their profile.
-            </div>
-        `;
+        launchpadEmpty.style.display = '';
+        launchpadContent.style.display = 'none';
 
         return;
     }
 
 
-    /*
-    |--------------------------------------------------------------------------
-    | Allergies
-    |--------------------------------------------------------------------------
-    */
+    launchpadEmpty.style.display = 'none';
+    launchpadContent.style.display = '';
+
+
+    /* ---- Allergy flags ---- */
 
     let allergyHtml = '';
 
+    if (patient.allergies && patient.allergies.length > 0) {
 
-    if (
-        patient.allergies &&
-        patient.allergies.length > 0
-    ) {
-
-        allergyHtml = `
-            <div class="allergy-flag">
-
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                    <path d="M12 9v4M12 17h.01"/>
-                </svg>
-
-                Allergies:
-                ${escapeHtml(patient.allergies.join(', '))}
-
-            </div>
-        `;
-
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Consultation History
-    |--------------------------------------------------------------------------
-    */
-
-    let historyHtml = '';
-
-
-    if (
-        patient.history &&
-        patient.history.length > 0
-    ) {
-
-        historyHtml =
-            patient.history.map(
-                h => `
-
-                <div class="pd-history-item">
-
-                    <div class="pd-history-head">
-
-                        <span class="pd-history-date">
-
-                            ${escapeHtml(h.date)}
-
-                        </span>
-
-                        <span>|</span>
-
-                        <span class="pd-history-doc">
-
-                            ${escapeHtml(h.doctor)}
-
-                        </span>
-
-                    </div>
-
-
-                    <div class="pd-history-note">
-
-                        ${escapeHtml(h.note)}
-
-                    </div>
-
-
-                    ${
-                        h.tags && h.tags.length
-                        ?
-                        `
-                        <div class="pd-tags">
-
-                            ${h.tags.map(
-                                (tag, index) => `
-
-                                <span
-                                    class="pd-tag ${
-                                        index % 2 === 0
-                                        ? 'blue'
-                                        : 'amber'
-                                    }"
-                                >
-
-                                    ${escapeHtml(tag)}
-
-                                </span>
-
-                            `).join('')}
-
-                        </div>
-                        `
-                        :
-                        ''
-                    }
-
-
-                    ${
-                        h.follow_up
-                        ?
-                        `
-                        <div class="pd-history-followup">
-
-                            Follow-up:
-                            ${escapeHtml(h.follow_up)}
-
-                        </div>
-                        `
-                        :
-                        ''
-                    }
-
-                </div>
-
-            `
-            ).join('');
+        allergyHtml = patient.allergies.map(function(a) {
+            return '<span class="ql-allergy">' +
+                escapeHtml(a) +
+            '</span>';
+        }).join('');
 
     } else {
 
-        historyHtml = `
+        allergyHtml = '<span class="ql-none">None recorded</span>';
+    }
 
-            <div class="records-empty">
 
-                No consultation history on file.
+    /* ---- Patient flags (allergy / high risk / lab pending) ---- */
 
-            </div>
+    let flagHtml = '';
 
-        `;
+    if (patient.flags && Object.keys(patient.flags).length > 0) {
+
+        let flagIcons = {
+            allergy: '\u26a0',
+            high_risk: '\u26a0',
+            lab_pending: '\u25cf'
+        };
+
+        flagHtml = Object.keys(patient.flags).map(function(key) {
+            let label = patient.flags[key];
+            let icon = flagIcons[key] || '\u25cf';
+            return '<span class="pflag pflag--' + key + '">' +
+                '<span class="pflag-icon">' + icon + '</span>' +
+                escapeHtml(label) +
+            '</span>';
+        }).join('');
 
     }
 
 
-    /*
-    |--------------------------------------------------------------------------
-    | Render Detail
-    |--------------------------------------------------------------------------
-    */
+    /* ---- Medications ---- */
 
-    detailPanel.innerHTML = `
+    let medsHtml = '';
 
-        <div class="pd-header">
+    if (patient.medications) {
 
-            <div class="pd-avatar">
+        medsHtml = '<span>' +
+            escapeHtml(patient.medications) +
+        '</span>';
 
-                ${getInitials(patient.name)}
+    } else {
 
-            </div>
+        medsHtml = '<span class="ql-none">None recorded</span>';
+    }
 
 
-            <div>
+    /* ---- Assemble ---- */
 
-                <div class="pd-name">
+    launchpadContent.innerHTML = `
 
-                    ${escapeHtml(patient.name)}
+        <div class="ql-card">
 
+            <div class="ql-header">
+
+                <div class="ql-avatar">
+                    ${getInitials(patient.name)}
                 </div>
 
+                <div class="ql-identity">
 
-                <div class="pd-meta">
+                    <div class="ql-name">
+                        ${escapeHtml(patient.name)}
+                    </div>
 
-                    <span>
-
-                        Age
-                        ${
-                            patient.age !== null
-                            ? escapeHtml(patient.age)
-                            : 'N/A'
-                        }
-
-                        |
-
+                    <div class="ql-meta">
                         ${escapeHtml(patient.id)}
-
-                    </span>
-
-
-                    <span class="blood-pill">
-
-                        Blood:
-                        ${escapeHtml(patient.blood)}
-
-                    </span>
+                        ${patient.sex ? ' &middot; ' + escapeHtml(patient.sex) : ''}
+                        ${patient.age !== null ? ' &middot; Age ' + patient.age : ''}
+                        ${patient.blood ? ' &middot; Blood ' + escapeHtml(patient.blood) : ''}
+                        ${patient.consultations ? ' &middot; ' + patient.consultations + ' visit' + (patient.consultations === 1 ? '' : 's') : ''}
+                    </div>
 
                 </div>
 
+            </div>
 
-                ${allergyHtml}
+
+            ${flagHtml
+                ? '<div class="ql-flags patient-flags">' + flagHtml + '</div>'
+                : ''
+            }
+
+
+            <div class="ql-facts">
+
+                <div class="ql-fact">
+
+                    <div class="ql-fact-label">
+                        Last Visit
+                    </div>
+
+                    <div class="ql-fact-value">
+                        ${patient.last_visit
+                            ? escapeHtml(patient.last_visit)
+                            : '<span class="ql-none">No visits yet</span>'
+                        }
+                    </div>
+
+                </div>
+
+                <div class="ql-fact">
+
+                    <div class="ql-fact-label">
+                        Allergies
+                    </div>
+
+                    <div class="ql-fact-value ql-allergies">
+                        ${allergyHtml}
+                    </div>
+
+                </div>
+
+                <div class="ql-fact">
+
+                    <div class="ql-fact-label">
+                        Current Medications
+                    </div>
+
+                    <div class="ql-fact-value">
+                        ${medsHtml}
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="ql-actions">
+
+                <a
+                    class="ql-btn ql-btn-primary"
+                    href="doctor_queue.php"
+                >
+                    Start Consultation
+                </a>
+
+                <a
+                    class="ql-btn ql-btn-secondary"
+                    href="records.php?patient_id=${patient.patient_id}"
+                >
+                    View Full Record
+                </a>
 
             </div>
 
         </div>
-
-
-        <div class="pd-stats">
-
-
-            <div class="pd-stat">
-
-                <div class="pd-stat-value">
-
-                    ${patient.appointments}
-
-                </div>
-
-                <div class="pd-stat-label">
-
-                    Total Appointments
-
-                </div>
-
-            </div>
-
-
-            <div class="pd-stat">
-
-                <div class="pd-stat-value">
-
-                    ${patient.consultations}
-
-                </div>
-
-                <div class="pd-stat-label">
-
-                    Consultations
-
-                </div>
-
-            </div>
-
-
-            <div class="pd-stat">
-
-                <div class="pd-stat-value">
-
-                    ${patient.prescriptions}
-
-                </div>
-
-                <div class="pd-stat-label">
-
-                    Treatments
-
-                </div>
-
-            </div>
-
-
-            <div class="pd-stat">
-
-                <div class="pd-stat-value">
-
-                    ${escapeHtml(patient.first_visit)}
-
-                </div>
-
-                <div class="pd-stat-label">
-
-                    First Visit
-
-                </div>
-
-            </div>
-
-
-        </div>
-
-
-        <div class="pd-history-title">
-
-            Consultation History
-
-        </div>
-
-
-        ${historyHtml}
 
     `;
 
@@ -1371,57 +1022,51 @@ function renderPatient(patient) {
 |--------------------------------------------------------------------------
 */
 
-function selectPatient(id, element) {
+function selectPatient(element) {
 
     document
         .querySelectorAll('.result-item')
-        .forEach(
-            item =>
-                item.classList.remove('selected')
-        );
-
+        .forEach(function(item) {
+            item.classList.remove('selected');
+        });
 
     element.classList.add('selected');
 
+    activePatientId =
+        element.dataset.patientId;
 
     const patient =
         patients.find(
-            p => p.id === id
+            function(p) {
+                return p.patient_id ==
+                    parseInt(activePatientId, 10);
+            }
         );
 
-
-    renderPatient(patient);
-
+    renderQuickLookup(patient);
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| Initial Patient
+| Initial Selection
 |--------------------------------------------------------------------------
 */
 
-const initiallySelected =
-    document.querySelector(
-        '.result-item.selected'
-    );
+(function() {
 
+    if (activePatientId) {
+        return;
+    }
 
-if (initiallySelected) {
+    const initialItem =
+        document.querySelector('.result-item.selected');
 
-    renderPatient(
-        patients.find(
-            p =>
-                p.id ===
-                initiallySelected.dataset.id
-        )
-    );
+    if (initialItem) {
+        selectPatient(initialItem);
+    }
 
-} else if (patients.length > 0) {
-
-    renderPatient(patients[0]);
-
-}
+})();
 
 
 /*
@@ -1447,32 +1092,35 @@ const resultsEmpty =
 
 searchInput.addEventListener(
     'input',
-    () => {
+    function() {
 
         const q =
             searchInput.value
                 .trim()
                 .toLowerCase();
 
-
         let visible = 0;
 
 
         resultItems.forEach(
-            item => {
+            function(item) {
 
                 const name =
-                    item.dataset.name;
+                    item.dataset.name || '';
 
-                const patientId =
+                const id =
                     item.dataset.id
                         .toLowerCase();
+
+                const phone =
+                    item.dataset.phone || '';
 
 
                 const match =
                     !q ||
                     name.includes(q) ||
-                    patientId.includes(q);
+                    id.includes(q) ||
+                    phone.includes(q);
 
 
                 item.style.display =
@@ -1488,13 +1136,11 @@ searchInput.addEventListener(
 
 
         resultsCount.textContent =
-            `(${visible})`;
+            '(' + visible + ')';
 
 
         resultsEmpty.style.display =
-            visible === 0
-            ? 'block'
-            : 'none';
+            visible === 0 ? 'block' : 'none';
 
     }
 );

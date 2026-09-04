@@ -22,6 +22,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/pdf_helper.php';
 
 
 /* ================================================================
@@ -188,6 +189,70 @@ function cleanTreatmentPlanText(string $text): string
 }
 
 
+/* ================================================================
+   PATIENT FLAGS
+   ================================================================
+   Computes warning badges shown across the queue, search and
+   records pages:
+     - Allergy        (from patient Allergies column)
+     - High Risk      (heuristic: certain chronic conditions in
+                       PastMedicalCondition)
+     - Lab Pending    (an Ongoing consultation with a LabRequest set)
+   Returns an ordered associative array of flag => label.
+   ================================================================ */
+
+function patientFlags(
+    array $patient,
+    bool $labPending = false
+): array {
+    $flags = [];
+
+    $allergiesRaw = $patient['allergies'] ?? '';
+
+    $allergies = is_array($allergiesRaw)
+        ? trim(implode(',', array_map('trim', $allergiesRaw)))
+        : trim((string)$allergiesRaw);
+
+    if ($allergies !== '') {
+        $flags['allergy'] = 'Allergy';
+    }
+
+    $conditions = strtolower(trim((string)($patient['past_medical_condition'] ?? '')));
+
+    $highRiskTerms = [
+        'diabetes',
+        'hypertension',
+        'high blood pressure',
+        'heart disease',
+        'cardiovascular',
+        'asthma',
+        'copd',
+        'cancer',
+        'malignancy',
+        'kidney disease',
+        'renal failure',
+        'stroke',
+        'seizure',
+        'epilepsy',
+        'hiv',
+        'hepatitis',
+    ];
+
+    foreach ($highRiskTerms as $term) {
+        if (strpos($conditions, $term) !== false) {
+            $flags['high_risk'] = 'High Risk';
+            break;
+        }
+    }
+
+    if ($labPending) {
+        $flags['lab_pending'] = 'Lab Pending';
+    }
+
+    return $flags;
+}
+
+
 /**
  * Render SOAP-structured clinical notes as readable HTML.
  *
@@ -249,7 +314,8 @@ function renderSoapNotes(string $text): string
 
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
-    ($_POST['action'] ?? '') === 'save_consultation'
+    ($_POST['action'] ?? '') === 'save_consultation' &&
+    !isset($_POST['print_action'])
 ) {
 
     $appointmentID = (int)($_POST['appointment_id'] ?? 0);
@@ -306,6 +372,25 @@ if (
     ------------------------------------------------------------ */
 
     $finalTreatment = $treatmentPlan;
+
+
+    /* ------------------------------------------------------------
+       LABORATORY / DIAGNOSTIC REQUESTS
+       (One test per row in the form; stored as a newline-separated
+       text block in the LabRequest column.)
+    ------------------------------------------------------------ */
+
+    $labRequestsSaved = [];
+
+    foreach (($_POST['lab_requests'] ?? []) as $req) {
+        $req = trim((string)$req);
+
+        if ($req !== '') {
+            $labRequestsSaved[] = $req;
+        }
+    }
+
+    $labRequestsText = implode("\n", $labRequestsSaved);
 
 
     /* ------------------------------------------------------------
@@ -458,6 +543,7 @@ if (
                 Diagnosis = ?,
                 Treatment = ?,
                 Notes = ?,
+                LabRequest = ?,
                 FollowUpDate = ?,
                 Status = 'Completed',
                 BloodPressure = ?,
@@ -482,11 +568,12 @@ if (
 
         mysqli_stmt_bind_param(
             $updateStmt,
-            'ssssssssssii',
+            'sssssssssssii',
             $chiefComplaint,
             $diagnosis,
             $finalTreatment,
             $clinicalNotes,
+            $labRequestsText,
             $followUpDate,
             $bloodPressure,
             $temperature,
@@ -522,6 +609,7 @@ if (
                 Diagnosis,
                 Treatment,
                 Notes,
+                LabRequest,
                 FollowUpDate,
                 Status,
                 BloodPressure,
@@ -530,6 +618,7 @@ if (
             )
             VALUES
             (
+                ?,
                 ?,
                 ?,
                 ?,
@@ -560,7 +649,7 @@ if (
 
         mysqli_stmt_bind_param(
             $insertStmt,
-            'iiissssssssss',
+            'iiisssssssssss',
             $appointmentID,
             $patientID,
             $staffID,
@@ -570,6 +659,7 @@ if (
             $diagnosis,
             $finalTreatment,
             $clinicalNotes,
+            $labRequestsText,
             $followUpDate,
             $bloodPressure,
             $temperature,
@@ -741,9 +831,314 @@ if (
        RETURN TO QUEUE
     ------------------------------------------------------------ */
 
-    header('Location: doctor_queue.php?saved=1');
+    header('Location: doctor_queue.php?saved=1&appt=' . $appointmentID . '&pid=' . $patientID);
     exit;
 }
+
+/* ================================================================
+   GENERATE CLINICAL DOCUMENT (PDF)
+   ================================================================
+   Triggered by "Generate Prescription", "Medical Certificate" or
+   "Laboratory Request" buttons in the consultation form. Builds the
+   PDF from the CURRENT (unsaved) form data and streams it to the
+   browser, so the doctor can print before/without saving.
+*/
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['print_action'])
+) {
+
+    $printType = (string)($_POST['print_action'] ?? 'prescription');
+
+    if (!in_array($printType, ['prescription', 'medical_certificate', 'lab_request', 'consultation_report'], true)) {
+        $printType = 'prescription';
+    }
+
+    $apptID = (int)($_POST['appointment_id'] ?? 0);
+    $patID = (int)($_POST['patient_id'] ?? 0);
+
+    if ($apptID <= 0 || $patID <= 0) {
+        header('Location: doctor_queue.php?error=invalid');
+        exit;
+    }
+
+    /* Verify the appointment belongs to this doctor. */
+    $verifySql = "
+        SELECT a.AppointmentID, a.AppointmentDate, a.Purpose,
+               p.UserID, u.FirstName, u.MiddleName, u.LastName, u.Sex, u.DateOfBirth, u.Address, u.ContactNumber,
+               p.BloodType, p.Allergies, p.PastMedicalCondition
+        FROM appointments a
+        INNER JOIN patients p ON a.PatientID = p.PatientID
+        INNER JOIN users u   ON p.UserID = u.UserID
+        WHERE a.AppointmentID = ?
+          AND a.PatientID = ?
+          AND a.StaffID = ?
+        LIMIT 1
+    ";
+
+    $verifyStmt = mysqli_prepare($conn, $verifySql);
+
+    if (!$verifyStmt) {
+        die('Failed to prepare document request.');
+    }
+
+    mysqli_stmt_bind_param($verifyStmt, 'iii', $apptID, $patID, $staffID);
+    mysqli_stmt_execute($verifyStmt);
+    $verifyResult = mysqli_stmt_get_result($verifyStmt);
+    $appt = mysqli_fetch_assoc($verifyResult);
+    mysqli_stmt_close($verifyStmt);
+
+    if (!$appt) {
+        header('Location: doctor_queue.php?error=unauthorized');
+        exit;
+    }
+
+    /* Patient demographics. */
+    $patientName = trim(
+        ($appt['FirstName'] ?? '') . ' ' .
+        ($appt['MiddleName'] ?? '') . ' ' .
+        ($appt['LastName'] ?? '')
+    );
+
+    $age = '';
+    if (!empty($appt['DateOfBirth'])) {
+        $dob = new DateTime((string)$appt['DateOfBirth']);
+        $age = (string)$dob->diff(new DateTime())->y;
+    }
+
+    /* Read clinical data from the (unsaved) form. */
+    $diagnosis = trim($_POST['diagnosis'] ?? '');
+    $treatmentPlan = trim($_POST['treatment_plan'] ?? '');
+
+    $soapSub = trim($_POST['soap_subjective'] ?? '');
+    $soapObj = trim($_POST['soap_objective'] ?? '');
+    $soapAssess = trim($_POST['soap_assessment'] ?? '');
+    $soapPlanTxt = trim($_POST['soap_plan'] ?? '');
+
+    $soapParts = [];
+    foreach ([
+        'SUBJECTIVE' => $soapSub,
+        'OBJECTIVE' => $soapObj,
+        'ASSESSMENT' => $soapAssess,
+        'PLAN' => $soapPlanTxt,
+    ] as $k => $v) {
+        if ($v !== '') {
+            $soapParts[] = $k . ":\n" . $v;
+        }
+    }
+    $notes = implode("\n\n", $soapParts);
+
+    $bp = trim($_POST['vital_bp'] ?? '');
+    $temp = trim($_POST['vital_temp'] ?? '');
+    $pulse = trim($_POST['vital_pulse'] ?? '');
+
+    $vitalsParts = [];
+    if ($bp !== '') {
+        $vitalsParts[] = 'BP: ' . $bp;
+    }
+    if ($temp !== '') {
+        $vitalsParts[] = 'Temp: ' . $temp;
+    }
+    if ($pulse !== '') {
+        $vitalsParts[] = 'HR: ' . $pulse;
+    }
+    $vitals = implode('  |  ', $vitalsParts);
+
+    $followUp = trim($_POST['follow_up_date'] ?? '');
+
+    $rxNames        = $_POST['rx_name'] ?? [];
+    $rxDosages      = $_POST['rx_dosage'] ?? [];
+    $rxFrequencies  = $_POST['rx_frequency'] ?? [];
+    $rxDurations    = $_POST['rx_duration'] ?? [];
+    $rxInstructions = $_POST['rx_instructions'] ?? [];
+
+    $rxItems = [];
+    foreach ($rxNames as $i => $name) {
+        $name = trim((string)$name);
+        if ($name === '') {
+            continue;
+        }
+        $rxItems[] = [
+            'MedicineName' => $name,
+            'Dosage' => trim($rxDosages[$i] ?? ''),
+            'Frequency' => trim($rxFrequencies[$i] ?? ''),
+            'Duration' => trim($rxDurations[$i] ?? ''),
+            'Instructions' => trim($rxInstructions[$i] ?? ''),
+        ];
+    }
+
+    /* Laboratory / diagnostic requests: one per row. */
+    $labRequests = [];
+    foreach (($_POST['lab_requests'] ?? []) as $req) {
+        $req = trim((string)$req);
+        if ($req !== '') {
+            $labRequests[] = $req;
+        }
+    }
+
+    $allergiesAlerts = trim((string)($appt['Allergies'] ?? ''));
+
+    $data = [
+        'clinic_name' => 'MediCare Clinic',
+        'clinic_info' => 'MediCare Outpatient Portal | Tel: (02) 1234-5678',
+        'doctor_name' => $doctorName,
+        'doctor_specialization' => $doctorSpecialization,
+        'doctor_license' => '',
+        'department' => $doctorDepartment,
+        'status' => 'Ongoing',
+        'consultation_datetime' => date('F j, Y') . '  |  ' . date('g:i A'),
+        'patient_name' => $patientName,
+        'patient_id' => 'PT-' . str_pad((string)$patID, 3, '0', STR_PAD_LEFT),
+        'patient_age' => $age,
+        'patient_sex' => (string)($appt['Sex'] ?? ''),
+        'patient_address' => (string)($appt['Address'] ?? ''),
+        'blood_type' => (string)($appt['BloodType'] ?? ''),
+        'allergies_alerts' => $allergiesAlerts,
+        'date_issued' => date('Y-m-d'),
+        'appointment_date' => (string)($appt['AppointmentDate'] ?? ''),
+        'chief_complaint' => trim($_POST['chief_complaint'] ?? ($appt['Purpose'] ?? '')),
+        'diagnosis' => $diagnosis,
+        'treatment' => $treatmentPlan,
+        'notes' => $notes,
+        'vitals' => $vitals,
+        'follow_up_date' => $followUp,
+        'follow_up_instructions' => '',
+        'rx_items' => $rxItems,
+        'lab_requests' => $labRequests,
+    ];
+
+    $pdfBinary = pdf_build($data, $printType);
+
+    $filename = match ($printType) {
+        'medical_certificate' => 'medical_certificate_' . $apptID . '.pdf',
+        'lab_request' => 'lab_request_' . $apptID . '.pdf',
+        'consultation_report' => 'consultation_report_' . $apptID . '.pdf',
+        default => 'prescription_' . $apptID . '.pdf',
+    };
+
+    if (ob_get_level()) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+    }
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: inline; filename="' . $filename . '"');
+    header('Content-Length: ' . strlen($pdfBinary));
+    echo $pdfBinary;
+    exit;
+}
+
+
+/* ================================================================
+   AJAX: CHECK FOLLOW-UP AVAILABILITY
+   ================================================================
+   Called by the follow-up modal to show how many appointments a
+   doctor already has on a given date.
+   Returns JSON: { ok, appointments, max_per_day }
+   ================================================================ */
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'GET'
+    && isset($_GET['action'])
+    && $_GET['action'] === 'check_availability'
+    && isset($_GET['date'])
+) {
+    header('Content-Type: application/json');
+
+    $checkDate = $_GET['date'];
+
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $checkDate)) {
+        echo json_encode(['ok' => false, 'error' => 'Invalid date format.']);
+        exit;
+    }
+
+    $maxPerDay = 10;
+
+    $availStmt = mysqli_prepare(
+        $conn,
+        "SELECT COUNT(*) AS cnt
+         FROM appointments
+         WHERE StaffID = ?
+           AND AppointmentDate = ?
+           AND Status NOT IN ('Cancelled','No-show')"
+    );
+
+    mysqli_stmt_bind_param($availStmt, 'is', $staffID, $checkDate);
+    mysqli_stmt_execute($availStmt);
+    $availResult = mysqli_stmt_get_result($availStmt);
+    $availRow = mysqli_fetch_assoc($availResult);
+    mysqli_stmt_close($availStmt);
+
+    $existingCount = (int)($availRow['cnt'] ?? 0);
+    $remaining = max(0, $maxPerDay - $existingCount);
+
+    echo json_encode([
+        'ok'           => true,
+        'date'         => $checkDate,
+        'appointments' => $existingCount,
+        'max_per_day'  => $maxPerDay,
+        'remaining'    => $remaining,
+        'available'    => $remaining > 0,
+    ]);
+    exit;
+}
+
+
+/* ================================================================
+   SCHEDULE FOLLOW-UP APPOINTMENT
+   ================================================================
+   Triggered by the "Confirm Follow-up" button inside the follow-up
+   modal. Creates a new appointment with Status = 'Scheduled' and
+   redirects back to the queue with a confirmation message.
+   ================================================================ */
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['action'])
+    && $_POST['action'] === 'schedule_followup'
+) {
+    $fuPatientID = (int)($_POST['followup_patient_id'] ?? 0);
+    $fuDate      = $_POST['followup_date'] ?? '';
+    $fuTime      = $_POST['followup_time'] ?? '10:00:00';
+    $fuPurpose   = trim($_POST['followup_purpose'] ?? 'Follow-up consultation');
+
+    if (!$fuPatientID || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fuDate)) {
+        header('Location: doctor_queue.php?error=Invalid follow-up data.');
+        exit;
+    }
+
+    $fuDeptID = (int)$doctor['DepartmentID'];
+
+    $fuInsert = mysqli_prepare(
+        $conn,
+        "INSERT INTO appointments
+            (PatientID, StaffID, DepartmentID, AppointmentDate,
+             AppointmentTime, Purpose, Status)
+         VALUES (?, ?, ?, ?, ?, ?, 'Scheduled')"
+    );
+
+    mysqli_stmt_bind_param(
+        $fuInsert,
+        'iiisss',
+        $fuPatientID,
+        $staffID,
+        $fuDeptID,
+        $fuDate,
+        $fuTime,
+        $fuPurpose
+    );
+
+    mysqli_stmt_execute($fuInsert);
+    $newApptId = mysqli_insert_id($conn);
+    mysqli_stmt_close($fuInsert);
+
+    header('Location: doctor_queue.php?followup_scheduled=' . $newApptId);
+    exit;
+}
+
+
 
 
 /* ================================================================
@@ -787,6 +1182,7 @@ $queueSql = "
         c.PulseRate,
         c.ConsultationDate,
         c.ConsultationTime,
+        c.LabRequest,
         c.Status AS ConsultationStatus
 
     FROM appointments a
@@ -927,6 +1323,41 @@ while ($row = mysqli_fetch_assoc($queueResult)) {
                     explode(',', $allergyText)
                 );
         }
+    }
+
+
+    /* ------------------------------------------------------------
+       LAB PENDING
+       Any ongoing consultation for this patient with a requested
+       lab order flags the patient as having a pending lab.
+    ------------------------------------------------------------ */
+
+    $labPending = false;
+
+    $labQuery = "
+        SELECT COUNT(*) AS cnt
+        FROM consultations
+        WHERE PatientID = ?
+          AND Status = 'Ongoing'
+          AND LabRequest IS NOT NULL
+          AND TRIM(LabRequest) <> ''
+    ";
+
+    $labStmt = mysqli_prepare($conn, $labQuery);
+
+    mysqli_stmt_bind_param(
+        $labStmt,
+        'i',
+        $row['PatientID']
+    );
+
+    mysqli_stmt_execute($labStmt);
+    $labResult = mysqli_stmt_get_result($labStmt);
+    $labRow = mysqli_fetch_assoc($labResult);
+    mysqli_stmt_close($labStmt);
+
+    if ((int)($labRow['cnt'] ?? 0) > 0) {
+        $labPending = true;
     }
 
 
@@ -1130,7 +1561,16 @@ while ($row = mysqli_fetch_assoc($queueResult)) {
                 : null,
 
         'history' =>
-            $history
+            $history,
+
+        'flags' =>
+            patientFlags(
+                [
+                    'allergies'              => $allergies,
+                    'past_medical_condition' => $row['PastMedicalCondition'] ?? '',
+                ],
+                $labPending
+            )
     ];
 }
 
@@ -1564,6 +2004,29 @@ if (isset($_GET['consult'])) {
 
             $consultPatient['follow_up_date'] =
                 $consultation['FollowUpDate'] ?? '';
+
+
+            /*
+             * Load saved lab requests so the form can be re-populated.
+             * Stored as newline-separated text in the LabRequest column.
+             */
+
+            $consultPatient['lab_requests'] = [];
+
+            $savedLabText = $consultation['LabRequest'] ?? '';
+
+            if ($savedLabText !== '') {
+
+                foreach (
+                    preg_split('/\r\n|\r|\n/', $savedLabText) as $savedReq
+                ) {
+                    $savedReq = trim($savedReq);
+
+                    if ($savedReq !== '') {
+                        $consultPatient['lab_requests'][] = $savedReq;
+                    }
+                }
+            }
 
 
             /*
@@ -2572,11 +3035,150 @@ if (isset($_GET['consult'])) {
 </div>
 
 
-<div class="consult-save-wrap">
+<div class="consult-panel">
+
+    <div class="consult-panel-head">
+
+        <div class="consult-panel-title">
+
+            Laboratory / Diagnostic Requests
+
+        </div>
+
+
+        <button
+            type="button"
+            class="btn-add-sm"
+            onclick="addLabRequestRow()"
+        >
+
+            + Add Test
+
+        </button>
+
+    </div>
+
+
+    <div id="lab-requests-list">
+
+        <?php
+            $savedLabList = $_POST['lab_requests'] ?? ($consultPatient['lab_requests'] ?? []);
+        ?>
+
+        <?php if (!empty($savedLabList)): ?>
+
+            <?php foreach ($savedLabList as $req): ?>
+
+            <div class="lab-entry">
+
+                <div class="prescription-row">
+
+                    <input
+                        type="text"
+                        name="lab_requests[]"
+                        placeholder="Test to request (e.g. Complete Blood Count)"
+                        value="<?= htmlspecialchars($req ?? '') ?>"
+                    >
+
+                </div>
+
+                <button
+                    type="button"
+                    class="btn-remove-rx"
+                    onclick="this.closest('.lab-entry').remove()"
+                >
+
+                    Remove
+
+                </button>
+
+            </div>
+
+            <?php endforeach; ?>
+
+        <?php else: ?>
+
+            <div class="lab-entry">
+
+                <div class="prescription-row">
+
+                    <input
+                        type="text"
+                        name="lab_requests[]"
+                        placeholder="Test to request (e.g. Complete Blood Count)"
+                    >
+
+                </div>
+
+                <button
+                    type="button"
+                    class="btn-remove-rx"
+                    onclick="this.closest('.lab-entry').remove()"
+                >
+
+                    Remove
+
+                </button>
+
+            </div>
+
+        <?php endif; ?>
+
+    </div>
+
+</div>
+
+
+<div class="consult-save-actions">
+
+    <button
+        type="submit"
+        class="btn-print-consult"
+        name="print_action"
+        value="prescription"
+    >
+
+        Generate Prescription
+
+    </button>
+
+    <button
+        type="submit"
+        class="btn-print-consult"
+        name="print_action"
+        value="medical_certificate"
+    >
+
+        Medical Certificate
+
+    </button>
+
+    <button
+        type="submit"
+        class="btn-print-consult"
+        name="print_action"
+        value="lab_request"
+    >
+
+        Lab Request
+
+    </button>
+
+    <button
+        type="submit"
+        class="btn-print-consult btn-print-report"
+        name="print_action"
+        value="consultation_report"
+    >
+
+        Print Consultation Report
+
+    </button>
 
     <button
         type="submit"
         class="btn-save-consult"
+        name="save_consultation"
     >
 
         Save Consultation
@@ -2670,6 +3272,47 @@ function addPrescriptionRow()
     list.appendChild(entry);
 }
 
+function addLabRequestRow()
+{
+    const list =
+        document.getElementById(
+            'lab-requests-list'
+        );
+
+    const entry =
+        document.createElement(
+            'div'
+        );
+
+    entry.className =
+        'lab-entry';
+
+    entry.innerHTML = `
+
+        <div class="prescription-row">
+
+            <input
+                type="text"
+                name="lab_requests[]"
+                placeholder="Test to request (e.g. Complete Blood Count)"
+            >
+
+        </div>
+
+        <button
+            type="button"
+            class="btn-remove-rx"
+            onclick="this.closest('.lab-entry').remove()"
+        >
+
+            Remove
+
+        </button>
+    `;
+
+    list.appendChild(entry);
+}
+
 function toggleConsultDetails(btn)
 {
     const card =
@@ -2732,13 +3375,127 @@ function toggleConsultDetails(btn)
 
 <?php if (isset($_GET['saved'])): ?>
 
-<div class="queue-alert">
+<div class="queue-alert queue-alert--success">
 
     Consultation saved successfully.
+
+    <?php if (!empty($_GET['pid'])): ?>
+
+    <button
+        type="button"
+        class="btn-followup-launch"
+        onclick="openFollowupModal(<?= (int)$_GET['pid'] ?>)"
+    >
+        Schedule Follow-up
+    </button>
+
+    <?php endif; ?>
 
 </div>
 
 <?php endif; ?>
+
+
+<?php if (isset($_GET['followup_scheduled'])): ?>
+
+<div class="queue-alert queue-alert--info">
+
+    Follow-up appointment booked successfully (Appointment #<?= (int)$_GET['followup_scheduled'] ?>).
+
+</div>
+
+<?php endif; ?>
+
+
+<?php if (isset($_GET['error'])): ?>
+
+<div class="queue-alert queue-alert--error">
+
+    <?= htmlspecialchars($_GET['error']) ?>
+
+</div>
+
+<?php endif; ?>
+
+
+<!-- ==========================================================
+     FOLLOW-UP SCHEDULING MODAL
+========================================================== -->
+
+<div id="followupModal" class="fu-modal" style="display:none">
+
+    <div class="fu-modal-backdrop" onclick="closeFollowupModal()"></div>
+
+    <div class="fu-modal-dialog">
+
+        <div class="fu-modal-header">
+            <h3>Schedule Follow-up</h3>
+            <button type="button" class="fu-modal-close" onclick="closeFollowupModal()">&times;</button>
+        </div>
+
+        <div class="fu-modal-body">
+
+            <div class="fu-field">
+                <label for="fu_date">Follow-up Date</label>
+                <input
+                    type="date"
+                    id="fu_date"
+                    min="<?= date('Y-m-d', strtotime('+1 day')) ?>"
+                    onchange="checkFollowupAvailability(this.value)"
+                />
+            </div>
+
+            <div id="fu_availability" class="fu-availability" style="display:none"></div>
+
+            <div class="fu-field">
+                <label for="fu_time">Preferred Time</label>
+                <select id="fu_time">
+                    <option value="08:00:00">8:00 AM</option>
+                    <option value="08:30:00">8:30 AM</option>
+                    <option value="09:00:00" selected>9:00 AM</option>
+                    <option value="09:30:00">9:30 AM</option>
+                    <option value="10:00:00">10:00 AM</option>
+                    <option value="10:30:00">10:30 AM</option>
+                    <option value="11:00:00">11:00 AM</option>
+                    <option value="11:30:00">11:30 AM</option>
+                    <option value="13:00:00">1:00 PM</option>
+                    <option value="13:30:00">1:30 PM</option>
+                    <option value="14:00:00">2:00 PM</option>
+                    <option value="14:30:00">2:30 PM</option>
+                    <option value="15:00:00">3:00 PM</option>
+                    <option value="15:30:00">3:30 PM</option>
+                    <option value="16:00:00">4:00 PM</option>
+                </select>
+            </div>
+
+            <div class="fu-field">
+                <label for="fu_purpose">Purpose</label>
+                <input
+                    type="text"
+                    id="fu_purpose"
+                    value="Follow-up consultation"
+                    maxlength="255"
+                />
+            </div>
+
+        </div>
+
+        <div class="fu-modal-footer">
+            <button type="button" class="fu-btn fu-btn-cancel" onclick="closeFollowupModal()">Cancel</button>
+            <button
+                type="button"
+                id="fu_confirm"
+                class="fu-btn fu-btn-confirm"
+                disabled
+                onclick="submitFollowup()"
+            >
+                Confirm Follow-up
+            </button>
+        </div>
+
+    </div>
+
+</div>
 
 
 <?php if ($queueMessage): ?>
@@ -3184,6 +3941,40 @@ $statusLabel =
 
     </div>
 
+    <?php if (!empty($p['flags'])): ?>
+
+    <div class="patient-flags">
+
+        <?php foreach ($p['flags'] as $fkey => $flabel): ?>
+
+        <span class="pflag pflag--<?= htmlspecialchars($fkey) ?>">
+
+            <span class="pflag-icon">
+
+                <?php
+
+                $flagIcons = [
+                    'allergy'    => '\u26a0',
+                    'high_risk'  => '\u26a0',
+                    'lab_pending'=> '\u25cf',
+                ];
+
+                echo $flagIcons[$fkey] ?? '\u25cf';
+
+                ?>
+
+            </span>
+
+            <?= htmlspecialchars($flabel) ?>
+
+        </span>
+
+        <?php endforeach; ?>
+
+    </div>
+
+    <?php endif; ?>
+
 </td>
 
 
@@ -3370,6 +4161,101 @@ function filterQueue(status, btn)
                 }
             }
         );
+}
+
+
+/* ==========================================================
+   FOLLOW-UP SCHEDULING MODAL
+========================================================== */
+
+var _fuPatientId = 0;
+
+function openFollowupModal(patientId) {
+    _fuPatientId = patientId;
+    document.getElementById('fu_date').value = '';
+    document.getElementById('fu_time').value = '09:00:00';
+    document.getElementById('fu_purpose').value = 'Follow-up consultation';
+    document.getElementById('fu_availability').style.display = 'none';
+    document.getElementById('fu_confirm').disabled = true;
+    document.getElementById('followupModal').style.display = '';
+    document.getElementById('fu_date').focus();
+}
+
+function closeFollowupModal() {
+    document.getElementById('followupModal').style.display = 'none';
+    _fuPatientId = 0;
+}
+
+function checkFollowupAvailability(dateVal) {
+    var box = document.getElementById('fu_availability');
+    var btn = document.getElementById('fu_confirm');
+
+    if (!dateVal) {
+        box.style.display = 'none';
+        btn.disabled = true;
+        return;
+    }
+
+    box.style.display = '';
+    box.innerHTML = '<span class="fu-spin"></span> Checking availability\u2026';
+    btn.disabled = true;
+
+    fetch('doctor_queue.php?action=check_availability&date=' + encodeURIComponent(dateVal))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) {
+                box.innerHTML = '<span class="fu-avail-dot fu-avail-dot--unavail"></span> Error: ' + d.error;
+                return;
+            }
+            if (d.available) {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--avail"></span> ' +
+                    d.remaining + ' of ' + d.max_per_day + ' slots available on ' + d.date;
+                btn.disabled = false;
+            } else {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--unavail"></span> ' +
+                    'Fully booked on ' + d.date + ' (' + d.appointments + '/' + d.max_per_day + ')';
+                btn.disabled = true;
+            }
+        })
+        .catch(function() {
+            box.innerHTML = '<span class="fu-avail-dot fu-avail-dot--unavail"></span> Could not check availability.';
+            btn.disabled = true;
+        });
+}
+
+function submitFollowup() {
+    var dateVal = document.getElementById('fu_date').value;
+    var timeVal = document.getElementById('fu_time').value;
+    var purposeVal = document.getElementById('fu_purpose').value;
+
+    if (!_fuPatientId || !dateVal) {
+        return;
+    }
+
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'doctor_queue.php';
+
+    var fields = {
+        action: 'schedule_followup',
+        followup_patient_id: _fuPatientId,
+        followup_date: dateVal,
+        followup_time: timeVal,
+        followup_purpose: purposeVal
+    };
+
+    Object.keys(fields).forEach(function(key) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = fields[key];
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
 }
 
 </script>

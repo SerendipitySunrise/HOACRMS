@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Sep 04, 2026 at 03:59 AM
+-- Generation Time: Sep 04, 2026 at 04:15 AM
 -- Server version: 8.0.43
 -- PHP Version: 8.3.14
 
@@ -526,7 +526,7 @@ INSERT INTO `users` (`UserID`, `RoleID`, `FirstName`, `MiddleName`, `LastName`, 
 (8, 3, 'Jedrick', '', 'Versoza', 'jedvesoza@gmail.com', '$2y$10$M.3mCghPzuQutueQsMfcAubXxDzz6Z1S6Q4BQfNbBDIw5SK/89Fce', 'Male', '2006-08-30', '09456789321', 'Malabon City', 'Active', '2026-08-13 23:23:33', 0, NULL, NULL, NULL, 'assets/images/avatars/avatar_8_1787294739.jpg', '2026-09-02 13:03:55'),
 (9, 2, 'Roxzia', NULL, 'Kim', 'RoxziaKim@gmai.com', '$2y$10$YTVYBlQfE5M3yC7Qq36MZ.57cnKoa9wrTuKMYXbSLwPScj0HSbVs.', 'Not Specified', NULL, '09369852147', NULL, 'Active', '2026-08-15 13:59:03', 0, NULL, NULL, NULL, NULL, NULL),
 (10, 2, 'Jonah', '', 'Santos', 'JonahSantos@gmail.com', '$2y$10$mr5WCmDu0wX5V5KvHg2qiOJ5k.v3hwGSPN7CY5V2SEkc3W/kc0zbC', 'Male', NULL, '09835744920', '', 'Active', '2026-08-19 19:35:09', 0, NULL, NULL, NULL, 'assets/images/avatars/avatar_10_1787323071.png', '2026-08-28 16:35:36'),
-(11, 4, 'Morgan', '', 'Cruz', 'morgancruz@gmail.com', '$2y$10$1YOmp6D8uva6/x0rn4wV8uwKHjDeeYnoEvUjzKBHhtiZB.uz7sQKG', 'Female', NULL, '09789044731', '', 'Active', '2026-08-20 18:17:31', 0, NULL, NULL, NULL, 'assets/images/avatars/avatar_11_1787323127.jpg', '2026-09-02 10:46:43'),
+(11, 4, 'Morgan', '', 'Cruz', 'morgancruz@gmail.com', '$2y$10$1YOmp6D8uva6/x0rn4wV8uwKHjDeeYnoEvUjzKBHhtiZB.uz7sQKG', 'Female', NULL, '09789044731', '', 'Active', '2026-08-20 18:17:31', 0, NULL, NULL, NULL, 'assets/images/avatars/avatar_11_1787323127.jpg', '2026-09-04 12:04:50'),
 (19, 4, 'Ana', NULL, 'Luiz', 'anaLuiz@gmail.com', '$2y$10$k2gvUjtLAeVD1mVGaEQgyenRpe/k2RlC2tPVpt/3jO7CsST3ciclO', 'Not Specified', NULL, '09978856452', NULL, 'Active', '2026-09-02 11:12:39', 0, NULL, NULL, NULL, NULL, '2026-09-02 13:10:46'),
 (20, 4, 'Shan', NULL, 'Meyers', 'shanMeyers@gmail.comm', '$2y$10$2YbxGOlu0gh4DnvPSvN3/eMS/9sUz08zv8cKw.9RM60aKSOVYKIRu', 'Not Specified', NULL, '09227689054', NULL, 'Active', '2026-09-02 12:49:17', 0, NULL, NULL, NULL, NULL, '2026-09-02 12:49:21');
 

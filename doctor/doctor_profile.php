@@ -32,9 +32,9 @@ function verifyCsrf(): bool {
 // Fetch doctor + user info
 $doctorStmt = mysqli_prepare(
     $conn,
-    "SELECT s.StaffID, s.EmployeeID, s.DepartmentID, s.StaffRole, s.Suffix,
-            s.Specialization, s.LicenseNumber, s.YearsOfExperience,
-            s.AvailabilityStatus, s.DateHired, s.AssignedDays, s.AssignedResponsibilities,
+    "SELECT s.StaffID, s.DepartmentID, s.StaffRole,
+            s.Specialization,
+            s.AvailabilityStatus,
             d.DepartmentName,
             u.UserID, u.FirstName, u.MiddleName, u.LastName, u.Email,
             u.Sex, u.DateOfBirth, u.ContactNumber, u.Address,
@@ -78,8 +78,8 @@ $dateRegisteredDisplay = !empty($doctor['DateRegistered'])
     ? (new DateTime($doctor['DateRegistered']))->format('F j, Y')
     : '';
 
-$yearsExp = !empty($doctor['YearsOfExperience']) ? $doctor['YearsOfExperience'] : null;
-$yearsExpDisplay = $yearsExp !== null ? $yearsExp . ' year' . ($yearsExp != 1 ? 's' : '') : '';
+$yearsExp = null;
+$yearsExpDisplay = '';
 
 $accountStatus = !empty($doctor['AccountStatus']) ? $doctor['AccountStatus'] : 'Active';
 
@@ -766,7 +766,7 @@ if (isset($_GET['updated'])) {
           </div>
           <div class="pinfo-item">
             <div class="pinfo-label">License Number</div>
-            <div class="pinfo-value"><?php echo field($doctor['LicenseNumber']); ?></div>
+            <div class="pinfo-value"><?php echo field(null); ?></div>
           </div>
           <div class="pinfo-item">
             <div class="pinfo-label">Years of Experience</div>
