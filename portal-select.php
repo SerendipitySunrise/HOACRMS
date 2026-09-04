@@ -55,7 +55,8 @@ function getPortalTarget(string $portal, string $action): string
     return match ($portal) {
         'patient' => 'auth/signup.php',
         'admin' => 'auth/register_admin.php',
-        'staff', 'doctor' => 'auth/register_staff.php',
+        'staff' => 'auth/register_staff.php',
+        'doctor' => 'auth/register_doctor.php',
         default => 'auth/signup.php',
     };
 }

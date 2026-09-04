@@ -7,6 +7,8 @@
   --color-text-white: #ffffff;
   --color-text-muted: rgba(255, 255, 255, 0.88);
   --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --nav-height: 76px;         /* real fixed-nav height, used everywhere below */
+  --nav-clearance: 96px;      /* nav-height + buffer, for spacing/scroll offsets */
 }
 
 * {
@@ -35,8 +37,17 @@ body.landing-page {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: var(--nav-height);
   padding: 18px 48px;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 100%);
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Solid background once scrolled past the hero, so nav text stays legible
+   over the light section backgrounds instead of visually overlapping them. */
+.landing-nav.is-scrolled {
+  background: #0f172a;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 
 .landing-nav .brand {
@@ -135,14 +146,33 @@ body.landing-page {
 }
 
 /* ========== SHARED SECTION STYLES ========== */
+/* Every main section gets consistent vertical padding AND enough
+   scroll-margin-top to clear the fixed navbar when jumped to via
+   anchor links (#features, #how-it-works, #contact, #cta). */
 .landing-section {
   color: #1f2937;
-  padding: 80px 80px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 5rem 0;
+  scroll-margin-top: var(--nav-clearance);
+}
+
+/* Shared max-width container so every section's content spans full
+   desktop widths comfortably without touching the viewport edges. */
+.section-container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
 }
 
 .section-header {
   text-align: center;
-  margin-bottom: 48px;
+  max-width: 700px;
+  margin: 0 auto 48px;
 }
 
 .section-tag {
@@ -218,7 +248,7 @@ body.landing-page {
 
 /* ========== PROCESS / HOW IT WORKS ========== */
 .process-section {
-  background: #F8F9FA;
+  background: #EAF6F4;
 }
 
 .steps-grid {
@@ -265,9 +295,12 @@ body.landing-page {
 /* ========== CTA BANNER ========== */
 .cta-banner {
   background-color: #149191;
-  padding: 80px 20px;
   text-align: center;
   color: #FFFFFF;
+}
+
+.cta-container {
+  max-width: 700px;
 }
 
 .cta-banner h2 {
@@ -279,7 +312,6 @@ body.landing-page {
 
 .cta-banner p {
   color: #E6F4EA;
-  max-width: 600px;
   margin: 0 auto 28px;
   font-size: 16px;
   line-height: 1.6;
@@ -418,12 +450,15 @@ body.landing-page {
 }
 
 /* ========== ALERT ========== */
+/* Sits safely below the fixed navbar (var(--nav-clearance)) and above
+   normal section content (z-index 50), but below the nav itself (100)
+   so it can never visually clash with the nav or a section heading. */
 .landing-alert {
   position: fixed;
-  top: 80px;
+  top: var(--nav-clearance);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 200;
+  z-index: 50;
   background: #ecfdf5;
   color: #065f46;
   border: 1px solid #a7f3d0;
@@ -431,6 +466,35 @@ body.landing-page {
   border-radius: 8px;
   font-size: 0.9rem;
   max-width: 90%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  animation: slideInDown 0.4s ease-out;
+}
+
+/* Auto-hide animation */
+.landing-alert.hide {
+  animation: slideOutUp 0.4s ease-out forwards;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes slideOutUp {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
 }
 
 /* ========== RESPONSIVE ========== */
@@ -441,11 +505,16 @@ body.landing-page {
   }
 
   .landing-section {
-    padding: 60px 40px;
+    padding: 4rem 0;
   }
 }
 
 @media (max-width: 768px) {
+  :root {
+    --nav-height: 64px;
+    --nav-clearance: 84px;
+  }
+
   .landing-nav {
     padding: 14px 20px;
     flex-wrap: wrap;
@@ -466,7 +535,7 @@ body.landing-page {
   }
 
   .landing-section {
-    padding: 48px 20px;
+    padding: 3rem 0;
   }
 
   .cta-buttons {

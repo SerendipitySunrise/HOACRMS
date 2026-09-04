@@ -1085,7 +1085,7 @@ function formatAppointmentTime($time)
         <?php if ($nowServing): ?>
 
             <a
-                href="consultation.php?patient_id=<?= $nowServing['id'] ?>&appointment_id=<?= $nowServing['appointment_id'] ?>"
+                href="doctor_queue.php?consult=<?= (int) $nowServing['appointment_id'] ?>"
                 class="btn-quick teal"
             >
 
@@ -1339,7 +1339,7 @@ function formatAppointmentTime($time)
 
 
                                 <a
-                                    href="consultation.php?patient_id=<?= $patient['id'] ?>&appointment_id=<?= $patient['appointment_id'] ?>"
+                                    href="doctor_queue.php?consult=<?= (int) $patient['appointment_id'] ?>"
                                     class="queue-badge-sm"
                                     onclick="event.stopPropagation();"
                                 >
@@ -1355,7 +1355,7 @@ function formatAppointmentTime($time)
 
 
                                 <a
-                                    href="consultation.php?patient_id=<?= $patient['id'] ?>&appointment_id=<?= $patient['appointment_id'] ?>"
+                                    href="doctor_queue.php?consult=<?= (int) $patient['appointment_id'] ?>"
                                     class="queue-badge-sm"
                                     onclick="event.stopPropagation();"
                                 >

@@ -113,7 +113,9 @@ body {
   font-weight: 700;
   font-size: 0.85rem;
   flex-shrink: 0;
+  overflow: hidden;
 }
+.user-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 
 .user-name { font-size: 0.85rem; font-weight: 600; color: var(--color-ink); }
 .user-role { font-size: 0.75rem; color: var(--color-ink-soft); }
@@ -1162,9 +1164,8 @@ body {
 
 /* ============================================
    WALK-IN MODAL - additions for checkin_patient.php
-   Append this block to the end of staff_dashboard.css
    ============================================ */
- 
+
 /* ---------- PROGRESS BAR ---------- */
 .modal-progress {
   height: 5px;
@@ -1173,25 +1174,25 @@ body {
   overflow: hidden;
   margin-bottom: 20px;
 }
- 
+
 .modal-progress-bar {
   height: 100%;
   background: var(--color-primary);
   border-radius: 999px;
   transition: width 0.2s ease;
 }
- 
+
 /* ---------- FORM FIELDS ---------- */
 .form-group {
   margin-bottom: 14px;
 }
- 
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
- 
+
 .form-label {
   display: block;
   font-size: 0.72rem;
@@ -1201,7 +1202,7 @@ body {
   letter-spacing: 0.03em;
   margin-bottom: 6px;
 }
- 
+
 .form-input {
   width: 100%;
   padding: 10px 14px;
@@ -1212,29 +1213,29 @@ body {
   color: var(--color-ink);
   background: #fff;
 }
- 
+
 .form-input:focus {
   outline: none;
   border-color: var(--color-primary-light);
 }
- 
+
 select.form-input {
   cursor: pointer;
 }
- 
+
 .form-textarea {
   resize: vertical;
   min-height: 72px;
   font-family: var(--font-family);
 }
- 
+
 /* ---------- SESSION PICKER ---------- */
 .session-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
- 
+
 .session-option {
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -1242,33 +1243,33 @@ select.form-input {
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
- 
+
 .session-option:hover {
   background: #f8fafc;
 }
- 
+
 .session-option.selected {
   background: var(--color-primary-tint);
   border-color: var(--color-primary-tint-border);
 }
- 
+
 .session-option-title {
   font-weight: 700;
   font-size: 0.86rem;
   color: var(--color-ink);
 }
- 
+
 .session-option-slots {
   font-size: 0.76rem;
   color: var(--color-ink-soft);
   margin-top: 3px;
 }
- 
+
 .session-option.selected .session-option-title,
 .session-option.selected .session-option-slots {
   color: var(--color-primary-hover);
 }
- 
+
 /* ---------- PATIENT SUMMARY (step 2 header) ---------- */
 .patient-summary {
   display: flex;
@@ -1279,7 +1280,7 @@ select.form-input {
   padding: 12px 14px;
   margin-bottom: 16px;
 }
- 
+
 .patient-summary-avatar {
   width: 38px;
   height: 38px;
@@ -1292,19 +1293,19 @@ select.form-input {
   flex-shrink: 0;
 }
 .patient-summary-avatar svg { width: 18px; height: 18px; }
- 
+
 .patient-summary-name {
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--color-ink);
 }
- 
+
 .patient-summary-meta {
   font-size: 0.78rem;
   color: var(--color-ink-soft);
   margin-top: 2px;
 }
- 
+
 /* ---------- QUEUE NUMBER ASSIGNED CARD ---------- */
 .queue-assigned-card {
   display: flex;
@@ -1317,19 +1318,19 @@ select.form-input {
   margin-top: 4px;
   margin-bottom: 4px;
 }
- 
+
 .queue-assigned-title {
   font-weight: 700;
   font-size: 0.86rem;
   color: var(--color-primary-hover);
 }
- 
+
 .queue-assigned-sub {
   font-size: 0.76rem;
   color: var(--color-ink-soft);
   margin-top: 2px;
 }
- 
+
 .queue-assigned-number {
   background: var(--color-primary);
   color: #fff;
@@ -1347,7 +1348,6 @@ select.form-input {
 /* ============================================
    STAFF PROFILE PAGE (redesigned, patient-portal style)
    Styles for staff_profile.php
-   Load together with staff_dashboard.css
    ============================================ */
 
 /* ---------- HERO CARD ---------- */
@@ -1532,7 +1532,9 @@ select.form-input {
   border-radius: 16px;
   padding: 22px 24px;
 }
-.profile-card + .profile-card { margin-top: 20px; }
+
+/* ✅ FIX: Removed the problematic margin-top rule that pushed the second card down */
+/* .profile-card + .profile-card { margin-top: 20px; }  <-- DELETED */
 
 /* ---------- Avatar upload ---------- */
 .avatar-upload-wrapper {
@@ -1689,10 +1691,6 @@ select.form-input {
   flex-shrink: 0;
   margin-top: 1px;
 }
-
-/* Sidebar avatar img */
-.user-avatar { overflow: hidden; }
-.user-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 
 @media (max-width: 768px) {
   .profile-hero { flex-direction: column; align-items: flex-start; }

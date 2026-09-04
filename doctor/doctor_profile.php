@@ -19,6 +19,16 @@ if ($roleName !== null && strcasecmp(trim((string)$roleName), 'Doctor') !== 0) {
     exit;
 }
 
+// CSRF token (generate once per session)
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
+function verifyCsrf(): bool {
+    return isset($_POST['csrf_token']) && hash_equals($_SESSION['csrf_token'], $_POST['csrf_token']);
+}
+
 // Fetch doctor + user info
 $doctorStmt = mysqli_prepare(
     $conn,
@@ -40,6 +50,7 @@ mysqli_stmt_bind_param($doctorStmt, 'i', $userID);
 mysqli_stmt_execute($doctorStmt);
 $doctorResult = mysqli_stmt_get_result($doctorStmt);
 $doctor = mysqli_fetch_assoc($doctorResult);
+mysqli_stmt_close($doctorStmt);
 
 if (!$doctor) {
     session_destroy();
@@ -57,7 +68,7 @@ $dobFormatted = !empty($doctor['DateOfBirth'])
     : '';
 $dobDisplay = !empty($doctor['DateOfBirth'])
     ? (new DateTime($doctor['DateOfBirth']))->format('F j, Y')
-    : '—';
+    : '';
 
 $lastLoginDisplay = !empty($doctor['LastLogin'])
     ? (new DateTime($doctor['LastLogin']))->format('F j, Y, g:i A')
@@ -65,16 +76,23 @@ $lastLoginDisplay = !empty($doctor['LastLogin'])
 
 $dateRegisteredDisplay = !empty($doctor['DateRegistered'])
     ? (new DateTime($doctor['DateRegistered']))->format('F j, Y')
-    : '—';
+    : '';
 
 $yearsExp = !empty($doctor['YearsOfExperience']) ? $doctor['YearsOfExperience'] : null;
-$yearsExpDisplay = $yearsExp !== null ? $yearsExp . ' year' . ($yearsExp != 1 ? 's' : '') : '—';
+$yearsExpDisplay = $yearsExp !== null ? $yearsExp . ' year' . ($yearsExp != 1 ? 's' : '') : '';
 
 $accountStatus = !empty($doctor['AccountStatus']) ? $doctor['AccountStatus'] : 'Active';
 
-function field($value, $fallback = '—') {
+/**
+ * Renders a value, or a visually distinct "Not provided" placeholder if empty.
+ * Returns raw HTML — do not wrap in htmlspecialchars() again at the call site.
+ */
+function field($value, $fallback = 'Not provided') {
     $value = trim((string) $value);
-    return $value !== '' ? htmlspecialchars($value) : $fallback;
+    if ($value !== '') {
+        return htmlspecialchars($value);
+    }
+    return '<span class="pinfo-empty">' . htmlspecialchars($fallback) . '</span>';
 }
 
 // Fetch department schedules
@@ -92,6 +110,7 @@ $schedules = [];
 while ($row = mysqli_fetch_assoc($scheduleResult)) {
     $schedules[] = $row;
 }
+mysqli_stmt_close($scheduleStmt);
 
 $dayNames = [
     0 => 'Sunday',
@@ -107,9 +126,32 @@ $dayNames = [
 $updateMessage = '';
 $updateSuccess = false;
 
+// Controls whether each edit panel should render open (e.g. after a failed submit)
+$personalEditOpen = false;
+$accountEditOpen = false;
+
+// Values used to populate the personal-info form. Default to DB values;
+// overridden with submitted values below if validation fails, so the user
+// never loses what they typed.
+$personalFormData = [
+    'FirstName'     => $doctor['FirstName'],
+    'MiddleName'    => $doctor['MiddleName'] ?? '',
+    'LastName'      => $doctor['LastName'],
+    'Sex'           => $doctor['Sex'] ?? '',
+    'DateOfBirth'   => $dobFormatted,
+    'ContactNumber' => $doctor['ContactNumber'] ?? '',
+    'Address'       => $doctor['Address'] ?? '',
+];
+
+$accountFormData = [
+    'Email' => $doctor['Email'],
+];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
-    if ($_POST['action'] === 'update_personal') {
+    if (!verifyCsrf()) {
+        $updateMessage = 'Your session expired. Please try again.';
+    } elseif ($_POST['action'] === 'update_personal') {
         $firstName = trim($_POST['FirstName'] ?? '');
         $middleName = trim($_POST['MiddleName'] ?? '');
         $lastName = trim($_POST['LastName'] ?? '');
@@ -118,11 +160,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $contact = trim($_POST['ContactNumber'] ?? '');
         $address = trim($_POST['Address'] ?? '');
 
+        // Keep whatever the user typed in the form in case we need to redisplay it
+        $personalFormData = [
+            'FirstName'     => $firstName,
+            'MiddleName'    => $middleName,
+            'LastName'      => $lastName,
+            'Sex'           => $sex,
+            'DateOfBirth'   => $dob,
+            'ContactNumber' => $contact,
+            'Address'       => $address,
+        ];
+
         // Convert empty date to NULL
-        $dob = ($dob === '') ? null : $dob;
+        $dobForDb = ($dob === '') ? null : $dob;
 
         if (empty($firstName) || empty($lastName)) {
             $updateMessage = 'First name and last name are required.';
+            $personalEditOpen = true;
+        } elseif ($contact !== '' && !preg_match('/^[0-9+\-\s()]{7,20}$/', $contact)) {
+            $updateMessage = 'Please enter a valid contact number.';
+            $personalEditOpen = true;
         } else {
 
             $uStmt = mysqli_prepare(
@@ -145,16 +202,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $middleName,
                 $lastName,
                 $sex,
-                $dob,
+                $dobForDb,
                 $contact,
                 $address,
                 $userID
             );
 
             mysqli_stmt_execute($uStmt);
-
-            $updateMessage = 'Personal information updated successfully.';
-            $updateSuccess = true;
+            mysqli_stmt_close($uStmt);
 
             header('Location: doctor_profile.php?updated=1');
             exit();
@@ -166,32 +221,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $newPassword = trim($_POST['NewPassword'] ?? '');
         $confirmPassword = trim($_POST['ConfirmPassword'] ?? '');
 
+        $accountFormData['Email'] = $email;
+
         if (empty($email)) {
             $updateMessage = 'Email is required.';
+            $accountEditOpen = true;
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $updateMessage = 'Please enter a valid email address.';
+            $accountEditOpen = true;
         } elseif ($newPassword !== '' && $newPassword !== $confirmPassword) {
             $updateMessage = 'Passwords do not match.';
+            $accountEditOpen = true;
         } elseif ($newPassword !== '' && strlen($newPassword) < 8) {
             $updateMessage = 'Password must be at least 8 characters.';
+            $accountEditOpen = true;
         } else {
-            $uStmt = mysqli_prepare($conn,
-                'UPDATE users SET Email=? WHERE UserID=?');
-            mysqli_stmt_bind_param($uStmt, 'si', $email, $userID);
-            mysqli_stmt_execute($uStmt);
+            // Make sure no other account is already using this email
+            $dupStmt = mysqli_prepare($conn, 'SELECT UserID FROM users WHERE Email = ? AND UserID != ? LIMIT 1');
+            mysqli_stmt_bind_param($dupStmt, 'si', $email, $userID);
+            mysqli_stmt_execute($dupStmt);
+            $dupResult = mysqli_stmt_get_result($dupStmt);
+            $duplicate = mysqli_fetch_assoc($dupResult);
+            mysqli_stmt_close($dupStmt);
 
-            if ($newPassword !== '') {
-                $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
-                $pStmt = mysqli_prepare($conn,
-                    'UPDATE users SET Password=? WHERE UserID=?');
-                mysqli_stmt_bind_param($pStmt, 'si', $hashed, $userID);
-                mysqli_stmt_execute($pStmt);
+            if ($duplicate) {
+                $updateMessage = 'That email address is already in use by another account.';
+                $accountEditOpen = true;
+            } else {
+                $uStmt = mysqli_prepare($conn, 'UPDATE users SET Email=? WHERE UserID=?');
+                mysqli_stmt_bind_param($uStmt, 'si', $email, $userID);
+                mysqli_stmt_execute($uStmt);
+                mysqli_stmt_close($uStmt);
+
+                if ($newPassword !== '') {
+                    $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
+                    $pStmt = mysqli_prepare($conn, 'UPDATE users SET Password=? WHERE UserID=?');
+                    mysqli_stmt_bind_param($pStmt, 'si', $hashed, $userID);
+                    mysqli_stmt_execute($pStmt);
+                    mysqli_stmt_close($pStmt);
+                }
+
+                header('Location: doctor_profile.php?updated=1');
+                exit();
             }
-
-            $updateMessage = 'Account settings updated successfully.';
-            $updateSuccess = true;
-            header('Location: doctor_profile.php?updated=1');
-            exit();
         }
     }
 }
@@ -212,93 +284,86 @@ if (isset($_GET['updated'])) {
 <link rel="stylesheet" href="../assets/css/doctor/doctor_dashboard.css">
 <style>
 /* ===== Profile Page Overrides ===== */
-.profile-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
-  padding: 24px 28px;
-  margin-bottom: 24px;
-}
-.profile-hero-left {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  min-width: 0;
-}
-.profile-hero-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
+/* ===== Profile Banner (matches patient portal) ===== */
+.profile-banner {
   background: var(--color-primary-tint);
-  color: var(--color-primary-hover);
+  border: 1px solid var(--color-primary-tint-border);
+  border-radius: 14px;
+  padding: 20px 24px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 1.5rem;
-  flex-shrink: 0;
-  overflow: hidden;
-  border: 3px solid #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  gap: 14px;
+  margin-top: 24px;
 }
-.profile-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.profile-hero-name {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: var(--color-ink);
-}
-.profile-hero-meta {
+.profile-banner-info {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-  font-size: 0.88rem;
-  color: var(--color-ink-soft);
-  flex-wrap: wrap;
+  gap: 14px;
+  flex: 1;
 }
-.profile-hero-meta .sep { color: var(--color-primary-tint-border); }
-.profile-hero-badge {
-  background: var(--color-primary-tint);
-  color: var(--color-primary-hover);
-  padding: 2px 10px;
-  border-radius: 20px;
-  font-weight: 700;
-  font-size: 0.8rem;
-}
-.btn-edit-hero {
+.btn-edit-profile {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
-  border-radius: 10px;
-  border: 1px solid var(--color-border);
-  background: #fff;
-  color: var(--color-ink);
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 9px;
   font-family: var(--font-family);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.btn-edit-profile:hover { background: var(--color-primary-hover); }
+.btn-edit-profile svg { width: 15px; height: 15px; }
+.profile-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
   flex-shrink: 0;
 }
-.btn-edit-hero:hover { background: var(--color-bg); border-color: var(--color-primary-tint-border); }
-.btn-edit-hero svg { width: 16px; height: 16px; }
+.profile-avatar-photo { object-fit: cover; }
+.profile-banner-name { font-weight: 700; font-size: 1rem; color: var(--color-ink); }
+.profile-banner-meta {
+  font-size: 0.85rem;
+  color: #475569;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.profile-banner-meta .sep { color: #94a3b8; }
+.id-pill {
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
 
 /* Avatar upload */
 .avatar-upload-wrapper {
   position: relative;
-  width: 80px;
-  height: 80px;
+  width: 46px;
+  height: 46px;
   flex-shrink: 0;
   cursor: pointer;
 }
-.avatar-upload-wrapper .profile-hero-avatar,
-.avatar-upload-wrapper .profile-hero-avatar-photo {
-  width: 80px;
-  height: 80px;
+.avatar-upload-wrapper .profile-avatar,
+.avatar-upload-wrapper .profile-avatar-photo {
+  width: 46px;
+  height: 46px;
 }
 .avatar-hover-overlay {
   position: absolute;
@@ -319,15 +384,24 @@ if (isset($_GET['updated'])) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
+  margin-top: 20px;
   margin-bottom: 24px;
+  align-items: start;
 }
 .profile-card {
   background: #fff;
   border: 1px solid var(--color-border);
   border-radius: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   padding: 22px 24px;
 }
-.profile-card + .profile-card { margin-top: 20px; }
+/* NOTE: previously there was a ".profile-card + .profile-card { margin-top: 20px; }"
+   rule here. It matched the two sibling cards inside .profile-columns (a grid)
+   and pushed the second card down, breaking top alignment. Removed — the grid's
+   own `gap` already provides spacing. Vertical stacks (e.g. the account column)
+   add their own margin-top explicitly where needed instead. */
 .pcard-title {
   display: flex;
   align-items: center;
@@ -361,10 +435,20 @@ if (isset($_GET['updated'])) {
   color: var(--color-ink);
   font-weight: 500;
 }
+.pinfo-empty {
+  color: var(--color-ink-soft);
+  font-style: italic;
+  font-weight: 400;
+}
 .pinfo-divider {
   border: none;
   border-top: 1px solid var(--color-border);
   margin: 4px 0;
+}
+.pinfo-hint {
+  font-size: 0.8rem;
+  color: var(--color-ink-soft);
+  margin-top: 4px;
 }
 
 /* Chips */
@@ -505,7 +589,7 @@ if (isset($_GET['updated'])) {
 
 @media (max-width: 900px) {
   .profile-columns { grid-template-columns: 1fr; }
-  .profile-hero { flex-direction: column; gap: 16px; align-items: flex-start; }
+  .profile-banner { flex-direction: column; gap: 16px; align-items: flex-start; }
   .form-grid { grid-template-columns: 1fr; }
   .pinfo-grid { grid-template-columns: 1fr; }
 }
@@ -591,14 +675,14 @@ if (isset($_GET['updated'])) {
     </div>
     <?php endif; ?>
 
-    <!-- HERO CARD -->
-    <div class="profile-hero">
-      <div class="profile-hero-left">
+    <!-- Profile banner -->
+    <div class="profile-banner">
+      <div class="profile-banner-info">
         <div class="avatar-upload-wrapper" id="avatarArea">
           <?php if (!empty($doctor['ProfilePhoto'])): ?>
-          <img class="profile-hero-avatar profile-hero-avatar-photo" id="avatarImg" src="../<?php echo htmlspecialchars($doctor['ProfilePhoto']); ?>" alt="Photo">
+          <img class="profile-avatar profile-avatar-photo" id="avatarImg" src="../<?php echo htmlspecialchars($doctor['ProfilePhoto']); ?>" alt="Photo">
           <?php else: ?>
-          <div class="profile-hero-avatar" id="avatarImg"><?php echo htmlspecialchars($initials); ?></div>
+          <div class="profile-avatar" id="avatarImg"><?php echo htmlspecialchars($initials); ?></div>
           <?php endif; ?>
           <div class="avatar-hover-overlay">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -606,22 +690,22 @@ if (isset($_GET['updated'])) {
           <input type="file" id="avatarInput" accept="image/*" style="display:none;">
         </div>
         <div>
-          <div class="profile-hero-name"><?php echo htmlspecialchars($displayName); ?></div>
-          <div class="profile-hero-meta">
-            <span><?php echo htmlspecialchars($doctor['Email']); ?></span>
+          <div class="profile-banner-name"><?php echo htmlspecialchars($displayName); ?></div>
+          <div class="profile-banner-meta">
+            <?php echo htmlspecialchars($doctor['Email']); ?>
             <span class="sep">|</span>
-            <span class="profile-hero-badge"><?php echo htmlspecialchars($staffIdFormatted); ?></span>
+            <span class="id-pill"><?php echo htmlspecialchars($staffIdFormatted); ?></span>
           </div>
         </div>
       </div>
-      <button class="btn-edit-hero" type="button" onclick="togglePersonalEdit(true)">
+      <button class="btn-edit-profile" type="button" onclick="togglePersonalEdit(true)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
         Edit Profile
       </button>
     </div>
 
     <!-- ROW 1: Basic Information / Professional Information -->
-    <div class="profile-columns" id="profile-readonly">
+    <div class="profile-columns" id="profile-readonly" style="display:<?php echo $personalEditOpen ? 'none' : 'grid'; ?>;">
 
       <!-- Section 1: Basic Information -->
       <div class="profile-card">
@@ -640,7 +724,7 @@ if (isset($_GET['updated'])) {
           </div>
           <div class="pinfo-item">
             <div class="pinfo-label">Date of Birth</div>
-            <div class="pinfo-value"><?php echo htmlspecialchars($dobDisplay); ?></div>
+            <div class="pinfo-value"><?php echo field($dobDisplay); ?></div>
           </div>
           <div class="pinfo-item">
             <div class="pinfo-label">Sex</div>
@@ -674,7 +758,7 @@ if (isset($_GET['updated'])) {
           </div>
           <div class="pinfo-item">
             <div class="pinfo-label">Specialization</div>
-            <div class="pinfo-value"><?php echo field($doctor['Specialization'], 'Not specified'); ?></div>
+            <div class="pinfo-value"><?php echo field($doctor['Specialization']); ?></div>
           </div>
           <div class="pinfo-item">
             <div class="pinfo-label">Department</div>
@@ -682,23 +766,24 @@ if (isset($_GET['updated'])) {
           </div>
           <div class="pinfo-item">
             <div class="pinfo-label">License Number</div>
-            <div class="pinfo-value"><?php echo field($doctor['LicenseNumber'], 'Not specified'); ?></div>
+            <div class="pinfo-value"><?php echo field($doctor['LicenseNumber']); ?></div>
           </div>
           <div class="pinfo-item">
             <div class="pinfo-label">Years of Experience</div>
-            <div class="pinfo-value"><?php echo htmlspecialchars($yearsExpDisplay); ?></div>
+            <div class="pinfo-value"><?php echo field($yearsExpDisplay); ?></div>
           </div>
         </div>
-        <p style="margin-top:16px;font-size:0.78rem;color:var(--color-ink-soft);">
+        <p style="margin-top:auto;padding-top:16px;font-size:0.78rem;color:var(--color-ink-soft);">
           Professional details are managed by administration. Contact your administrator if any of this information needs to be corrected.
         </p>
       </div>
     </div>
 
-    <!-- Personal Information (edit form, hidden by default) -->
-    <div id="personal-edit" style="display:none;margin-bottom:24px;">
+    <!-- Personal Information (edit form, hidden unless open) -->
+    <div id="personal-edit" style="display:<?php echo $personalEditOpen ? 'block' : 'none'; ?>;margin-top:20px;margin-bottom:24px;">
       <form method="POST" id="personalForm">
         <input type="hidden" name="action" value="update_personal">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
         <div class="profile-card">
           <div class="pcard-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
@@ -707,35 +792,35 @@ if (isset($_GET['updated'])) {
           <div class="form-grid">
             <div class="form-group">
               <label for="FirstName">First Name *</label>
-              <input type="text" id="FirstName" name="FirstName" value="<?php echo htmlspecialchars($doctor['FirstName']); ?>" required>
+              <input type="text" id="FirstName" name="FirstName" value="<?php echo htmlspecialchars($personalFormData['FirstName']); ?>" required>
             </div>
             <div class="form-group">
               <label for="MiddleName">Middle Name</label>
-              <input type="text" id="MiddleName" name="MiddleName" value="<?php echo htmlspecialchars($doctor['MiddleName'] ?? ''); ?>">
+              <input type="text" id="MiddleName" name="MiddleName" value="<?php echo htmlspecialchars($personalFormData['MiddleName']); ?>">
             </div>
             <div class="form-group">
               <label for="LastName">Last Name *</label>
-              <input type="text" id="LastName" name="LastName" value="<?php echo htmlspecialchars($doctor['LastName']); ?>" required>
+              <input type="text" id="LastName" name="LastName" value="<?php echo htmlspecialchars($personalFormData['LastName']); ?>" required>
             </div>
             <div class="form-group">
               <label for="Sex">Sex</label>
               <select id="Sex" name="Sex">
                 <option value="">Select</option>
-                <option value="Male" <?php echo ($doctor['Sex'] === 'Male') ? 'selected' : ''; ?>>Male</option>
-                <option value="Female" <?php echo ($doctor['Sex'] === 'Female') ? 'selected' : ''; ?>>Female</option>
+                <option value="Male" <?php echo ($personalFormData['Sex'] === 'Male') ? 'selected' : ''; ?>>Male</option>
+                <option value="Female" <?php echo ($personalFormData['Sex'] === 'Female') ? 'selected' : ''; ?>>Female</option>
               </select>
             </div>
             <div class="form-group">
               <label for="DateOfBirth">Date of Birth</label>
-              <input type="date" id="DateOfBirth" name="DateOfBirth" value="<?php echo htmlspecialchars($dobFormatted); ?>">
+              <input type="date" id="DateOfBirth" name="DateOfBirth" value="<?php echo htmlspecialchars($personalFormData['DateOfBirth']); ?>">
             </div>
             <div class="form-group">
               <label for="ContactNumber">Contact Number</label>
-              <input type="tel" id="ContactNumber" name="ContactNumber" value="<?php echo htmlspecialchars($doctor['ContactNumber'] ?? ''); ?>" placeholder="09XXXXXXXXX">
+              <input type="tel" id="ContactNumber" name="ContactNumber" value="<?php echo htmlspecialchars($personalFormData['ContactNumber']); ?>" placeholder="09XXXXXXXXX">
             </div>
             <div class="form-group full-width">
               <label for="Address">Address</label>
-              <textarea id="Address" name="Address" rows="2"><?php echo htmlspecialchars($doctor['Address'] ?? ''); ?></textarea>
+              <textarea id="Address" name="Address" rows="2"><?php echo htmlspecialchars($personalFormData['Address']); ?></textarea>
             </div>
           </div>
           <div class="action-bar">
@@ -797,7 +882,7 @@ if (isset($_GET['updated'])) {
 
       <!-- Section 4: Account Information -->
       <div>
-        <div class="profile-card" id="account-readonly">
+        <div class="profile-card" id="account-readonly" style="display:<?php echo $accountEditOpen ? 'none' : 'block'; ?>;">
           <div class="pcard-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             Account Information
@@ -825,15 +910,12 @@ if (isset($_GET['updated'])) {
               <div class="pinfo-label">Last Login</div>
               <div class="pinfo-value"><?php echo htmlspecialchars($lastLoginDisplay); ?></div>
             </div>
-            <div class="pinfo-item">
-              <div class="pinfo-label">Date Registered</div>
-              <div class="pinfo-value"><?php echo htmlspecialchars($dateRegisteredDisplay); ?></div>
-            </div>
             <div class="pinfo-item full-width">
-              <div class="pinfo-label">Password</div>
-              <div class="pinfo-value">••••••••••</div>
+              <div class="pinfo-label">Date Registered</div>
+              <div class="pinfo-value"><?php echo field($dateRegisteredDisplay); ?></div>
             </div>
           </div>
+          <p class="pinfo-hint">For security, your password isn't displayed here. Use the button below to change it.</p>
           <div class="action-bar">
             <button class="btn-edit" type="button" onclick="toggleAccountEdit(true)" style="background:var(--color-primary);color:#fff;border:none;padding:10px 20px;border-radius:9px;font-family:var(--font-family);font-size:0.85rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
@@ -842,9 +924,10 @@ if (isset($_GET['updated'])) {
           </div>
         </div>
 
-        <div id="account-edit" style="display:none;margin-top:20px;">
+        <div id="account-edit" style="display:<?php echo $accountEditOpen ? 'block' : 'none'; ?>;margin-top:20px;">
           <form method="POST" id="accountForm">
             <input type="hidden" name="action" value="update_account">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
             <div class="profile-card">
               <div class="pcard-title">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
@@ -853,7 +936,7 @@ if (isset($_GET['updated'])) {
               <div class="form-grid">
                 <div class="form-group full-width">
                   <label for="Email">Email Address *</label>
-                  <input type="email" id="Email" name="Email" value="<?php echo htmlspecialchars($doctor['Email']); ?>" required>
+                  <input type="email" id="Email" name="Email" value="<?php echo htmlspecialchars($accountFormData['Email']); ?>" required>
                 </div>
                 <hr class="pinfo-divider" style="grid-column:1/-1;">
                 <div class="form-group full-width">
@@ -893,7 +976,21 @@ function togglePersonalEdit(editing) {
 function toggleAccountEdit(editing) {
   document.getElementById('account-readonly').style.display = editing ? 'none' : 'block';
   document.getElementById('account-edit').style.display = editing ? 'block' : 'none';
+  if (editing) {
+    document.getElementById('account-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
+
+<?php if ($personalEditOpen): ?>
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('personal-edit').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+<?php endif; ?>
+<?php if ($accountEditOpen): ?>
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('account-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+<?php endif; ?>
 
 // Avatar upload
 document.getElementById('avatarArea').addEventListener('click', function() {
@@ -917,7 +1014,7 @@ document.getElementById('avatarInput').addEventListener('change', function() {
     } else {
       const img = document.createElement('img');
       img.id = 'avatarImg';
-      img.className = 'profile-hero-avatar profile-hero-avatar-photo';
+      img.className = 'profile-avatar profile-avatar-photo';
       img.src = e.target.result;
       img.alt = 'Photo';
       avatarEl.replaceWith(img);

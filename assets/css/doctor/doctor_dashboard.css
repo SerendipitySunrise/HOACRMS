@@ -847,19 +847,26 @@ body {
   color: var(--color-ink);
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
+  text-align: left;
+}
+.queue-table td:first-child {
+  text-align: left;
+  padding-left: 20px;
 }
 .queue-table tbody tr:last-child td { border-bottom: none; }
 .queue-table tbody tr.highlight { background: var(--color-primary-tint); }
 
 .queue-num-badge {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  min-width: 50px;
+  height: 32px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   font-weight: 800;
   font-size: 0.85rem;
+  white-space: nowrap;
+  padding: 0 8px;
 }
 .queue-num-badge.waiting { background: #fef3c7; color: #b45309; }
 .queue-num-badge.serving { background: var(--color-primary); color: #fff; }
@@ -1346,6 +1353,8 @@ body {
   display: block;
 }
 .form-field input[type="text"],
+.form-field input[type="date"],
+.form-field input[type="number"],
 .form-field textarea {
   width: 100%;
   padding: 10px 14px;
@@ -1355,6 +1364,7 @@ body {
   font-size: 0.86rem;
   color: var(--color-ink);
   resize: vertical;
+  box-sizing: border-box;
 }
 .form-field input:focus,
 .form-field textarea:focus { outline: none; border-color: var(--color-primary-light); }
@@ -1383,8 +1393,8 @@ body {
  
 .prescription-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: 1.6fr 1.2fr 1fr 0.8fr;
+  gap: 10px;
   margin-bottom: 10px;
 }
 .prescription-row .full { grid-column: 1 / -1; }
@@ -1396,6 +1406,7 @@ body {
   font-family: var(--font-family);
   font-size: 0.86rem;
   color: var(--color-ink);
+  box-sizing: border-box;
 }
 .prescription-row input:focus { outline: none; border-color: var(--color-primary-light); }
  
@@ -1435,6 +1446,105 @@ body {
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 999px;
+}
+
+/* Past consultation summary cards + expandable details */
+.pc-card {
+  cursor: default;
+}
+.pc-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  margin-bottom: 6px;
+}
+.pc-view-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-primary);
+  font-family: var(--font-family);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0;
+  margin-top: 4px;
+}
+.pc-view-btn:hover { color: var(--color-primary-hover); text-decoration: underline; }
+.pc-full {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+}
+.pc-section { margin-top: 12px; }
+.pc-section:first-child { margin-top: 0; }
+.pc-section-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--color-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.pc-vitals {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: var(--color-ink);
+}
+.pc-vitals span {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.pc-note.soap-note {
+  background: #fff;
+  padding: 6px 10px;
+}
+.soap-block {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.soap-block:last-child { border-bottom: none; }
+.soap-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--color-primary-hover);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.soap-body {
+  font-size: 0.84rem;
+  color: #374151;
+  line-height: 1.6;
+}
+.pc-rx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pc-rx-item {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.pc-rx-med {
+  font-weight: 700;
+  color: var(--color-ink);
+  margin-bottom: 2px;
+}
+.pc-rx-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+  line-height: 1.5;
 }
  
 /* Vitals form */

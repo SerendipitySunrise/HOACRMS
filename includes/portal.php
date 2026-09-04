@@ -51,7 +51,7 @@ function portalRegisterPath(string $portal): string
     return match ($portal) {
         'admin' => 'register_admin.php',
         'staff' => 'register_staff.php',
-        'doctor' => 'register_staff.php',
+        'doctor' => 'register_doctor.php',
         default => 'signup.php',
     };
 }

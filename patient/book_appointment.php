@@ -310,52 +310,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
 
     <ul class="nav-list">
-
-        <li class="nav-item">
-
-            <a href="patient_dashboard.php"
-               style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;">
-
-                Dashboard
-
-            </a>
-
-        </li>
-
-
-        <li class="nav-item active">
-
-            <a href="patient_appointment.php"
-               style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;">
-
-                Appointments
-
-            </a>
-
-        </li>
-
-
-        <li class="nav-item">
-            Queue Status
-        </li>
-
-        <li class="nav-item">
-            View Results
-        </li>
-
-        <li class="nav-item">
-            Consultation History
-        </li>
-
-        <li class="nav-item">
-            Notifications
-        </li>
-
-        <li class="nav-item">
-            Profile
-        </li>
-
-    </ul>
+  <li>
+    <a href="patient_dashboard.php" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+      Dashboard
+    </a>
+  </li>
+  <li>
+    <a href="patient_appointment.php" class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Appointments
+    </a>
+  </li>
+  <li>
+    <a href="queue_status.php" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Queue Status
+    </a>
+  </li>
+  <li>
+    <a href="view_results.php" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
+      View Results
+    </a>
+  </li>
+  <li>
+    <a href="consultation_history.php" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Consultation History
+    </a>
+  </li>
+  <li>
+    <a href="notifications.php" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      Notifications
+    </a>
+  </li>
+  <li>
+    <a href="patient_profile.php" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Profile
+    </a>
+  </li>
+</ul>
 
 
     <div class="sidebar-footer">
@@ -400,7 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
         <a href="../auth/logout.php"
            class="sign-out"
-           style="text-decoration:none;"
+           style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;"
            onclick="return confirm('Are you sure you want to sign out?');">
 
             Sign Out
@@ -482,7 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
             <a href="patient_dashboard.php"
                class="btn-primary-solid"
-               style="text-decoration:none;">
+               style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;">
 
                 Go to Dashboard
 
@@ -490,7 +487,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
             <a href="patient_appointment.php"
                class="btn-outline"
-               style="text-decoration:none;">
+               style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;">
 
                 My Appointments
 
@@ -924,13 +921,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
             <a href="patient_dashboard.php"
                class="btn-primary-solid"
-               style="text-decoration:none;">
+               style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;">
                 Go to Dashboard
             </a>
 
             <a href="patient_appointment.php"
                class="btn-outline"
-               style="text-decoration:none;">
+               style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;">
                 My Appointments
             </a>
 

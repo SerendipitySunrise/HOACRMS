@@ -23,7 +23,7 @@ body.portal-select-page {
 }
 
 .portal-select-wrap {
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -61,8 +61,9 @@ body.portal-select-page {
 
 .portal-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
+  align-items: stretch;
 }
 
 .portal-card {
@@ -71,6 +72,9 @@ body.portal-select-page {
   border-radius: 16px;
   padding: 28px 24px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   transition: box-shadow 0.2s, border-color 0.2s;
 }
 
@@ -103,6 +107,7 @@ body.portal-select-page {
   color: var(--color-text-muted);
   line-height: 1.5;
   margin-bottom: 20px;
+  flex: 1;
   min-height: 2.8em;
 }
 
@@ -130,4 +135,18 @@ body.portal-select-page {
 
 .portal-card.staff-admin .hint {
   color: #6b7280;
+}
+
+/* Align all four portal cards in a single row on desktop, then degrade
+   gracefully to 2 / 1 columns on narrower screens. */
+@media (max-width: 900px) {
+  .portal-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .portal-cards {
+    grid-template-columns: 1fr;
+  }
 }

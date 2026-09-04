@@ -506,8 +506,22 @@ body.landing-page {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 12px;              /* gap-3 */
+  padding: 12px 16px;      /* py-3 px-4 */
+  border-radius: 10px;
+  color: #6b7280;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;              /* gap-3 */
+  padding: 12px 16px;      /* py-3 px-4 */
   border-radius: 10px;
   color: #6b7280;
   text-decoration: none;
@@ -524,6 +538,8 @@ body.landing-page {
   color: var(--color-ink);
 }
 
+/* Active state changes ONLY background, text color, and font-weight.
+   No layout properties (display/align-items/gap/padding) are touched here. */
 .nav-item.active {
   background: var(--color-primary-tint);
   color: var(--color-primary-hover);
@@ -1206,6 +1222,115 @@ body.landing-page {
 }
 
 .tab-btn:not(.active):hover { color: var(--color-ink); }
+
+/* ---------- APPOINTMENT FILTER BAR ---------- */
+.filter-bar {
+  margin-top: 24px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-tab {
+  border: 1px solid var(--color-border);
+  background: #f6f8fa;
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #64748b;
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.filter-tab:hover { color: var(--color-ink); }
+
+.filter-tab.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-field label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+}
+
+.filter-select,
+.filter-date {
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fff;
+}
+
+.filter-select:focus,
+.filter-date:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+}
+
+#dateRangeFields {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.filter-date-sep {
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  padding-bottom: 9px;
+}
+
+.btn-clear {
+  margin-left: auto;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  color: #64748b;
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-clear:hover {
+  border-color: #fecaca;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
 
 .section-panel {
   background: #fff;

@@ -172,6 +172,76 @@ function waiting_minutes(array $patient): int
     );
 }
 
+// Clean up treatment plan text to remove redundant labels and duplicate prescriptions
+function cleanTreatmentPlanText(string $text): string
+{
+    // Remove leading "Treatment Plan:" or "Treatment:" labels
+    $text = preg_replace('/^(Treatment Plan:|Treatment:)\s*/i', '', trim($text));
+    
+    // Remove "Prescriptions:" section and everything after it (including bullet list)
+    $text = preg_replace('/\s*Prescriptions:[\s\S]*$/i', '', $text);
+    
+    // Clean up extra whitespace
+    $text = trim($text);
+    
+    return $text;
+}
+
+
+/**
+ * Render SOAP-structured clinical notes as readable HTML.
+ *
+ * Accepts either the structured string stored in the Notes column
+ * (SUBJECTIVE:/OBJECTIVE:/ASSESSMENT:/PLAN: sections) or a plain,
+ * legacy note string. Returns HTML with section labels in bold.
+ */
+function renderSoapNotes(string $text): string
+{
+    $text = trim($text);
+
+    if ($text === '') {
+        return '';
+    }
+
+    $pattern =
+        '/^(SUBJECTIVE|OBJECTIVE|ASSESSMENT|PLAN):\s*(.*?)(?=^(?:SUBJECTIVE|OBJECTIVE|ASSESSMENT|PLAN):|\z)/msi';
+
+    if (
+        preg_match_all(
+            $pattern,
+            $text,
+            $matches,
+            PREG_SET_ORDER
+        ) &&
+        !empty($matches)
+    ) {
+
+        $html = '';
+
+        foreach ($matches as $match) {
+
+            $label = strtoupper($match[1]);
+            $body  = nl2br(htmlspecialchars(trim($match[2])));
+
+            $html .=
+                '<div class="soap-block">' .
+                '<div class="soap-label">' .
+                htmlspecialchars($label) .
+                '</div>' .
+                '<div class="soap-body">' .
+                $body .
+                '</div>' .
+                '</div>';
+        }
+
+        return $html;
+    }
+
+    // Legacy / unstructured note
+    return nl2br(htmlspecialchars($text));
+}
+
+
 
 /* ================================================================
    SAVE CONSULTATION
@@ -186,8 +256,34 @@ if (
     $patientID = (int)($_POST['patient_id'] ?? 0);
 
     $diagnosis = trim($_POST['diagnosis'] ?? '');
-    $clinicalNotes = trim($_POST['clinical_notes'] ?? '');
     $treatmentPlan = trim($_POST['treatment_plan'] ?? '');
+
+    /* SOAP-format clinical notes */
+    $soapSubjective = trim($_POST['soap_subjective'] ?? '');
+    $soapObjective = trim($_POST['soap_objective'] ?? '');
+    $soapAssessment = trim($_POST['soap_assessment'] ?? '');
+    $soapPlan = trim($_POST['soap_plan'] ?? '');
+
+    /* Assemble structured clinical notes (stored in the Notes column) */
+    $soapParts = [];
+
+    if ($soapSubjective !== '') {
+        $soapParts[] = "SUBJECTIVE:\n" . $soapSubjective;
+    }
+
+    if ($soapObjective !== '') {
+        $soapParts[] = "OBJECTIVE:\n" . $soapObjective;
+    }
+
+    if ($soapAssessment !== '') {
+        $soapParts[] = "ASSESSMENT:\n" . $soapAssessment;
+    }
+
+    if ($soapPlan !== '') {
+        $soapParts[] = "PLAN:\n" . $soapPlan;
+    }
+
+    $clinicalNotes = implode("\n\n", $soapParts);
 
     $bloodPressure = trim($_POST['vital_bp'] ?? '');
     $temperature = trim($_POST['vital_temp'] ?? '');
@@ -203,58 +299,13 @@ if (
 
 
     /* ------------------------------------------------------------
-       PRESCRIPTIONS
+       TREATMENT PLAN
+       (Prescriptions are stored separately in the prescriptions /
+       prescription_items tables, so only the treatment plan text
+       is written to the Treatment column here.)
     ------------------------------------------------------------ */
 
-    $rxNames = $_POST['rx_name'] ?? [];
-    $rxDosages = $_POST['rx_dosage'] ?? [];
-    $rxInstructions = $_POST['rx_instructions'] ?? [];
-
-    $prescriptions = [];
-
-    foreach ($rxNames as $i => $name) {
-
-        $name = trim($name);
-
-        if ($name === '') {
-            continue;
-        }
-
-        $dosage = trim($rxDosages[$i] ?? '');
-        $instructions = trim($rxInstructions[$i] ?? '');
-
-        $prescription = $name;
-
-        if ($dosage !== '') {
-            $prescription .= ' — ' . $dosage;
-        }
-
-        if ($instructions !== '') {
-            $prescription .= ' — ' . $instructions;
-        }
-
-        $prescriptions[] = $prescription;
-    }
-
-
-    /* ------------------------------------------------------------
-       COMBINE TREATMENT + PRESCRIPTIONS
-    ------------------------------------------------------------ */
-
-    $treatmentParts = [];
-
-    if ($treatmentPlan !== '') {
-        $treatmentParts[] =
-            "Treatment Plan:\n" . $treatmentPlan;
-    }
-
-    if (!empty($prescriptions)) {
-        $treatmentParts[] =
-            "Prescriptions:\n- " .
-            implode("\n- ", $prescriptions);
-    }
-
-    $finalTreatment = implode("\n\n", $treatmentParts);
+    $finalTreatment = $treatmentPlan;
 
 
     /* ------------------------------------------------------------
@@ -527,7 +578,129 @@ if (
 
         mysqli_stmt_execute($insertStmt);
 
+        $consultationID =
+            (int) mysqli_insert_id($conn);
+
         mysqli_stmt_close($insertStmt);
+    }
+
+
+    /* ------------------------------------------------------------
+       SAVE PRESCRIPTIONS (header + items)
+    ------------------------------------------------------------ */
+
+    if (!empty($consultationID)) {
+
+        $deleteRxSql = "
+            DELETE pi
+            FROM prescription_items pi
+            INNER JOIN prescriptions pr
+                ON pi.PrescriptionID = pr.PrescriptionID
+            WHERE pr.ConsultationID = ?
+        ";
+
+        $deleteRxStmt =
+            mysqli_prepare($conn, $deleteRxSql);
+
+        mysqli_stmt_bind_param(
+            $deleteRxStmt,
+            'i',
+            $consultationID
+        );
+
+        mysqli_stmt_execute($deleteRxStmt);
+
+        mysqli_stmt_close($deleteRxStmt);
+
+
+        $deletePrescSql = "
+            DELETE FROM prescriptions
+            WHERE ConsultationID = ?
+        ";
+
+        $deletePrescStmt =
+            mysqli_prepare($conn, $deletePrescSql);
+
+        mysqli_stmt_bind_param(
+            $deletePrescStmt,
+            'i',
+            $consultationID
+        );
+
+        mysqli_stmt_execute($deletePrescStmt);
+
+        mysqli_stmt_close($deletePrescStmt);
+
+
+        $rxNames = $_POST['rx_name'] ?? [];
+        $rxDosages = $_POST['rx_dosage'] ?? [];
+        $rxFrequencies = $_POST['rx_frequency'] ?? [];
+        $rxDurations = $_POST['rx_duration'] ?? [];
+        $rxInstructions = $_POST['rx_instructions'] ?? [];
+
+        $prescDate = date('Y-m-d');
+
+        $insertPrescSql = "
+            INSERT INTO prescriptions
+                (ConsultationID, PrescribedDate)
+            VALUES (?, ?)
+        ";
+
+        $insertPrescStmt =
+            mysqli_prepare($conn, $insertPrescSql);
+
+        mysqli_stmt_bind_param(
+            $insertPrescStmt,
+            'is',
+            $consultationID,
+            $prescDate
+        );
+
+        mysqli_stmt_execute($insertPrescStmt);
+
+        $newPrescriptionID =
+            (int) mysqli_insert_id($conn);
+
+        mysqli_stmt_close($insertPrescStmt);
+
+
+        $insertItemSql = "
+            INSERT INTO prescription_items
+                (PrescriptionID, MedicineName, Dosage, Frequency, Duration, Instructions)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ";
+
+        $insertItemStmt =
+            mysqli_prepare($conn, $insertItemSql);
+
+        foreach ($rxNames as $i => $name) {
+
+            $name = trim($name);
+
+            if ($name === '') {
+                continue;
+            }
+
+            $dosage = trim($rxDosages[$i] ?? '');
+            $frequency = trim($rxFrequencies[$i] ?? '');
+            $duration = trim($rxDurations[$i] ?? '');
+            $instructions = trim($rxInstructions[$i] ?? '');
+
+            mysqli_stmt_bind_param(
+                $insertItemStmt,
+                'isssss',
+                $newPrescriptionID,
+                $name,
+                $dosage,
+                $frequency,
+                $duration,
+                $instructions
+            );
+
+            mysqli_stmt_execute($insertItemStmt);
+        }
+
+        mysqli_stmt_close($insertItemStmt);
     }
 
 
@@ -798,7 +971,10 @@ while ($row = mysqli_fetch_assoc($queueResult)) {
 
     if (!empty($row['ConsultationID'])) {
 
-        $history[] = [
+        $historyItem = [
+            'consultation_id' =>
+                (int)$row['ConsultationID'],
+
             'date' =>
                 $row['ConsultationDate'],
 
@@ -810,6 +986,9 @@ while ($row = mysqli_fetch_assoc($queueResult)) {
 
             'note' =>
                 $row['Notes'] ?? '',
+
+            'treatment' =>
+                $row['Treatment'] ?? '',
 
             'tag' =>
                 $row['Treatment'] ?? '',
@@ -823,6 +1002,73 @@ while ($row = mysqli_fetch_assoc($queueResult)) {
             'pulse_rate' =>
                 $row['PulseRate'] ?? ''
         ];
+
+
+        /*
+         * Load prescription medications for this consultation
+         * (used for medication tags on the summary card and for
+         * the full prescription list in the details view).
+         */
+
+        $meds = [];
+        $rxItems = [];
+
+        $histRxSql = "
+            SELECT
+                pi.MedicineName,
+                pi.Dosage,
+                pi.Frequency,
+                pi.Duration,
+                pi.Instructions
+            FROM prescriptions pr
+            INNER JOIN prescription_items pi
+                ON pr.PrescriptionID = pi.PrescriptionID
+            WHERE pr.ConsultationID = ?
+            ORDER BY pi.PrescriptionItemID ASC
+        ";
+
+        $histRxStmt =
+            mysqli_prepare($conn, $histRxSql);
+
+        mysqli_stmt_bind_param(
+            $histRxStmt,
+            'i',
+            $historyItem['consultation_id']
+        );
+
+        mysqli_stmt_execute($histRxStmt);
+
+        $histRxResult =
+            mysqli_stmt_get_result($histRxStmt);
+
+        while ($hr = mysqli_fetch_assoc($histRxResult)) {
+
+            $medName = trim($hr['MedicineName'] ?? '');
+
+            if ($medName !== '') {
+                $meds[] = $medName;
+            }
+
+            $rxItems[] = [
+                'medicine' =>
+                    $hr['MedicineName'] ?? '',
+                'dosage' =>
+                    $hr['Dosage'] ?? '',
+                'frequency' =>
+                    $hr['Frequency'] ?? '',
+                'duration' =>
+                    $hr['Duration'] ?? '',
+                'instructions' =>
+                    $hr['Instructions'] ?? ''
+            ];
+        }
+
+        mysqli_stmt_close($histRxStmt);
+
+        $historyItem['medications'] = $meds;
+        $historyItem['prescription_items'] = $rxItems;
+
+        $history[] = $historyItem;
     }
 
 
@@ -1241,6 +1487,72 @@ if (isset($_GET['consult'])) {
             $consultPatient['notes'] =
                 $consultation['Notes'] ?? '';
 
+            /*
+             * Parse SOAP-format clinical notes back into
+             * individual fields for pre-filling the form.
+             */
+
+            $soapDefaults =
+                [
+                    'soap_subjective' => '',
+                    'soap_objective' => '',
+                    'soap_assessment' => '',
+                    'soap_plan' => ''
+                ];
+
+            $soapPattern =
+                '/^(SUBJECTIVE|OBJECTIVE|ASSESSMENT|PLAN):\s*(.*?)(?=^(?:SUBJECTIVE|OBJECTIVE|ASSESSMENT|PLAN):|\z)/msi';
+
+            if (
+
+                preg_match_all(
+                    $soapPattern,
+                    $consultPatient['notes'],
+                    $soapMatches,
+                    PREG_SET_ORDER
+                ) &&
+                !empty($soapMatches)
+            ) {
+
+                foreach ($soapMatches as $soapMatch) {
+
+                    $soapKey =
+                        strtolower($soapMatch[1]);
+
+                    $soapValue =
+                        trim($soapMatch[2]);
+
+                    $soapDefaults[
+                        'soap_' . $soapKey
+                    ] = $soapValue;
+                }
+            } elseif (
+
+                $consultPatient['notes'] !== ''
+            ) {
+
+                /*
+                 * Legacy / unstructured notes: put the whole
+                 * text into the Subjective field so nothing
+                 * is lost.
+                 */
+
+                $soapDefaults['soap_subjective'] =
+                    $consultPatient['notes'];
+            }
+
+            $consultPatient['soap_subjective'] =
+                $soapDefaults['soap_subjective'];
+
+            $consultPatient['soap_objective'] =
+                $soapDefaults['soap_objective'];
+
+            $consultPatient['soap_assessment'] =
+                $soapDefaults['soap_assessment'];
+
+            $consultPatient['soap_plan'] =
+                $soapDefaults['soap_plan'];
+
             $consultPatient['blood_pressure'] =
                 $consultation['BloodPressure'] ?? '';
 
@@ -1252,6 +1564,47 @@ if (isset($_GET['consult'])) {
 
             $consultPatient['follow_up_date'] =
                 $consultation['FollowUpDate'] ?? '';
+
+
+            /*
+             * Load saved prescriptions to re-populate the form.
+             */
+
+            $consultPatient['prescriptions'] = [];
+
+            $rxSql = "
+                SELECT
+                    pi.MedicineName,
+                    pi.Dosage,
+                    pi.Frequency,
+                    pi.Duration,
+                    pi.Instructions
+                FROM prescriptions pr
+                INNER JOIN prescription_items pi
+                    ON pr.PrescriptionID = pi.PrescriptionID
+                WHERE pr.ConsultationID = ?
+                ORDER BY pi.PrescriptionItemID ASC
+            ";
+
+            $rxStmt =
+                mysqli_prepare($conn, $rxSql);
+
+            mysqli_stmt_bind_param(
+                $rxStmt,
+                'i',
+                $consultPatient['consultation_id']
+            );
+
+            mysqli_stmt_execute($rxStmt);
+
+            $rxResult =
+                mysqli_stmt_get_result($rxStmt);
+
+            while ($rx = mysqli_fetch_assoc($rxResult)) {
+                $consultPatient['prescriptions'][] = $rx;
+            }
+
+            mysqli_stmt_close($rxStmt);
         }
     }
 }
@@ -1638,35 +1991,63 @@ if (isset($_GET['consult'])) {
 
         </label>
 
-        <input
-            type="text"
+        <textarea
             id="diagnosis"
             name="diagnosis"
-            value="<?= htmlspecialchars(
-                $consultPatient['diagnosis'] ?? ''
-            ) ?>"
-            placeholder="Enter diagnosis"
-        >
+            placeholder="Primary: ...  Secondary: ..."
+        ><?= htmlspecialchars(
+            $consultPatient['diagnosis'] ?? ''
+        ) ?></textarea>
 
     </div>
 
 
     <div class="form-field">
+        <label>Clinical Notes — SOAP</label>
+    </div>
 
-        <label for="clinical-notes">
-
-            Clinical Notes
-
-        </label>
-
+    <div class="form-field">
+        <label for="soap-subjective">Subjective</label>
         <textarea
-            id="clinical-notes"
-            name="clinical_notes"
-            placeholder="Patient symptoms, observations, history..."
+            id="soap-subjective"
+            name="soap_subjective"
+            placeholder="Chief complaint in patient's own words, history of present illness..."
         ><?= htmlspecialchars(
-            $consultPatient['notes'] ?? ''
+            $consultPatient['soap_subjective'] ?? ''
         ) ?></textarea>
+    </div>
 
+    <div class="form-field">
+        <label for="soap-objective">Objective</label>
+        <textarea
+            id="soap-objective"
+            name="soap_objective"
+            placeholder="Observations, examination findings, vitals, test results..."
+        ><?= htmlspecialchars(
+            $consultPatient['soap_objective'] ?? ''
+        ) ?></textarea>
+    </div>
+
+    <div class="form-field">
+        <label for="soap-assessment">Assessment</label>
+        <textarea
+            id="soap-assessment"
+            name="soap_assessment"
+            placeholder="Working diagnosis, differentials, assessment of findings..."
+        ><?= htmlspecialchars(
+            $consultPatient['soap_assessment'] ?? ''
+        ) ?></textarea>
+    </div>
+
+    <div class="form-field">
+        <label for="soap-plan">Plan</label>
+        <textarea
+            id="soap-plan"
+            name="soap_plan"
+            placeholder="Treatment, medications, tests, follow-up, referrals..."
+        ><?= htmlspecialchars(
+            $consultPatient['soap_plan'] ?? ''
+        ) ?></textarea>
     </div>
 
 
@@ -1742,38 +2123,112 @@ if (isset($_GET['consult'])) {
 
     <div id="prescription-list">
 
-        <div class="prescription-entry">
+        <?php
+            $savedRxList = $consultPatient['prescriptions'] ?? [];
+        ?>
 
-            <div class="prescription-row">
+        <?php if (!empty($savedRxList)): ?>
 
-                <input
-                    type="text"
-                    name="rx_name[]"
-                    placeholder="Medicine name & strength"
-                >
+            <?php foreach ($savedRxList as $rx): ?>
+
+            <div class="prescription-entry">
+
+                <div class="prescription-row">
+
+                    <input
+                        type="text"
+                        name="rx_name[]"
+                        placeholder="Medication"
+                        value="<?= htmlspecialchars($rx['MedicineName'] ?? '') ?>"
+                    >
+
+                    <input
+                        type="text"
+                        name="rx_dosage[]"
+                        placeholder="Dosage & Form"
+                        value="<?= htmlspecialchars($rx['Dosage'] ?? '') ?>"
+                    >
+
+                    <input
+                        type="text"
+                        name="rx_frequency[]"
+                        placeholder="Frequency"
+                        value="<?= htmlspecialchars($rx['Frequency'] ?? '') ?>"
+                    >
+
+                    <input
+                        type="text"
+                        name="rx_duration[]"
+                        placeholder="Duration"
+                        value="<?= htmlspecialchars($rx['Duration'] ?? '') ?>"
+                    >
+
+                </div>
 
 
-                <input
-                    type="text"
-                    name="rx_dosage[]"
-                    placeholder="Dosage"
-                >
+                <div class="prescription-row">
+
+                    <input
+                        type="text"
+                        name="rx_instructions[]"
+                        class="full"
+                        placeholder="Instructions"
+                        value="<?= htmlspecialchars($rx['Instructions'] ?? '') ?>"
+                    >
+
+                </div>
 
             </div>
 
+            <?php endforeach; ?>
 
-            <div class="prescription-row">
+        <?php else: ?>
 
-                <input
-                    type="text"
-                    name="rx_instructions[]"
-                    class="full"
-                    placeholder="Instructions"
-                >
+            <div class="prescription-entry">
+
+                <div class="prescription-row">
+
+                    <input
+                        type="text"
+                        name="rx_name[]"
+                        placeholder="Medication"
+                    >
+
+                    <input
+                        type="text"
+                        name="rx_dosage[]"
+                        placeholder="Dosage & Form"
+                    >
+
+                    <input
+                        type="text"
+                        name="rx_frequency[]"
+                        placeholder="Frequency"
+                    >
+
+                    <input
+                        type="text"
+                        name="rx_duration[]"
+                        placeholder="Duration"
+                    >
+
+                </div>
+
+
+                <div class="prescription-row">
+
+                    <input
+                        type="text"
+                        name="rx_instructions[]"
+                        class="full"
+                        placeholder="Instructions"
+                    >
+
+                </div>
 
             </div>
 
-        </div>
+        <?php endif; ?>
 
     </div>
 
@@ -1821,8 +2276,7 @@ if (isset($_GET['consult'])) {
             as $c
         ): ?>
 
-
-        <div class="past-consult-item">
+        <div class="past-consult-item pc-card">
 
             <div class="pc-head">
 
@@ -1859,35 +2313,170 @@ if (isset($_GET['consult'])) {
             <?php endif; ?>
 
 
-            <?php if (!empty($c['note'])): ?>
+            <?php if (!empty($c['medications'])): ?>
 
-            <div class="pc-note">
+            <div class="pc-tags">
 
-                <?= nl2br(
-                    htmlspecialchars(
-                        $c['note']
-                    )
-                ) ?>
+                <?php foreach ($c['medications'] as $med): ?>
+
+                <span class="pc-tag">
+
+                    <?= htmlspecialchars($med) ?>
+
+                </span>
+
+                <?php endforeach; ?>
 
             </div>
 
             <?php endif; ?>
 
 
-            <?php if (!empty($c['tag'])): ?>
+            <button
+                type="button"
+                class="pc-view-btn"
+                onclick="toggleConsultDetails(this)"
+            >
 
-            <span class="pc-tag">
+                View Details
 
-                <?= htmlspecialchars(
-                    $c['tag']
-                ) ?>
+            </button>
 
-            </span>
 
-            <?php endif; ?>
+            <div class="pc-full" hidden>
+
+                <?php if (!empty($c['note'])): ?>
+
+                <div class="pc-section">
+
+                    <div class="pc-section-title">
+
+                        Clinical Notes
+
+                    </div>
+
+                    <div class="pc-note soap-note">
+
+                        <?= renderSoapNotes($c['note']) ?>
+
+                    </div>
+
+                </div>
+
+                <?php endif; ?>
+
+
+                <?php if (!empty($c['treatment'])): ?>
+
+                <div class="pc-section">
+
+                    <div class="pc-section-title">
+
+                        Treatment Plan
+
+                    </div>
+
+                    <div class="pc-note">
+
+                        <?= nl2br(
+                            htmlspecialchars(
+                                cleanTreatmentPlanText($c['treatment'])
+                            )
+                        ) ?>
+
+                    </div>
+
+                </div>
+
+                <?php endif; ?>
+
+
+                <?php if (!empty($c['prescription_items'])): ?>
+
+                <div class="pc-section">
+
+                    <div class="pc-section-title">
+
+                        Prescriptions
+
+                    </div>
+
+                    <div class="pc-rx-list">
+
+                        <?php foreach ($c['prescription_items'] as $rx): ?>
+
+                        <div class="pc-rx-item">
+
+                            <div class="pc-rx-med">
+
+                                <?= htmlspecialchars($rx['medicine']) ?>
+
+                            </div>
+
+                            <?php if (!empty($rx['dosage'])): ?>
+                            <div class="pc-rx-meta">Dosage: <?= htmlspecialchars($rx['dosage']) ?></div>
+                            <?php endif; ?>
+
+                            <?php if (!empty($rx['frequency'])): ?>
+                            <div class="pc-rx-meta">Frequency: <?= htmlspecialchars($rx['frequency']) ?></div>
+                            <?php endif; ?>
+
+                            <?php if (!empty($rx['duration'])): ?>
+                            <div class="pc-rx-meta">Duration: <?= htmlspecialchars($rx['duration']) ?></div>
+                            <?php endif; ?>
+
+                            <?php if (!empty($rx['instructions'])): ?>
+                            <div class="pc-rx-meta">Instructions: <?= htmlspecialchars($rx['instructions']) ?></div>
+                            <?php endif; ?>
+
+                        </div>
+
+                        <?php endforeach; ?>
+
+                    </div>
+
+                </div>
+
+                <?php endif; ?>
+
+
+                <?php if (
+                    !empty($c['blood_pressure']) ||
+                    !empty($c['temperature']) ||
+                    !empty($c['pulse_rate'])
+                ): ?>
+
+                <div class="pc-section">
+
+                    <div class="pc-section-title">
+
+                        Vitals
+
+                    </div>
+
+                    <div class="pc-vitals">
+
+                        <?php if (!empty($c['blood_pressure'])): ?>
+                        <span>BP: <?= htmlspecialchars($c['blood_pressure']) ?></span>
+                        <?php endif; ?>
+
+                        <?php if (!empty($c['temperature'])): ?>
+                        <span>Temp: <?= htmlspecialchars($c['temperature']) ?>°C</span>
+                        <?php endif; ?>
+
+                        <?php if (!empty($c['pulse_rate'])): ?>
+                        <span>Pulse: <?= htmlspecialchars($c['pulse_rate']) ?> bpm</span>
+                        <?php endif; ?>
+
+                    </div>
+
+                </div>
+
+                <?php endif; ?>
+
+            </div>
 
         </div>
-
 
         <?php endforeach; ?>
 
@@ -2032,13 +2621,25 @@ function addPrescriptionRow()
             <input
                 type="text"
                 name="rx_name[]"
-                placeholder="Medicine name & strength"
+                placeholder="Medication"
             >
 
             <input
                 type="text"
                 name="rx_dosage[]"
-                placeholder="Dosage"
+                placeholder="Dosage & Form"
+            >
+
+            <input
+                type="text"
+                name="rx_frequency[]"
+                placeholder="Frequency"
+            >
+
+            <input
+                type="text"
+                name="rx_duration[]"
+                placeholder="Duration"
             >
 
         </div>
@@ -2067,6 +2668,34 @@ function addPrescriptionRow()
 
 
     list.appendChild(entry);
+}
+
+function toggleConsultDetails(btn)
+{
+    const card =
+        btn.closest('.past-consult-item');
+
+    if (!card) {
+        return;
+    }
+
+    const detail =
+        card.querySelector('.pc-full');
+
+    if (!detail) {
+        return;
+    }
+
+    const isHidden =
+        detail.hasAttribute('hidden');
+
+    if (isHidden) {
+        detail.removeAttribute('hidden');
+        btn.textContent = 'Hide Details';
+    } else {
+        detail.setAttribute('hidden', '');
+        btn.textContent = 'View Details';
+    }
 }
 
 </script>
@@ -2657,13 +3286,19 @@ $statusLabel =
 
 <?php else: ?>
 
+<?php
+    $viewApptDate = $p['appointment_date'] ?? '';
+    $viewTarget   = ($viewApptDate === $today)
+        ? 'doctor_queue.php?consult=' . (int)$p['appointment_id']
+        : 'records.php';
+?>
 
 <a
     class="btn-done"
-    href="doctor_queue.php?consult=<?= (int)$p['appointment_id'] ?>"
+    href="<?= htmlspecialchars($viewTarget) ?>"
 >
 
-    View
+    <?= ($viewApptDate === $today) ? 'View' : 'Records' ?>
 
 </a>
 
