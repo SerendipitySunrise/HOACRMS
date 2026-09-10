@@ -24,6 +24,7 @@ session_start();
 
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/pdf_helper.php';
+require_once __DIR__ . '/../includes/vitals.php';
 
 
 /*
@@ -1045,6 +1046,58 @@ if (!empty($records)) {
 
 /*
 |--------------------------------------------------------------------------
+| GET VITALS PER PATIENT
+|--------------------------------------------------------------------------
+|
+| Builds a map: PatientID -> [ vitals readings (newest first) ].
+| Powers the Vitals History panel in each patient's detail view.
+|
+*/
+
+$vitalsByPatient = [];
+
+if (!empty($records)) {
+
+    $recordPatientIds = [];
+
+    foreach ($records as $r) {
+        $recordPatientIds[(int) $r['patient_id']] = true;
+    }
+
+    if (!empty($recordPatientIds)) {
+
+        $patientIdList = implode(
+            ',',
+            array_map('intval', array_keys($recordPatientIds))
+        );
+
+        $vitalsResult = $conn->query("
+            SELECT
+                v.PatientID,
+                v.BloodPressure,
+                v.Temperature,
+                v.PulseRate,
+                v.Weight,
+                v.Height,
+                v.RecordedAt
+            FROM vitals v
+            WHERE v.PatientID IN ($patientIdList)
+            ORDER BY v.RecordedAt DESC, v.VitalID DESC
+        ");
+
+        if ($vitalsResult) {
+
+            while ($vRow = $vitalsResult->fetch_assoc()) {
+                $vPid = (int) $vRow['PatientID'];
+                $vitalsByPatient[$vPid][] = $vRow;
+            }
+        }
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
 | GROUP RECORDS BY PATIENT
 |--------------------------------------------------------------------------
 |
@@ -1167,6 +1220,11 @@ foreach ($patients as $pid => &$group) {
         ],
         $labPending
     );
+
+    /*
+    | Latest vitals readings for this patient (Vitals History panel).
+    */
+    $group['vitals_history'] = $vitalsByPatient[$pid] ?? [];
 }
 
 unset($group);
@@ -1275,6 +1333,57 @@ function patientFlags(array $patient, bool $labPending = false): array
     }
 
     return $flags;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| VITALS HISTORY CELL RENDERER
+|--------------------------------------------------------------------------
+|
+| Renders a single vitals table cell, color-coded when the reading is
+| outside the normal range (using the shared vitals classifier).
+|
+*/
+
+function renderVitalsCell(array $byKey, string $key): string
+{
+    $item = $byKey[$key] ?? null;
+
+    if (
+        !$item
+        || $item['value'] === ''
+        || $item['value'] === null
+    ) {
+        return '<span class="vh-cell-empty">&mdash;</span>';
+    }
+
+    $status = $item['status'];
+
+    $attrs = '';
+
+    if ($status === 'warning') {
+        $attrs = ' class="vh-cell-warning" title="' .
+            htmlspecialchars($item['note']) . '"';
+    } elseif ($status === 'high' || $status === 'low') {
+        $attrs = ' class="vh-cell-abnormal" title="' .
+            htmlspecialchars($item['note']) . '"';
+    }
+
+    $warn = '';
+
+    if ($status === 'warning') {
+        $warn = ' <span class="vh-cell-warn">&#9888;</span>';
+    } elseif ($status === 'high' || $status === 'low') {
+        $warn = ' <span class="vh-cell-warn">&#9888;&#65039;</span>';
+    }
+
+    return '<span' . $attrs . '>' .
+        htmlspecialchars(
+            $item['value'] . ' ' . $item['unit']
+        ) .
+        $warn .
+        '</span>';
 }
 
 
@@ -1856,6 +1965,105 @@ $totalRecords = count($records);
                             </div>
 
                         </div>
+
+                    </div>
+
+
+                    <!-- ==================================================
+                         VITALS HISTORY
+                    ================================================== -->
+
+                    <div class="vh-history-panel">
+
+                        <div class="vh-history-head">
+                            Vitals History
+                        </div>
+
+                        <?php if (empty($group['vitals_history'])): ?>
+
+                            <div class="vh-history-empty">
+                                No vitals history on file.
+                            </div>
+
+                        <?php else: ?>
+
+                            <div class="vh-table-wrap">
+
+                                <table class="vh-table">
+
+                                    <thead>
+
+                                        <tr>
+                                            <th>Date/Time</th>
+                                            <th>BP</th>
+                                            <th>Temp</th>
+                                            <th>Pulse</th>
+                                            <th>Weight</th>
+                                            <th>Height</th>
+                                        </tr>
+
+                                    </thead>
+
+                                    <tbody>
+
+                                        <?php
+                                        foreach ($group['vitals_history'] as $vhIdx => $vhRow):
+
+                                            $vhClassified = classifyVitals([
+                                                'blood_pressure'    => $vhRow['BloodPressure'] ?? '',
+                                                'temperature'       => $vhRow['Temperature'] ?? '',
+                                                'pulse_rate'        => $vhRow['PulseRate'] ?? '',
+                                                'weight'            => $vhRow['Weight'] ?? '',
+                                                'height'            => $vhRow['Height'] ?? '',
+                                            ]);
+
+                                            $vhByKey = [];
+
+                                            foreach ($vhClassified as $ci) {
+                                                $vhByKey[$ci['key']] = $ci;
+                                            }
+                                        ?>
+
+                                        <tr <?= $vhIdx >= 5 ? 'class="vh-more-row" hidden' : '' ?>>
+
+                                            <td class="vh-cell-date">
+                                                <?= htmlspecialchars(
+                                                    date(
+                                                        'M d, Y g:i A',
+                                                        strtotime($vhRow['RecordedAt'])
+                                                    )
+                                                ) ?>
+                                            </td>
+
+                                            <td><?= renderVitalsCell($vhByKey, 'blood_pressure') ?></td>
+                                            <td><?= renderVitalsCell($vhByKey, 'temperature') ?></td>
+                                            <td><?= renderVitalsCell($vhByKey, 'pulse_rate') ?></td>
+                                            <td><?= renderVitalsCell($vhByKey, 'weight') ?></td>
+                                            <td><?= renderVitalsCell($vhByKey, 'height') ?></td>
+
+                                        </tr>
+
+                                        <?php endforeach; ?>
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+                            <?php if (count($group['vitals_history']) > 5): ?>
+
+                            <button
+                                type="button"
+                                class="vh-view-all-btn"
+                                onclick="toggleVitalsHistory(this)"
+                            >
+                                View All Vitals History
+                            </button>
+
+                            <?php endif; ?>
+
+                        <?php endif; ?>
 
                     </div>
 
@@ -2472,6 +2680,38 @@ function toggleAudit(consultationId) {
             editEl.style.display = 'none';
         }
     }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| TOGGLE FULL VITALS HISTORY
+|--------------------------------------------------------------------------
+*/
+
+function toggleVitalsHistory(btn) {
+
+    const panel = btn.closest('.vh-history-panel');
+
+    if (!panel) {
+        return;
+    }
+
+    const rows = panel.querySelectorAll('tr.vh-more-row');
+
+    const expanding = btn.textContent.indexOf('All') !== -1;
+
+    rows.forEach(function (row) {
+        if (expanding) {
+            row.removeAttribute('hidden');
+        } else {
+            row.setAttribute('hidden', 'hidden');
+        }
+    });
+
+    btn.textContent = expanding
+        ? 'Show Less Vitals History'
+        : 'View All Vitals History';
 }
 
 </script>

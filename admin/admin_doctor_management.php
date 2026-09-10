@@ -1,3 +1,328 @@
+<?php
+require_once __DIR__ . '/../includes/session.php';
+require_once __DIR__ . '/../includes/db.php';
+requireRole('Admin');
+
+$flashMessage = '';
+$flashType = 'success';
+
+// All departments (used by the add/edit modal)
+$departments = [];
+$deptResult = mysqli_query($conn, 'SELECT DepartmentID, DepartmentName FROM departments ORDER BY DepartmentName');
+if ($deptResult) {
+    $departments = mysqli_fetch_all($deptResult, MYSQLI_ASSOC);
+}
+
+function fetchDoctors(mysqli $conn): array
+{
+    $doctors = [];
+    $result = mysqli_query(
+        $conn,
+        'SELECT
+            s.StaffID,
+            s.UserID,
+            s.DepartmentID,
+            s.Specialization,
+            COALESCE(s.LicenseNumber, "") AS LicenseNumber,
+            COALESCE(s.YearsOfExperience, 0) AS YearsOfExperience,
+            s.AvailabilityStatus,
+            TIME_FORMAT(s.ScheduleStart, "%H:%i") AS ScheduleStart,
+            TIME_FORMAT(s.ScheduleEnd, "%H:%i") AS ScheduleEnd,
+            COALESCE(s.AssignedResponsibilities, "") AS Bio,
+            u.FirstName,
+            u.LastName,
+            u.Email,
+            COALESCE(u.ContactNumber, "") AS ContactNumber,
+            COALESCE(u.ProfilePhoto, "") AS ProfilePhoto,
+            u.Status,
+            COALESCE(d.DepartmentName, "") AS DepartmentName,
+            (SELECT COUNT(DISTINCT a.PatientID)
+             FROM appointments a
+             WHERE a.StaffID = s.StaffID) AS PatientsCount
+         FROM staff s
+         INNER JOIN users u ON u.UserID = s.UserID
+         LEFT JOIN departments d ON d.DepartmentID = s.DepartmentID
+         WHERE s.StaffRole = "Doctor"
+         ORDER BY u.FirstName, u.LastName'
+    );
+
+    if ($result) {
+        while ($row = mysqli_fetch_assoc($result)) {
+            $doctors[] = [
+                'staffId'      => (int) $row['StaffID'],
+                'userId'       => (int) $row['UserID'],
+                'name'         => trim(($row['FirstName'] ?? '') . ' ' . ($row['LastName'] ?? '')),
+                'phone'        => (string) $row['ContactNumber'],
+                'email'        => (string) $row['Email'],
+                'departmentId' => (int) $row['DepartmentID'],
+                'department'   => (string) $row['DepartmentName'],
+                'license'      => (string) $row['LicenseNumber'],
+                'specialization' => (string) $row['Specialization'],
+                'experience'   => (int) $row['YearsOfExperience'],
+                'status'       => (string) $row['AvailabilityStatus'],
+                'startTime'    => (string) $row['ScheduleStart'],
+                'endTime'      => (string) $row['ScheduleEnd'],
+                'bio'          => (string) $row['Bio'],
+                'image'        => (string) $row['ProfilePhoto'],
+                'active'       => ($row['Status'] ?? '') === 'Active',
+                'userStatus'   => (string) $row['Status'],
+                'patients'     => (int) $row['PatientsCount']
+            ];
+        }
+    }
+
+    return $doctors;
+}
+
+function validateDoctorInput(string $firstName, string $lastName, string $email, int $departmentId, string &$error): bool
+{
+    if ($firstName === '' || $lastName === '') {
+        $error = 'Please enter the doctor\'s full name.';
+        return false;
+    }
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'Please enter a valid email address.';
+        return false;
+    }
+    if ($departmentId <= 0) {
+        $error = 'Please select a department.';
+        return false;
+    }
+    return true;
+}
+
+function emailExists(mysqli $conn, string $email, int $excludeUserId = 0): bool
+{
+    $stmt = mysqli_prepare($conn, 'SELECT UserID FROM users WHERE Email = ? AND UserID <> ?');
+    if (!$stmt) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'si', $email, $excludeUserId);
+    mysqli_stmt_execute($stmt);
+    return mysqli_num_rows(mysqli_stmt_get_result($stmt)) > 0;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    $name = trim($_POST['doctor-name'] ?? '');
+    $email = strtolower(trim($_POST['doctor-email'] ?? ''));
+    $phone = trim($_POST['doctor-phone'] ?? '');
+    $departmentId = (int) ($_POST['doctor-department'] ?? 0);
+    $license = trim($_POST['doctor-license'] ?? '');
+    $specialization = trim($_POST['doctor-specialization'] ?? '');
+    $experience = (int) ($_POST['doctor-experience'] ?? 0);
+    $statusOptions = ['Available', 'Off Duty', 'On Leave'];
+    $availabilityStatus = in_array(trim($_POST['doctor-status'] ?? ''), $statusOptions, true)
+        ? trim($_POST['doctor-status'])
+        : 'Available';
+    $startTime = trim($_POST['doctor-start-time'] ?? '');
+    $endTime = trim($_POST['doctor-end-time'] ?? '');
+    $bio = trim($_POST['doctor-bio'] ?? '');
+    $image = trim($_POST['doctor-image'] ?? '');
+    $userStatus = !empty($_POST['doctor-active']) ? 'Active' : 'Inactive';
+
+    $nameParts = preg_split('/\s+/', $name, 2);
+    $firstName = $nameParts[0] ?? '';
+    $lastName = $nameParts[1] ?? '';
+
+    if ($action === 'toggle') {
+        // Toggle doctor account active/inactive based on the users.Status column
+        $toggleUserId = (int) ($_POST['user_id'] ?? 0);
+        $newStatus = ($_POST['current_status'] ?? '') === 'Active' ? 'Inactive' : 'Active';
+
+        if ($toggleUserId > 0) {
+            $toggleStmt = mysqli_prepare($conn, 'UPDATE users SET Status = ? WHERE UserID = ?');
+            mysqli_stmt_bind_param($toggleStmt, 'si', $newStatus, $toggleUserId);
+            if (mysqli_stmt_execute($toggleStmt)) {
+                $flashMessage = 'Doctor status updated.';
+            } else {
+                $flashMessage = 'Could not update doctor status. Please try again.';
+                $flashType = 'error';
+            }
+        }
+    } elseif ($action === 'add') {
+        if (!validateDoctorInput($firstName, $lastName, $email, $departmentId, $flashMessage)) {
+            $flashType = 'error';
+        } elseif (emailExists($conn, $email)) {
+            $flashMessage = 'A user with this email address already exists.';
+            $flashType = 'error';
+        } else {
+            $tempPassword = bin2hex(random_bytes(6));
+            $hashedPassword = password_hash($tempPassword, PASSWORD_DEFAULT);
+
+            mysqli_begin_transaction($conn);
+
+            $roleID = 4; // Doctor role
+            $sex = 'Not Specified';
+            $contact = $phone !== '' ? $phone : null;
+            $photo = $image !== '' ? $image : null;
+
+            $userStmt = mysqli_prepare(
+                $conn,
+                'INSERT INTO users (RoleID, FirstName, LastName, Email, Password, Sex, ContactNumber, Status, ProfilePhoto)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            mysqli_stmt_bind_param(
+                $userStmt,
+                'issssssss',
+                $roleID,
+                $firstName,
+                $lastName,
+                $email,
+                $hashedPassword,
+                $sex,
+                $contact,
+                $userStatus,
+                $photo
+            );
+
+            if (!mysqli_stmt_execute($userStmt)) {
+                mysqli_rollback($conn);
+                $flashMessage = 'Registration failed. Please try again.';
+                $flashType = 'error';
+            } else {
+                $userId = (int) mysqli_insert_id($conn);
+                $staffRole = 'Doctor';
+                $licenseV = $license !== '' ? $license : null;
+                $specV = $specialization !== '' ? $specialization : null;
+                $expV = $experience > 0 ? $experience : null;
+                $startV = $startTime !== '' ? $startTime : null;
+                $endV = $endTime !== '' ? $endTime : null;
+                $bioV = $bio !== '' ? $bio : null;
+
+                $staffStmt = mysqli_prepare(
+                    $conn,
+                    'INSERT INTO staff (UserID, DepartmentID, StaffRole, Specialization, LicenseNumber, YearsOfExperience, AvailabilityStatus, ScheduleStart, ScheduleEnd, AssignedResponsibilities)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                mysqli_stmt_bind_param(
+                    $staffStmt,
+                    'iisssissss',
+                    $userId,
+                    $departmentId,
+                    $staffRole,
+                    $specV,
+                    $licenseV,
+                    $expV,
+                    $availabilityStatus,
+                    $startV,
+                    $endV,
+                    $bioV
+                );
+
+                if (mysqli_stmt_execute($staffStmt)) {
+                    mysqli_commit($conn);
+                    $flashMessage = 'Doctor account created for ' . $name . '. Temporary password: ' . $tempPassword;
+
+                    // Best-effort email of the new credentials
+                    if (is_file(__DIR__ . '/../includes/mailer.php') && !function_exists('sendMediCareEmail')) {
+                        require_once __DIR__ . '/../includes/mailer.php';
+                    }
+                    if (function_exists('sendMediCareEmail')) {
+                        sendMediCareEmail(
+                            $email,
+                            'Your MediCare doctor account has been created',
+                            '<p>Hello ' . htmlspecialchars($firstName) . ',</p>'
+                            . '<p>An administrator has created your doctor account for the Hospital Outpatient '
+                            . 'Appointment and Consultation Record Management System (MediCare).</p>'
+                            . '<p><strong>Email:</strong> ' . htmlspecialchars($email) . '<br>'
+                            . '<strong>Temporary password:</strong> ' . htmlspecialchars($tempPassword) . '</p>'
+                            . '<p>Please sign in and change your password as soon as possible.</p>'
+                        );
+                    }
+                } else {
+                    mysqli_rollback($conn);
+                    $flashMessage = 'Registration failed. Please try again.';
+                    $flashType = 'error';
+                }
+            }
+        }
+    } elseif ($action === 'update') {
+        $staffId = (int) ($_POST['staff_id'] ?? 0);
+        $userId = (int) ($_POST['user_id'] ?? 0);
+
+        if ($staffId <= 0 || $userId <= 0) {
+            $flashMessage = 'Missing doctor record. Please try again.';
+            $flashType = 'error';
+        } elseif (!validateDoctorInput($firstName, $lastName, $email, $departmentId, $flashMessage)) {
+            $flashType = 'error';
+        } elseif (emailExists($conn, $email, $userId)) {
+            $flashMessage = 'A user with this email address already exists.';
+            $flashType = 'error';
+        } else {
+            mysqli_begin_transaction($conn);
+
+            $contact = $phone !== '' ? $phone : null;
+            $photo = $image !== '' ? $image : null;
+
+            $userStmt = mysqli_prepare(
+                $conn,
+                'UPDATE users
+                 SET FirstName = ?, LastName = ?, Email = ?, ContactNumber = ?, ProfilePhoto = ?, Status = ?
+                 WHERE UserID = ?'
+            );
+            mysqli_stmt_bind_param(
+                $userStmt,
+                'ssssssi',
+                $firstName,
+                $lastName,
+                $email,
+                $contact,
+                $photo,
+                $userStatus,
+                $userId
+            );
+
+            if (!mysqli_stmt_execute($userStmt)) {
+                mysqli_rollback($conn);
+                $flashMessage = 'Update failed. Please try again.';
+                $flashType = 'error';
+            } else {
+                $licenseV = $license !== '' ? $license : null;
+                $specV = $specialization !== '' ? $specialization : null;
+                $expV = $experience > 0 ? $experience : null;
+                $startV = $startTime !== '' ? $startTime : null;
+                $endV = $endTime !== '' ? $endTime : null;
+                $bioV = $bio !== '' ? $bio : null;
+
+                $staffStmt = mysqli_prepare(
+                    $conn,
+                    'UPDATE staff
+                     SET DepartmentID = ?, Specialization = ?, LicenseNumber = ?, YearsOfExperience = ?,
+                         AvailabilityStatus = ?, ScheduleStart = ?, ScheduleEnd = ?, AssignedResponsibilities = ?
+                     WHERE StaffID = ?'
+                );
+                mysqli_stmt_bind_param(
+                    $staffStmt,
+                    'ississssi',
+                    $departmentId,
+                    $specV,
+                    $licenseV,
+                    $expV,
+                    $availabilityStatus,
+                    $startV,
+                    $endV,
+                    $bioV,
+                    $staffId
+                );
+
+                if (mysqli_stmt_execute($staffStmt)) {
+                    mysqli_commit($conn);
+                    $flashMessage = 'Doctor account updated.';
+                } else {
+                    mysqli_rollback($conn);
+                    $flashMessage = 'Update failed. Please try again.';
+                    $flashType = 'error';
+                }
+            }
+        }
+    }
+}
+
+$doctors = fetchDoctors($conn);
+
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,7 +349,7 @@
     <ul class="nav-list">
       <li class="nav-item">
         <a href="admin_dashboard.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           Dashboard
         </a>
       </li>
@@ -65,6 +390,12 @@
         </a>
       </li>
       <li class="nav-item">
+        <a href="admin_profile.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Profile
+        </a>
+      </li>
+      <li class="nav-item">
         <a href="admin_system_settings.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
           System Settings
@@ -72,19 +403,7 @@
       </li>
     </ul>
 
-    <div class="sidebar-footer">
-      <div class="sidebar-user">
-        <div class="user-avatar">PA</div>
-        <div>
-          <div class="user-name">Pedro Andres</div>
-          <div class="user-role">Admin</div>
-        </div>
-      </div>
-      <button class="sign-out">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        Sign Out
-      </button>
-    </div>
+    <?php include __DIR__ . '/../includes/admin_sidebar_footer.php'; ?>
   </aside>
 
   <!-- ================= MAIN ================= -->
@@ -93,7 +412,7 @@
     <div class="staff-topbar">
       <div class="page-header">
         <h1>Doctor Management</h1>
-        <p id="today-date">Sunday, May 10, 2026</p>
+        <p id="today-date"></p>
       </div>
       <button class="notif-bell" aria-label="Notifications">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
@@ -115,6 +434,13 @@
         </div>
       </div>
 
+      <?php if ($flashMessage !== ''): ?>
+        <div class="flash-message" style="padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:14px;font-weight:500;border:1px solid;
+          <?php echo $flashType === 'error' ? 'background:#fee2e2;color:#991b1b;border-color:#fecaca;' : 'background:#dcfce7;color:#065f46;border-color:#bbf7d0;'; ?>">
+          <?php echo htmlspecialchars($flashMessage); ?>
+        </div>
+      <?php endif; ?>
+
       <!-- Doctor Cards Grid -->
       <div class="doctor-grid" id="doctor-grid">
         <!-- Rendered by JavaScript -->
@@ -135,39 +461,57 @@
       <button class="modal-close" id="modal-close-btn" aria-label="Close">&times;</button>
     </div>
 
-    <form id="doctor-form" onsubmit="return false;">
-      <input type="hidden" id="edit-index" value="-1" />
+    <form id="doctor-form" action="admin_doctor_management.php" method="POST">
+      <input type="hidden" name="action" id="form-action" value="add" />
+      <input type="hidden" name="staff_id" id="form-staff-id" value="" />
+      <input type="hidden" name="user_id" id="form-user-id" value="" />
 
       <div class="form-row">
         <div class="form-group">
           <label for="doctor-name">Full Name <span class="hint">(e.g. Dr. Sarah Mitchell)</span></label>
-          <input type="text" id="doctor-name" placeholder="Dr. Sarah Mitchell" required />
+          <input type="text" id="doctor-name" name="doctor-name" placeholder="Dr. Sarah Mitchell" required />
         </div>
         <div class="form-group">
+          <label for="doctor-email">Email Address</label>
+          <input type="email" id="doctor-email" name="doctor-email" placeholder="doctor@clinic.example" required />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
           <label for="doctor-phone">Phone Number</label>
-          <input type="text" id="doctor-phone" placeholder="(555) 123-4567" />
+          <input type="text" id="doctor-phone" name="doctor-phone" placeholder="(555) 123-4567" />
+        </div>
+        <div class="form-group">
+          <label for="doctor-department">Department</label>
+          <select id="doctor-department" name="doctor-department" required>
+            <option value="">Select department</option>
+            <?php foreach ($departments as $dept): ?>
+              <option value="<?php echo (int) $dept['DepartmentID']; ?>"><?php echo htmlspecialchars($dept['DepartmentName']); ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
       </div>
 
       <div class="form-row">
         <div class="form-group">
           <label for="doctor-license">License Number</label>
-          <input type="text" id="doctor-license" placeholder="MD-XXXX-001" />
+          <input type="text" id="doctor-license" name="doctor-license" placeholder="MD-XXXX-001" />
         </div>
         <div class="form-group">
           <label for="doctor-specialization">Specialization</label>
-          <input type="text" id="doctor-specialization" placeholder="e.g. Cardiologist" />
+          <input type="text" id="doctor-specialization" name="doctor-specialization" placeholder="e.g. Cardiologist" />
         </div>
       </div>
 
       <div class="form-row">
         <div class="form-group">
           <label for="doctor-experience">Years of Experience</label>
-          <input type="number" id="doctor-experience" value="0" min="0" />
+          <input type="number" id="doctor-experience" name="doctor-experience" value="0" min="0" />
         </div>
         <div class="form-group">
           <label for="doctor-status">Availability Status</label>
-          <select id="doctor-status">
+          <select id="doctor-status" name="doctor-status">
             <option value="Available">Available</option>
             <option value="Off Duty">Off Duty</option>
             <option value="On Leave">On Leave</option>
@@ -178,27 +522,27 @@
       <div class="form-row">
         <div class="form-group">
           <label for="doctor-start-time">Duty Start Time</label>
-          <input type="time" id="doctor-start-time" value="08:00" />
+          <input type="time" id="doctor-start-time" name="doctor-start-time" value="08:00" />
         </div>
         <div class="form-group">
           <label for="doctor-end-time">Duty End Time</label>
-          <input type="time" id="doctor-end-time" value="17:00" />
+          <input type="time" id="doctor-end-time" name="doctor-end-time" value="17:00" />
         </div>
       </div>
 
       <div class="form-group">
         <label for="doctor-bio">Bio / Description</label>
-        <textarea id="doctor-bio" placeholder="Brief professional bio..."></textarea>
+        <textarea id="doctor-bio" name="doctor-bio" placeholder="Brief professional bio..."></textarea>
       </div>
 
       <div class="form-group">
         <label for="doctor-image">Profile Image URL</label>
-        <input type="text" id="doctor-image" placeholder="https://..." />
+        <input type="text" id="doctor-image" name="doctor-image" placeholder="https://..." />
       </div>
 
       <div class="form-group">
         <label class="day-check" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-          <input type="checkbox" id="doctor-active" checked />
+          <input type="checkbox" id="doctor-active" name="doctor-active" checked />
           <span style="font-weight:600;">Doctor is active</span>
         </label>
       </div>
@@ -215,110 +559,21 @@
 </div>
 
 <script>
-  // ================= DOCTOR DATA =================
-  let doctors = [
-    {
-      id: 1,
-      name: "Dr. Sarah Mitchell",
-      specialization: "Cardiology",
-      license: "MD-CARD-001",
-      status: "Available",
-      experience: 18,
-      rating: 4.9,
-      patients: 2400,
-      startTime: "08:00",
-      endTime: "17:00",
-      bio: "Board-certified cardiologist with expertise in interventional cardiology and heart failure management.",
-      image: "",
-      active: true
-    },
-    {
-      id: 2,
-      name: "Dr. James Wilson",
-      specialization: "Neurology",
-      license: "MD-NEURH-001",
-      status: "Available",
-      experience: 22,
-      rating: 4.8,
-      patients: 3100,
-      startTime: "08:00",
-      endTime: "17:00",
-      bio: "Leading neurologist specializing in stroke care, epilepsy, and neurodegenerative disorders.",
-      image: "",
-      active: true
-    },
-    {
-      id: 3,
-      name: "Dr. Emily Chen",
-      specialization: "Orthopedic Surgery",
-      license: "MD-ORTH-001",
-      status: "Available",
-      experience: 15,
-      rating: 4.9,
-      patients: 1800,
-      startTime: "08:00",
-      endTime: "17:00",
-      bio: "Expert in minimally invasive joint replacement and sports medicine procedures.",
-      image: "",
-      active: true
-    },
-    {
-      id: 4,
-      name: "Dr. Robert Kim",
-      specialization: "Cardiology",
-      license: "MD-CARD-002",
-      status: "Available",
-      experience: 12,
-      rating: 4.7,
-      patients: 1500,
-      startTime: "08:00",
-      endTime: "17:00",
-      bio: "Specializing in preventive cardiology and cardiac rehabilitation.",
-      image: "",
-      active: true
-    },
-    {
-      id: 5,
-      name: "Dr. Lisa Martinez",
-      specialization: "Obstetrics & Gynecology",
-      license: "MD-080Y-001",
-      status: "Available",
-      experience: 17,
-      rating: 4.9,
-      patients: 2200,
-      startTime: "08:00",
-      endTime: "17:00",
-      bio: "Comprehensive women's health specialist with focus on high-risk pregnancies.",
-      image: "",
-      active: true
-    },
-    {
-      id: 6,
-      name: "Dr. Michael Chen",
-      specialization: "Internal Medicine",
-      license: "MD-INTM-001",
-      status: "Available",
-      experience: 20,
-      rating: 4.8,
-      patients: 4500,
-      startTime: "08:00",
-      endTime: "17:00",
-      bio: "Experienced internist with focus on chronic disease management and preventive care.",
-      image: "",
-      active: true
-    }
-  ];
-
-  let nextId = 7;
+  // ================= DOCTOR DATA (from database) =================
+  const doctors = <?php echo json_encode($doctors, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 
   // ================= DOM REFS =================
   const grid = document.getElementById('doctor-grid');
   const modal = document.getElementById('doctor-modal');
   const modalTitle = document.getElementById('modal-title');
   const modalSub = document.getElementById('modal-sub');
-  const editIndex = document.getElementById('edit-index');
+  const formAction = document.getElementById('form-action');
+  const formStaffId = document.getElementById('form-staff-id');
+  const formUserId = document.getElementById('form-user-id');
   const doctorName = document.getElementById('doctor-name');
+  const doctorEmail = document.getElementById('doctor-email');
   const doctorPhone = document.getElementById('doctor-phone');
+  const doctorDepartment = document.getElementById('doctor-department');
   const doctorLicense = document.getElementById('doctor-license');
   const doctorSpecialization = document.getElementById('doctor-specialization');
   const doctorExperience = document.getElementById('doctor-experience');
@@ -335,7 +590,10 @@
 
   // ================= HELPERS =================
   function getInitials(name) {
-    return name.split(' ').map(word => word[0]).join('').substring(0, 2).toUpperCase();
+    const cleaned = name.replace(/^Dr\.?\s+/i, '');
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    if (!words.length) return 'DR';
+    return (words[0][0] + (words[1] ? words[1][0] : words[0][1] || '')).toUpperCase();
   }
 
   function getStatusClass(status) {
@@ -349,7 +607,9 @@
 
   function resetForm() {
     doctorName.value = '';
+    doctorEmail.value = '';
     doctorPhone.value = '';
+    doctorDepartment.value = '';
     doctorLicense.value = '';
     doctorSpecialization.value = '';
     doctorExperience.value = 0;
@@ -359,7 +619,9 @@
     doctorBio.value = '';
     doctorImage.value = '';
     doctorActive.checked = true;
-    editIndex.value = '-1';
+    formAction.value = 'add';
+    formStaffId.value = '';
+    formUserId.value = '';
     modalTitle.textContent = 'Add New Doctor';
     modalSub.textContent = 'Fill in the doctor\'s details';
     saveBtn.innerHTML = `
@@ -371,7 +633,9 @@
   function openModal(doctorData, index) {
     if (doctorData) {
       doctorName.value = doctorData.name || '';
+      doctorEmail.value = doctorData.email || '';
       doctorPhone.value = doctorData.phone || '';
+      doctorDepartment.value = doctorData.departmentId || '';
       doctorLicense.value = doctorData.license || '';
       doctorSpecialization.value = doctorData.specialization || '';
       doctorExperience.value = doctorData.experience || 0;
@@ -381,7 +645,9 @@
       doctorBio.value = doctorData.bio || '';
       doctorImage.value = doctorData.image || '';
       doctorActive.checked = doctorData.active !== undefined ? doctorData.active : true;
-      editIndex.value = index;
+      formAction.value = 'update';
+      formStaffId.value = doctorData.staffId || '';
+      formUserId.value = doctorData.userId || '';
       modalTitle.textContent = `Edit ${doctorData.name}`;
       modalSub.textContent = 'Update doctor information';
       saveBtn.innerHTML = `
@@ -409,7 +675,6 @@
     doctors.forEach((d, i) => {
       const statusClass = getStatusClass(d.status);
       const initials = getInitials(d.name);
-      const ratingStars = '★'.repeat(Math.floor(d.rating)) + '☆'.repeat(5 - Math.floor(d.rating));
       const activeBadge = d.active ? 'Active' : 'Inactive';
       const activeClass = d.active ? 'badge-active' : 'badge-inactive';
 
@@ -419,9 +684,9 @@
             <div class="doctor-avatar">${initials}</div>
             <div class="doctor-card-title">
               <div class="doctor-name">${d.name}</div>
-              <div class="doctor-specialty">${d.specialization}</div>
+              <div class="doctor-specialty">${d.department || d.specialization || 'General Practice'}</div>
             </div>
-            <div class="doctor-license-badge">${d.license}</div>
+            <div class="doctor-license-badge">${d.license || '—'}</div>
           </div>
           <div class="doctor-status-row">
             <span class="doctor-status ${statusClass}">${d.status}</span>
@@ -433,26 +698,29 @@
               <div class="stat-label">Experience</div>
             </div>
             <div class="stat-item">
-              <div class="stat-number">${d.rating}</div>
-              <div class="stat-label">${ratingStars}</div>
+              <div class="stat-number">${d.department || '—'}</div>
+              <div class="stat-label">Department</div>
             </div>
             <div class="stat-item">
-              <div class="stat-number">${d.patients.toLocaleString()}+</div>
+              <div class="stat-number">${d.patients.toLocaleString()}</div>
               <div class="stat-label">Patients</div>
             </div>
           </div>
           <div class="doctor-duty">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            ${d.startTime} - ${d.endTime}
+            ${d.startTime || '08:00'} - ${d.endTime || '17:00'}
           </div>
           <div class="doctor-actions">
-            <button class="btn-edit" data-index="${i}">
+            <button type="button" class="btn-edit" data-index="${i}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
               Edit
             </button>
-            <button class="btn-toggle" data-index="${i}">
-              ${d.active ? 'Deactivate' : 'Activate'}
-            </button>
+            <form class="toggle-form" action="admin_doctor_management.php" method="POST">
+              <input type="hidden" name="action" value="toggle">
+              <input type="hidden" name="user_id" value="${d.userId}">
+              <input type="hidden" name="current_status" value="${d.userStatus}">
+              <button type="submit" class="btn-toggle">${d.active ? 'Deactivate' : 'Activate'}</button>
+            </form>
           </div>
         </div>
       `;
@@ -467,53 +735,26 @@
         if (doctor) openModal(doctor, idx);
       });
     });
-
-    // Attach toggle active events
-    document.querySelectorAll('.btn-toggle').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = +btn.dataset.index;
-        doctors[idx].active = !doctors[idx].active;
-        renderDoctors();
-      });
-    });
   }
 
-  // ================= SAVE DOCTOR =================
-  function saveDoctor() {
-    const name = doctorName.value.trim();
-    if (!name) { alert('Please enter the doctor\'s full name.'); return; }
-
-    const newDoctor = {
-      name: name,
-      phone: doctorPhone.value.trim(),
-      license: doctorLicense.value.trim() || `MD-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
-      specialization: doctorSpecialization.value.trim() || 'General Practice',
-      experience: parseInt(doctorExperience.value, 10) || 0,
-      status: doctorStatus.value,
-      startTime: doctorStartTime.value || '08:00',
-      endTime: doctorEndTime.value || '17:00',
-      bio: doctorBio.value.trim(),
-      image: doctorImage.value.trim(),
-      active: doctorActive.checked,
-      rating: (4.0 + Math.random() * 0.9).toFixed(1),
-      patients: Math.floor(500 + Math.random() * 4000)
-    };
-
-    const idx = parseInt(editIndex.value, 10);
-    if (idx >= 0 && idx < doctors.length) {
-      // Preserve id and rating/patients if editing
-      newDoctor.id = doctors[idx].id;
-      newDoctor.rating = doctors[idx].rating;
-      newDoctor.patients = doctors[idx].patients;
-      doctors[idx] = newDoctor;
-    } else {
-      newDoctor.id = nextId++;
-      newDoctor.rating = (4.0 + Math.random() * 0.9).toFixed(1);
-      newDoctor.patients = Math.floor(500 + Math.random() * 4000);
-      doctors.push(newDoctor);
+  // ================= SAVE DOCTOR (validation only; form POSTs to itself) =================
+  function validateDoctorForm() {
+    if (!doctorName.value.trim()) {
+      alert('Please enter the doctor\'s full name.');
+      doctorName.focus();
+      return false;
     }
-    renderDoctors();
-    closeModal();
+    if (!doctorEmail.value.trim()) {
+      alert('Please enter the doctor\'s email address.');
+      doctorEmail.focus();
+      return false;
+    }
+    if (formAction.value === 'add' && !doctorDepartment.value) {
+      alert('Please select a department.');
+      doctorDepartment.focus();
+      return false;
+    }
+    return true;
   }
 
   // ================= EVENT BINDING =================
@@ -521,10 +762,12 @@
   closeBtn.addEventListener('click', closeModal);
   cancelBtn.addEventListener('click', closeModal);
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-  saveBtn.addEventListener('click', saveDoctor);
-  document.getElementById('doctor-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    saveDoctor();
+
+  // Allow native form submission (POST to this page) once client-side checks pass
+  document.getElementById('doctor-form').addEventListener('submit', function(e) {
+    if (!validateDoctorForm()) {
+      e.preventDefault();
+    }
   });
 
   // ================= INIT =================

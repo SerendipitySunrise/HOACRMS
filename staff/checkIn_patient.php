@@ -921,6 +921,21 @@ $appointmentsStmt = mysqli_prepare(
         d.DepartmentID,
         d.DepartmentName,
 
+        (SELECT COUNT(*) FROM vitals v
+         WHERE v.PatientID = p.PatientID
+           AND v.RecordedAt >= CURDATE()
+           AND v.RecordedAt < CURDATE() + INTERVAL 1 DAY) AS vitals_today,
+
+        (SELECT v.BloodPressure FROM vitals v
+         WHERE v.PatientID = p.PatientID
+         ORDER BY v.RecordedAt DESC, v.VitalID DESC
+         LIMIT 1) AS latest_bp,
+
+        (SELECT v.Temperature FROM vitals v
+         WHERE v.PatientID = p.PatientID
+         ORDER BY v.RecordedAt DESC, v.VitalID DESC
+         LIMIT 1) AS latest_temp,
+
         q.QueueID,
         q.QueueNumber,
         q.Status AS QueueStatus,
@@ -1794,6 +1809,66 @@ $staffName =
 
                         </div>
 
+                        <div class="modal-item-vitals">
+
+                            Latest Vitals:
+
+                            <?php
+                            $hasBp =
+                                !empty($appointment['latest_bp']);
+                            $hasTemp =
+                                $appointment['latest_temp'] !== null
+                                && $appointment['latest_temp'] !== '';
+
+                            if ($hasBp || $hasTemp):
+                            ?>
+                                <?php if ($hasBp): ?>
+                                    BP
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $appointment['latest_bp']
+                                    );
+                                    ?>
+                                <?php endif; ?>
+                                <?php if ($hasBp && $hasTemp): ?>
+                                    ·
+                                <?php endif; ?>
+                                <?php if ($hasTemp): ?>
+                                    Temp
+                                    <?php
+                                    echo htmlspecialchars(
+                                        number_format(
+                                            (float)
+                                            $appointment['latest_temp'],
+                                            1
+                                        )
+                                    );
+                                    ?>°C
+                                <?php endif; ?>
+                            <?php else: ?>
+                                No vitals on record
+                            <?php endif; ?>
+
+                        </div>
+
+                        <div
+                            class="modal-item-vitals-today
+                                <?php
+                                echo (int)
+                                    $appointment['vitals_today'] > 0
+                                    ? 'ok'
+                                    : 'pending';
+                                ?>"
+                        >
+                            Vitals recorded today:
+                            <?php
+                            echo (int)
+                                $appointment['vitals_today'] > 0
+                                ? 'Yes'
+                                : 'No';
+                            ?>
+                        </div>
+
                     </div>
 
                     <?php if (!empty($appointment['QueueNumber'])): ?>
@@ -2038,7 +2113,7 @@ $staffName =
                             name="phone"
                             id="wi_phone"
                             class="form-input"
-                            placeholder="+63 912 345 6789"
+                            placeholder="09171234567"
                             value="<?php echo htmlspecialchars($phone, ENT_QUOTES, 'UTF-8'); ?>"
                             required
                         >
@@ -2104,7 +2179,7 @@ $staffName =
                         name="allergies"
                         class="form-input"
                         placeholder="None"
-                        value="<?php echo htmlspecialchars($allergies, ENT_QUOTES, 'UTF-8'); ?>"
+                        value="<?php echo htmlspecialchars($allergies ?? '', ENT_QUOTES, 'UTF-8'); ?>"
                     >
 
                 </div>
@@ -2122,7 +2197,7 @@ $staffName =
                         name="current_medication"
                         class="form-input"
                         placeholder="None"
-                        value="<?php echo htmlspecialchars($currentMedication, ENT_QUOTES, 'UTF-8'); ?>"
+                        value="<?php echo htmlspecialchars($currentMedication ?? '', ENT_QUOTES, 'UTF-8'); ?>"
                     >
 
                 </div>
@@ -2140,7 +2215,7 @@ $staffName =
                         name="past_conditions"
                         class="form-input"
                         placeholder="None"
-                        value="<?php echo htmlspecialchars($pastConditions, ENT_QUOTES, 'UTF-8'); ?>"
+                        value="<?php echo htmlspecialchars($pastConditions ?? '', ENT_QUOTES, 'UTF-8'); ?>"
                     >
 
                 </div>
@@ -2161,7 +2236,7 @@ $staffName =
                         name="family_history"
                         class="form-input"
                         placeholder="None"
-                        value="<?php echo htmlspecialchars($familyHistory, ENT_QUOTES, 'UTF-8'); ?>"
+                        value="<?php echo htmlspecialchars($familyHistory ?? '', ENT_QUOTES, 'UTF-8'); ?>"
                     >
 
                 </div>

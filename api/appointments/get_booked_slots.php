@@ -35,9 +35,60 @@ if (($_SESSION['RoleName'] ?? '') !== 'Patient') {
 
 $departmentID = (int) ($_POST['department_id'] ?? 0);
 $appointmentDate = trim($_POST['appointment_date'] ?? '');
+$excludeAppointmentID = (int) ($_POST['exclude_appointment_id'] ?? 0);
 
 if ($departmentID <= 0 || $appointmentDate === '') {
     respond(false, [], 'Please select a department and appointment date.');
+}
+
+// When rescheduling, the patient's own appointment must not count
+// against the slot it was originally booked for.
+if ($excludeAppointmentID > 0) {
+    $patientStmt = mysqli_prepare(
+        $conn,
+        'SELECT PatientID
+         FROM patients
+         WHERE UserID = ?
+         LIMIT 1'
+    );
+
+    mysqli_stmt_bind_param($patientStmt, 'i', $_SESSION['UserID']);
+    mysqli_stmt_execute($patientStmt);
+
+    $patientResult = mysqli_stmt_get_result($patientStmt);
+    $patient = mysqli_fetch_assoc($patientResult);
+
+    mysqli_stmt_close($patientStmt);
+
+    if (!$patient) {
+        respond(false, [], 'Patient record not found.');
+    }
+
+    $verifyStmt = mysqli_prepare(
+        $conn,
+        'SELECT AppointmentID
+         FROM appointments
+         WHERE AppointmentID = ?
+           AND PatientID = ?
+         LIMIT 1'
+    );
+
+    mysqli_stmt_bind_param(
+        $verifyStmt,
+        'ii',
+        $excludeAppointmentID,
+        $patient['PatientID']
+    );
+
+    mysqli_stmt_execute($verifyStmt);
+
+    $verifyResult = mysqli_stmt_get_result($verifyStmt);
+
+    mysqli_stmt_close($verifyStmt);
+
+    if (mysqli_num_rows($verifyResult) === 0) {
+        respond(false, [], 'Appointment not found or does not belong to you.');
+    }
 }
 
 $dateObject = DateTime::createFromFormat('Y-m-d', $appointmentDate);
@@ -102,19 +153,48 @@ if (count($slotTimes) === 0) {
     respond(false, [], 'This department has no service scheduled on the selected date.');
 }
 
-$bookedStmt = mysqli_prepare(
-    $conn,
-    'SELECT
+$bookedSql = '
+    SELECT
         AppointmentTime,
         COUNT(*) AS BookedCount
      FROM appointments
      WHERE DepartmentID = ?
        AND AppointmentDate = ?
        AND Status NOT IN ("Cancelled", "Completed")
-     GROUP BY AppointmentTime'
-);
+ ';
 
-mysqli_stmt_bind_param($bookedStmt, 'is', $departmentID, $appointmentDate);
+$bookedParams = [$departmentID, $appointmentDate];
+
+if ($excludeAppointmentID > 0) {
+    $bookedSql .= ' AND AppointmentID <> ?';
+    $bookedParams[] = $excludeAppointmentID;
+}
+
+$bookedSql .= ' GROUP BY AppointmentTime';
+
+$bookedStmt = mysqli_prepare($conn, $bookedSql);
+
+if (!$bookedStmt) {
+    respond(false, [], 'Unable to prepare booked slots query.');
+}
+
+if ($excludeAppointmentID > 0) {
+    mysqli_stmt_bind_param(
+        $bookedStmt,
+        'isi',
+        $bookedParams[0],
+        $bookedParams[1],
+        $bookedParams[2]
+    );
+} else {
+    mysqli_stmt_bind_param(
+        $bookedStmt,
+        'is',
+        $bookedParams[0],
+        $bookedParams[1]
+    );
+}
+
 mysqli_stmt_execute($bookedStmt);
 
 $bookedResult = mysqli_stmt_get_result($bookedStmt);

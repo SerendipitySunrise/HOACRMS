@@ -107,6 +107,8 @@ if (!empty($errors)) {
     respond(false, implode(' ', $errors));
 }
 
+$dateOfBirth = ($dateOfBirth === '') ? null : $dateOfBirth;
+
 // Update users table
 $userStmt = mysqli_prepare(
     $conn,

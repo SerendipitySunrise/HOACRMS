@@ -1737,6 +1737,217 @@ body {
 .vitals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .vitals-grid .full { grid-column: 1 / -1; }
  
+/* Abnormal vitals alert */
+.vitals-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-left: 4px solid #f97316;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.vitals-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #9a3412;
+}
+.vitals-alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vitals-alert-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #b45309;
+}
+.vitals-alert-icon {
+  min-width: 18px;
+  text-align: center;
+}
+.vitals-alert-text { line-height: 1.4; }
+.vitals-alert-item.vitals-alert-normal {
+  color: #166534;
+  font-weight: 500;
+}
+.vitals-alert-item.vitals-alert-normal .vitals-alert-icon {
+  color: #16a34a;
+}
+.vitals-alert-item.vitals-alert-warning {
+  color: #b45309;
+  font-weight: 600;
+}
+.vitals-alert-item.vitals-alert-warning .vitals-alert-icon {
+  color: #f59e0b;
+}
+.vitals-alert-item.vitals-alert-abnormal {
+  color: #b91c1c;
+  font-weight: 700;
+}
+.vitals-alert-item.vitals-alert-abnormal .vitals-alert-icon {
+  color: #dc2626;
+}
+ 
+.vitals-recorded-by {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #0e7a6e;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 14px;
+}
+ 
+/* Vitals history cards */
+.vh-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+.vh-card:last-child { margin-bottom: 0; }
+.vh-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.vh-datetime {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #1f2937;
+}
+.vh-recorder {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+.vh-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.vh-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #374151;
+  cursor: default;
+}
+.vh-item-label { color: #6b7280; }
+.vh-item-value { font-weight: 600; }
+.vh-item-abnormal .vh-item-value {
+  color: #b91c1c;
+}
+.vh-item-warning .vh-item-value {
+  color: #b45309;
+}
+.vh-item-warn {
+  color: #b45309;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+.vh-item-abnormal .vh-item-warn {
+  color: #dc2626;
+}
+ 
+/* Vitals history panel (records page) */
+.vh-history-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.vh-history-head {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #1f2937;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.vh-history-empty {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+.vh-table-wrap {
+  overflow-x: auto;
+}
+.vh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  min-width: 560px;
+}
+.vh-table th,
+.vh-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  white-space: nowrap;
+}
+.vh-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+  background: #f9fafb;
+}
+.vh-cell-date {
+  font-weight: 600;
+  color: #374151;
+}
+.vh-cell-empty {
+  color: #9ca3af;
+}
+.vh-cell-abnormal {
+  color: #b91c1c;
+  font-weight: 600;
+  cursor: default;
+  border-bottom: 2px solid #fecaca;
+}
+.vh-cell-warning {
+  color: #b45309;
+  font-weight: 600;
+  cursor: default;
+  border-bottom: 2px solid #fde68a;
+}
+.vh-cell-warn {
+  color: #b45309;
+  font-size: 0.8rem;
+}
+.vh-view-all-btn {
+  background: #f0fdfa;
+  color: #0e7a6e;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-top: 12px;
+  font-family: var(--font-family);
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.vh-view-all-btn:hover {
+  background: #0e7a6e;
+  color: #fff;
+}
+ 
 .consult-save-wrap { margin-top: 20px; display: flex; justify-content: flex-end; }
 .btn-save-consult {
   background: #0e7a6e;

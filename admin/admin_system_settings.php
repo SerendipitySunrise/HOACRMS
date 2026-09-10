@@ -1,3 +1,10 @@
+<?php
+
+require_once __DIR__ . '/../includes/session.php';
+require_once __DIR__ . '/../includes/db.php';
+requireRole('Admin');
+
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -40,10 +47,16 @@
           Doctors
         </a>
       </li>
+<li class="nav-item">
+        <a href="admin_profile.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Profile
+        </a>
+      </li>
       <li class="nav-item">
-        <a href="admin_patient_management.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-1a7 7 0 0 0-7-7h-2a7 7 0 0 0-7 7v1"/><circle cx="12" cy="7" r="4"/></svg>
-          Patients
+        <a href="admin_system_settings.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+          System Settings
         </a>
       </li>
       <li class="nav-item">
@@ -72,19 +85,7 @@
       </li>
     </ul>
 
-    <div class="sidebar-footer">
-      <div class="sidebar-user">
-        <div class="user-avatar">PA</div>
-        <div>
-          <div class="user-name">Pedro Andres</div>
-          <div class="user-role">Admin</div>
-        </div>
-      </div>
-      <button class="sign-out">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        Sign Out
-      </button>
-    </div>
+    <?php include __DIR__ . '/../includes/admin_sidebar_footer.php'; ?>
   </aside>
 
   <!-- ================= MAIN ================= -->

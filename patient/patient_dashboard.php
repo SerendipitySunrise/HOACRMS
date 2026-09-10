@@ -201,6 +201,105 @@ mysqli_stmt_execute($apptCountStmt);
 $apptCountResult = mysqli_stmt_get_result($apptCountStmt);
 $apptCount = mysqli_fetch_assoc($apptCountResult);
 
+// ---------- HEALTH SUMMARY ----------
+
+// Latest vitals
+$latestVitals = null;
+$vitalsStmt = mysqli_prepare(
+    $conn,
+    'SELECT BloodPressure, Temperature, PulseRate, Weight, Height, RecordedAt
+     FROM vitals
+     WHERE PatientID = ?
+     ORDER BY VitalID DESC
+     LIMIT 1'
+);
+mysqli_stmt_bind_param($vitalsStmt, 'i', $patient['PatientID']);
+mysqli_stmt_execute($vitalsStmt);
+$vitalsResult = mysqli_stmt_get_result($vitalsStmt);
+$latestVitals = mysqli_fetch_assoc($vitalsResult);
+
+// BMI + category
+$bmi = null;
+$bmiCategory = null;
+if ($latestVitals && $latestVitals['Weight'] > 0 && $latestVitals['Height'] > 0) {
+    $heightM = $latestVitals['Height'] / 100;
+    if ($heightM > 0) {
+        $bmi = round($latestVitals['Weight'] / ($heightM * $heightM), 1);
+        if ($bmi < 18.5) $bmiCategory = 'Underweight';
+        elseif ($bmi < 25) $bmiCategory = 'Normal';
+        elseif ($bmi < 30) $bmiCategory = 'Overweight';
+        else $bmiCategory = 'Obese';
+    }
+}
+
+// Last check-up
+$lastCheckup = null;
+$lastCheckupStmt = mysqli_prepare(
+    $conn,
+    'SELECT MAX(ConsultationDate) AS last_checkup
+     FROM consultations
+     WHERE PatientID = ?'
+);
+mysqli_stmt_bind_param($lastCheckupStmt, 'i', $patient['PatientID']);
+mysqli_stmt_execute($lastCheckupStmt);
+$lastCheckupResult = mysqli_stmt_get_result($lastCheckupStmt);
+$lastCheckupRow = mysqli_fetch_assoc($lastCheckupResult);
+$lastCheckup = $lastCheckupRow['last_checkup'] ?? null;
+
+// Active medications (from latest prescriptions)
+$activeMeds = [];
+$medsStmt = mysqli_prepare(
+    $conn,
+    'SELECT pi.MedicineName, pi.Dosage, pi.Frequency, p.PrescribedDate
+     FROM prescription_items pi
+     INNER JOIN prescriptions p ON pi.PrescriptionID = p.PrescriptionID
+     INNER JOIN consultations c ON p.ConsultationID = c.ConsultationID
+     WHERE c.PatientID = ?
+     ORDER BY p.PrescribedDate DESC, pi.PrescriptionItemID ASC
+     LIMIT 4'
+);
+mysqli_stmt_bind_param($medsStmt, 'i', $patient['PatientID']);
+mysqli_stmt_execute($medsStmt);
+$medsResult = mysqli_stmt_get_result($medsStmt);
+while ($medRow = mysqli_fetch_assoc($medsResult)) {
+    $activeMeds[] = $medRow;
+}
+if (empty($activeMeds)) {
+    foreach (preg_split('/[\r\n,]+/', $patient['CurrentMedication'] ?? '') as $medName) {
+        $medName = trim($medName);
+        if ($medName !== '') {
+            $activeMeds[] = ['MedicineName' => $medName, 'Dosage' => null, 'Frequency' => null, 'PrescribedDate' => null];
+        }
+    }
+}
+
+// Upcoming follow-up (from consultations; fallback to upcoming appointment)
+$nextFollowUp = null;
+$followUpStmt = mysqli_prepare(
+    $conn,
+    'SELECT c.FollowUpDate, d.DepartmentName
+     FROM consultations c
+     LEFT JOIN appointments a ON c.AppointmentID = a.AppointmentID
+     LEFT JOIN departments d ON a.DepartmentID = d.DepartmentID
+     WHERE c.PatientID = ?
+       AND c.FollowUpDate IS NOT NULL
+       AND c.FollowUpDate >= CURDATE()
+     ORDER BY c.FollowUpDate ASC
+     LIMIT 1'
+);
+mysqli_stmt_bind_param($followUpStmt, 'i', $patient['PatientID']);
+mysqli_stmt_execute($followUpStmt);
+$followUpResult = mysqli_stmt_get_result($followUpStmt);
+$nextFollowUp = mysqli_fetch_assoc($followUpResult);
+
+$followUpFallback = null;
+if (!$nextFollowUp && $appointment) {
+    $followUpFallback = [
+        'FollowUpDate' => $appointment['AppointmentDate'],
+        'DepartmentName' => $appointment['DepartmentName']
+    ];
+}
+
 // Helper function for time ago
 function timeAgo($datetime) {
     $now = new DateTime();
@@ -364,6 +463,86 @@ function getNotifDotColor($type) {
           <div class="action-sub">Past consultations</div>
         </div>
       </a>
+    </div>
+
+    <!-- Health summary -->
+    <div class="health-summary">
+      <div class="panel-head">
+        <h2>Your Health Summary</h2>
+        <a href="consultation_history.php">View history</a>
+      </div>
+
+      <div class="hs-grid">
+
+        <div class="hs-stat">
+          <div class="hs-value"><?php echo $bmi ? $bmi : '—'; ?></div>
+          <div class="hs-label">BMI</div>
+          <?php if ($bmiCategory): ?>
+          <div class="hs-hint"><?php echo htmlspecialchars($bmiCategory); ?></div>
+          <?php endif; ?>
+        </div>
+
+        <div class="hs-stat">
+          <div class="hs-value"><?php echo htmlspecialchars($patient['BloodType'] ?? '—'); ?></div>
+          <div class="hs-label">Blood Type</div>
+        </div>
+
+        <div class="hs-stat">
+          <div class="hs-value"><?php echo $lastCheckup ? date('M j, Y', strtotime($lastCheckup)) : '—'; ?></div>
+          <div class="hs-label">Last Check-up</div>
+        </div>
+
+        <div class="hs-block">
+          <div class="hs-section-title">Active Medications</div>
+          <?php if (!empty($activeMeds)): ?>
+          <ul class="hs-med-list">
+            <?php foreach ($activeMeds as $med): ?>
+            <li>
+              <span class="hs-med-name"><?php echo htmlspecialchars($med['MedicineName']); ?></span>
+              <?php if (!empty($med['Dosage'])): ?>
+              <span class="hs-med-detail"><?php echo htmlspecialchars($med['Dosage']); ?></span>
+              <?php endif; ?>
+              <?php if (!empty($med['Frequency'])): ?>
+              <span class="hs-med-detail">· <?php echo htmlspecialchars($med['Frequency']); ?></span>
+              <?php endif; ?>
+            </li>
+            <?php endforeach; ?>
+          </ul>
+          <?php else: ?>
+          <div class="hs-empty">None listed</div>
+          <?php endif; ?>
+        </div>
+
+        <div class="hs-block">
+          <div class="hs-section-title">Upcoming Follow-up</div>
+          <?php if ($nextFollowUp || $followUpFallback): ?>
+            <?php $fu = $nextFollowUp ?? $followUpFallback; ?>
+            <div class="hs-followup">
+              <div class="hs-value"><?php echo date('M j, Y', strtotime($fu['FollowUpDate'])); ?></div>
+              <div class="hs-hint"><?php echo htmlspecialchars($fu['DepartmentName'] ?? 'Department appointment'); ?></div>
+            </div>
+          <?php else: ?>
+          <div class="hs-empty">No follow-up scheduled</div>
+          <?php endif; ?>
+        </div>
+
+        <div class="hs-block hs-block-wide">
+          <div class="hs-section-title">Recent Vitals</div>
+          <?php if ($latestVitals): ?>
+          <div class="hs-vitals">
+            <span>BP <strong><?php echo htmlspecialchars($latestVitals['BloodPressure'] ?? '—'); ?></strong></span>
+            <span>Temp <strong><?php echo htmlspecialchars($latestVitals['Temperature'] ?? '—'); ?>°C</strong></span>
+            <span>Pulse <strong><?php echo htmlspecialchars($latestVitals['PulseRate'] ?? '—'); ?> bpm</strong></span>
+            <span>Weight <strong><?php echo htmlspecialchars($latestVitals['Weight'] ?? '—'); ?> kg</strong></span>
+            <span>Height <strong><?php echo htmlspecialchars($latestVitals['Height'] ?? '—'); ?> cm</strong></span>
+          </div>
+          <div class="hs-vitals-date">Recorded <?php echo date('M j, Y g:i A', strtotime($latestVitals['RecordedAt'])); ?></div>
+          <?php else: ?>
+          <div class="hs-empty">No vital signs recorded yet</div>
+          <?php endif; ?>
+        </div>
+
+      </div>
     </div>
 
     <!-- Content grid -->

@@ -46,24 +46,28 @@ $fullName = trim($patient['FirstName'] . ' '
     . $patient['LastName']);
 
 // Get all consultations for this patient
+// (Only patient-approved fields are selected: prescriptions are fetched
+// separately from the structured prescriptions tables, plus the
+// patient-stated Chief Complaint / appointment Purpose, LabRequest and
+// FollowUpDate. Clinical fields such as Diagnosis, Treatment and Notes
+// are intentionally excluded from the patient view.)
 $consultStmt = mysqli_prepare(
     $conn,
     'SELECT
         c.ConsultationID,
         c.ConsultationDate,
-        c.Diagnosis,
-        c.Treatment,
+        c.ChiefComplaint,
         c.LabRequest,
-        c.Notes,
         c.FollowUpDate,
         c.Status,
-        c.ChiefComplaint,
+        a.Purpose,
         CONCAT(docUser.FirstName, " ", docUser.LastName) AS DoctorName,
         d.DepartmentName
      FROM consultations c
      INNER JOIN staff s ON c.StaffID = s.StaffID
      INNER JOIN users docUser ON s.UserID = docUser.UserID
      INNER JOIN departments d ON s.DepartmentID = d.DepartmentID
+     LEFT JOIN appointments a ON c.AppointmentID = a.AppointmentID
      WHERE c.PatientID = ?
      ORDER BY c.ConsultationDate DESC, c.ConsultationTime DESC'
 );
@@ -77,31 +81,30 @@ while ($row = mysqli_fetch_assoc($consultResult)) {
     $consultations[] = $row;
 }
 
-// Parse prescriptions from Treatment field
-function parsePrescriptions($treatment) {
-    $prescriptions = [];
-    if (empty($treatment)) return $prescriptions;
-
-    $lines = preg_split('/\r\n|\r|\n/', $treatment);
-    $inPrescriptions = false;
-
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if ($line === '') continue;
-
-        if (stripos($line, 'Prescriptions:') !== false) {
-            $inPrescriptions = true;
-            continue;
-        }
-
-        if ($inPrescriptions && preg_match('/^-\s*(.+)$/i', $line, $matches)) {
-            $prescriptions[] = trim($matches[1]);
-        } elseif (!$inPrescriptions && preg_match('/^-\s*(.+)$/i', $line, $matches)) {
-            $prescriptions[] = trim($matches[1]);
-        }
+// Fetch structured prescription items keyed by ConsultationID
+$prescriptionsByConsult = [];
+if (!empty($consultations)) {
+    $consultIds = array_map('intval', array_column($consultations, 'ConsultationID'));
+    $inList = implode(',', $consultIds);
+    $rxResult = mysqli_query(
+        $conn,
+        "SELECT
+            pr.ConsultationID,
+            pi.MedicineName,
+            pi.Dosage,
+            pi.Frequency,
+            pi.Duration,
+            pi.Instructions
+         FROM prescriptions pr
+         INNER JOIN prescription_items pi ON pr.PrescriptionID = pi.PrescriptionID
+         WHERE pr.ConsultationID IN ($inList)
+           AND pi.MedicineName IS NOT NULL
+           AND pi.MedicineName <> ''
+         ORDER BY pr.PrescriptionID"
+    );
+    while ($rx = mysqli_fetch_assoc($rxResult)) {
+        $prescriptionsByConsult[$rx['ConsultationID']][] = $rx;
     }
-
-    return $prescriptions;
 }
 
 // Parse lab requests
@@ -226,10 +229,11 @@ function parseLabRequests($labRequest) {
     <?php else: ?>
       <?php foreach ($consultations as $consult): ?>
         <?php
-          $prescriptions = parsePrescriptions($consult['Treatment']);
+          $prescriptions = $prescriptionsByConsult[$consult['ConsultationID']] ?? [];
           $labRequests = parseLabRequests($consult['LabRequest']);
           $hasPrescriptions = !empty($prescriptions);
           $hasLabRequests = !empty($labRequests);
+          $hasFollowUp = !empty($consult['FollowUpDate']);
         ?>
         <div class="history-card" onclick="toggleHistoryCard(this)">
           <div class="history-card-header">
@@ -238,7 +242,13 @@ function parseLabRequests($labRequest) {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg>
               </div>
               <div class="history-card-info">
-                <div class="history-card-title"><?php echo htmlspecialchars($consult['Diagnosis'] ?: ($consult['ChiefComplaint'] ?: 'Consultation')); ?></div>
+                <div class="history-card-title">
+                  <?php echo htmlspecialchars(
+                      $consult['ChiefComplaint']
+                        ?: $consult['Purpose']
+                        ?: 'Consultation'
+                  ); ?>
+                </div>
                 <div class="history-card-meta">
                   <?php echo htmlspecialchars($consult['ConsultationDate']); ?>
                   <span class="sep">|</span>
@@ -255,6 +265,9 @@ function parseLabRequests($labRequest) {
                 <?php if ($hasLabRequests): ?>
                   <span class="history-badge lab">Lab</span>
                 <?php endif; ?>
+                <?php if ($hasFollowUp): ?>
+                  <span class="history-badge followup">Follow-up</span>
+                <?php endif; ?>
               </div>
               <div class="history-card-chevron">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -266,7 +279,25 @@ function parseLabRequests($labRequest) {
               <div class="history-section">
                 <div class="history-section-label">Prescription</div>
                 <div class="history-section-content">
-                  <?php echo nl2br(htmlspecialchars(implode("\n", $prescriptions))); ?>
+                  <?php foreach ($prescriptions as $rx): ?>
+                    <div class="rx-item">
+                      <div class="rx-item-name"><?php echo htmlspecialchars($rx['MedicineName']); ?></div>
+                      <div class="rx-item-meta">
+                        <?php if (!empty($rx['Dosage'])): ?>
+                          <span><?php echo htmlspecialchars($rx['Dosage']); ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($rx['Frequency'])): ?>
+                          <span><?php echo htmlspecialchars($rx['Frequency']); ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($rx['Duration'])): ?>
+                          <span>Duration: <?php echo htmlspecialchars($rx['Duration']); ?></span>
+                        <?php endif; ?>
+                      </div>
+                      <?php if (!empty($rx['Instructions'])): ?>
+                        <div class="rx-item-instructions"><?php echo htmlspecialchars($rx['Instructions']); ?></div>
+                      <?php endif; ?>
+                    </div>
+                  <?php endforeach; ?>
                 </div>
               </div>
             <?php endif; ?>
@@ -278,11 +309,19 @@ function parseLabRequests($labRequest) {
                 </div>
               </div>
             <?php endif; ?>
-            <?php if (!$hasPrescriptions && !$hasLabRequests): ?>
+            <?php if ($hasFollowUp): ?>
               <div class="history-section">
-                <div class="history-section-label">Notes</div>
+                <div class="history-section-label">Follow-up Check-up</div>
                 <div class="history-section-content">
-                  <?php echo htmlspecialchars($consult['Notes'] ?: 'No additional notes recorded.'); ?>
+                  Next appointment scheduled on
+                  <?php echo htmlspecialchars(date('F j, Y', strtotime($consult['FollowUpDate']))); ?>.
+                </div>
+              </div>
+            <?php endif; ?>
+            <?php if (!$hasPrescriptions && !$hasLabRequests && !$hasFollowUp): ?>
+              <div class="history-section">
+                <div class="history-section-content">
+                  No prescriptions, lab requests, or follow-up details were recorded for this visit.
                 </div>
               </div>
             <?php endif; ?>

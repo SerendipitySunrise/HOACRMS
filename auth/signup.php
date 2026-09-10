@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/validation.php';
+require_once __DIR__ . '/../includes/terms_policy.php';
 
 $message = '';
 
@@ -15,6 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($fname === '' || $lname === '' || $email === '' || $password === '' || $confirmPassword === '') {
         $message = 'Please complete all required fields.';
+    } elseif (empty($_POST['agree_terms'])) {
+        $message = 'You must agree to the Terms and Conditions & Data Privacy Policy before continuing.';
     } elseif ($password !== $confirmPassword) {
         $message = 'Passwords do not match.';
     } elseif (($pwdError = validatePasswordStrength($password)) !== null) {
@@ -83,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patient Sign Up - MediCare</title>
     <link rel="stylesheet" href="../assets/css/auth/signup.css">
+    <link rel="stylesheet" href="../assets/css/auth/terms_policy.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -156,12 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <div class="form-options">
-                <label class="form-check-label">
-                    <input type="checkbox" name="terms" required>
-                    <span>I agree to the Terms and Conditions & Data Privacy Policy. I consent to the collection and processing of my personal and medical information for outpatient healthcare management purposes.</span>
-                </label>
-            </div>
+            <?php renderTermsCheckbox(); ?>
 
             <button type="submit" name="signup" id="signup-btn">Create Patient Account</button>
 
@@ -184,6 +183,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 </script>
+
+<?php renderTermsModal(); ?>
 
 </body>
 </html>

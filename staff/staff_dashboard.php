@@ -112,13 +112,59 @@ mysqli_stmt_bind_param($stmt, 'i', $departmentId);
 mysqli_stmt_execute($stmt);
 $completedToday = (int) mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['cnt'];
 
+// Distinct patients with vitals recorded today (scoped to this department
+// through the appointment the vitals belong to)
+$stmt = mysqli_prepare(
+    $conn,
+    "SELECT COUNT(DISTINCT v.PatientID) AS cnt
+     FROM vitals v
+     INNER JOIN appointments a ON v.AppointmentID = a.AppointmentID
+     WHERE a.DepartmentID = ?
+       AND v.RecordedAt >= CURDATE()
+       AND v.RecordedAt < CURDATE() + INTERVAL 1 DAY"
+);
+mysqli_stmt_bind_param($stmt, 'i', $departmentId);
+mysqli_stmt_execute($stmt);
+$vitalsToday = (int) mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['cnt'];
+
+/* -------------------------------------------------------
+   PENDING VITALS ALERT
+   (Checked-in patients today with no vitals recorded yet)
+------------------------------------------------------- */
+$stmt = mysqli_prepare(
+    $conn,
+    "SELECT a.AppointmentID, a.PatientID, a.AppointmentTime,
+            CONCAT(u.FirstName, ' ', u.LastName) AS PatientName,
+            d.DepartmentName
+     FROM appointments a
+     INNER JOIN patients p ON a.PatientID = p.PatientID
+     INNER JOIN users u ON p.UserID = u.UserID
+     INNER JOIN departments d ON a.DepartmentID = d.DepartmentID
+     WHERE a.DepartmentID = ?
+       AND a.AppointmentDate = CURDATE()
+       AND a.Status = '" . APPT_STATUS_CHECKED_IN . "'
+       AND a.AppointmentID NOT IN (
+           SELECT DISTINCT v.AppointmentID FROM vitals v
+           WHERE v.RecordedAt >= CURDATE()
+             AND v.RecordedAt < CURDATE() + INTERVAL 1 DAY
+       )
+     ORDER BY a.AppointmentTime ASC"
+);
+mysqli_stmt_bind_param($stmt, 'i', $departmentId);
+mysqli_stmt_execute($stmt);
+$pendingVitals = mysqli_fetch_all(mysqli_stmt_get_result($stmt), MYSQLI_ASSOC);
+
 /* -------------------------------------------------------
    SCHEDULED TODAY (not yet checked in)
 ------------------------------------------------------- */
 $stmt = mysqli_prepare(
     $conn,
-    "SELECT a.AppointmentID, a.AppointmentTime, a.Purpose,
-            CONCAT(u.FirstName, ' ', u.LastName) AS PatientName
+    "SELECT a.AppointmentID, a.PatientID, a.AppointmentTime, a.Purpose,
+            CONCAT(u.FirstName, ' ', u.LastName) AS PatientName,
+            (SELECT COUNT(*) FROM vitals v
+              WHERE v.PatientID = a.PatientID
+                AND v.RecordedAt >= CURDATE()
+                AND v.RecordedAt < CURDATE() + INTERVAL 1 DAY) AS vitals_today
      FROM appointments a
      INNER JOIN patients p ON a.PatientID = p.PatientID
      INNER JOIN users u ON p.UserID = u.UserID
@@ -143,7 +189,11 @@ $stmt = mysqli_prepare(
     "SELECT q.QueueID, q.QueueNumber, q.Status AS QueueStatus, q.PriorityLevel,
             a.AppointmentTime, a.AppointmentTime AS StartTime, a.Purpose,
             CONCAT(u.FirstName, ' ', u.LastName) AS PatientName,
-            d.DepartmentName
+            d.DepartmentName,
+            (SELECT COUNT(*) FROM vitals v
+              WHERE v.PatientID = a.PatientID
+                AND v.RecordedAt >= CURDATE()
+                AND v.RecordedAt < CURDATE() + INTERVAL 1 DAY) AS vitals_today
      FROM queue q
      INNER JOIN appointments a ON q.AppointmentID = a.AppointmentID
      INNER JOIN patients p ON a.PatientID = p.PatientID
@@ -307,6 +357,29 @@ function statusLabel(string $status): string
       </div>
     </div>
 
+    <!-- VITALS PENDING ALERT -->
+    <?php if (!empty($pendingVitals)): ?>
+      <div class="vitals-alert">
+        <div class="vitals-alert-head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span><strong>Alert:</strong> <?php echo count($pendingVitals); ?> checked-in patient(s) need vitals recorded before consultation</span>
+        </div>
+        <div class="vitals-alert-list">
+          <?php foreach ($pendingVitals as $pv): ?>
+            <div class="vitals-alert-item">
+              <span class="vitals-alert-name"><?php echo htmlspecialchars($pv['PatientName']); ?></span>
+              <span class="vitals-alert-dept">(<?php echo htmlspecialchars($pv['DepartmentName']); ?>)</span>
+              <span class="vitals-alert-time">— Appt at <?php echo htmlspecialchars(date('g:i A', strtotime($pv['AppointmentTime']))); ?></span>
+              <a
+                href="record_vitals.php?appointment_id=<?php echo (int) $pv['AppointmentID']; ?>&patient_id=<?php echo (int) $pv['PatientID']; ?>"
+                class="vitals-alert-btn"
+              >Record Vitals Now</a>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    <?php endif; ?>
+
     <!-- STATS -->
     <div class="staff-stats">
       <div class="staff-stat-card">
@@ -324,6 +397,10 @@ function statusLabel(string $status): string
       <div class="staff-stat-card">
         <div class="staff-stat-label">Completed</div>
         <div class="staff-stat-value green"><?php echo $completedToday; ?></div>
+      </div>
+      <div class="staff-stat-card">
+        <div class="staff-stat-label">Vitals Done</div>
+        <div class="staff-stat-value teal"><?php echo $vitalsToday; ?></div>
       </div>
     </div>
 
@@ -367,7 +444,19 @@ function statusLabel(string $status): string
                     <?php endif; ?>
                   </div>
                 </div>
+                <div class="vitals-indicator">
+                  <?php if ((int) $appt['vitals_today'] > 0): ?>
+                    <span class="vitals-status recorded" title="Vitals recorded today">✅ Recorded</span>
+                  <?php else: ?>
+                    <span class="vitals-status pending" title="Vitals not recorded today">⚠️ Pending</span>
+                  <?php endif; ?>
+                </div>
                 <div class="queue-actions">
+                  <a
+                    href="record_vitals.php?appointment_id=<?php echo (int) $appt['AppointmentID']; ?>&patient_id=<?php echo (int) $appt['PatientID']; ?>"
+                    class="btn-vitals-sm"
+                    title="Record vitals for this patient"
+                  >📊 Vitals</a>
                   <a href="checkin_patient.php?appointment_id=<?php echo (int) $appt['AppointmentID']; ?>" class="btn-call">Check In</a>
                 </div>
               </div>
@@ -413,6 +502,19 @@ function statusLabel(string $status): string
                       | In Consultation
                     <?php endif; ?>
                   </div>
+                </div>
+                <div class="vitals-indicator">
+                  <?php if ((int) $q['vitals_today'] > 0): ?>
+                    <span
+                      class="vitals-check"
+                      title="Vitals recorded today"
+                    >✅</span>
+                  <?php else: ?>
+                    <span
+                      class="vitals-missing"
+                      title="Vitals not recorded today"
+                    >⚠️</span>
+                  <?php endif; ?>
                 </div>
                 <div class="queue-actions">
                   <?php if ($isHighlighted): ?>

@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/portal.php';
 require_once __DIR__ . '/../includes/validation.php';
+require_once __DIR__ . '/../includes/terms_policy.php';
 
 $message = '';
 $messageType = '';
@@ -36,10 +37,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     $password = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirm-password'] ?? '';
+    $agreeTerms = !empty($_POST['agree_terms']);
 
     // Validation
     if (!registrationInvitationValid($formData['invitation_code'], STAFF_REGISTRATION_ACCESS_KEY)) {
         $message = 'Invalid staff invitation code. Ask your clinic administrator for the correct code.';
+        $messageType = 'error';
+    } elseif (!$agreeTerms) {
+        $message = 'You must agree to the Terms and Conditions & Data Privacy Policy before continuing.';
         $messageType = 'error';
     } elseif ($formData['fname'] === '' || $formData['lname'] === '' || $formData['email'] === '' || $password === '' || $confirmPassword === '') {
         $message = 'Please complete all required fields.';
@@ -133,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Staff Registration - MediCare</title>
     <link rel="stylesheet" href="../assets/css/auth/register_staff.css">
+    <link rel="stylesheet" href="../assets/css/auth/terms_policy.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -354,6 +360,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div id="matchMessage" class="match-message"></div>
                 </div>
 
+                <?php renderTermsCheckbox(); ?>
+
                 <button type="submit" id="submit-btn">
                     <i class="fas fa-user-plus"></i> Create Staff Account
                 </button>
@@ -366,6 +374,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
         <?php endif; ?>
     </div>
+
+    <?php renderTermsModal(); ?>
 
     <script>
         // Toggle password visibility

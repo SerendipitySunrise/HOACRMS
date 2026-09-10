@@ -45,22 +45,18 @@ $fullName = trim($patient['FirstName'] . ' '
     . ($patient['MiddleName'] ? $patient['MiddleName'] . ' ' : '')
     . $patient['LastName']);
 
-// Get consultations with prescriptions
+// Get consultations for this patient
+// (Only patient-approved fields are selected: prescriptions come from the
+// structured prescriptions tables, plus LabRequest and FollowUpDate.
+// Clinical fields such as Diagnosis, Treatment and Notes are excluded.)
 $consultStmt = mysqli_prepare(
     $conn,
     'SELECT
         c.ConsultationID,
         c.ConsultationDate,
-        c.Diagnosis,
-        c.Treatment,
         c.LabRequest,
-        c.Notes,
         c.FollowUpDate,
         c.Status,
-        c.BloodPressure,
-        c.Temperature,
-        c.PulseRate,
-        c.ChiefComplaint,
         CONCAT(docUser.FirstName, " ", docUser.LastName) AS DoctorName,
         d.DepartmentName
      FROM consultations c
@@ -80,31 +76,30 @@ while ($row = mysqli_fetch_assoc($consultResult)) {
     $consultations[] = $row;
 }
 
-// Parse prescriptions from Treatment field
-function parsePrescriptions($treatment) {
-    $prescriptions = [];
-    if (empty($treatment)) return $prescriptions;
-
-    $lines = preg_split('/\r\n|\r|\n/', $treatment);
-    $inPrescriptions = false;
-
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if ($line === '') continue;
-
-        if (stripos($line, 'Prescriptions:') !== false) {
-            $inPrescriptions = true;
-            continue;
-        }
-
-        if ($inPrescriptions && preg_match('/^-\s*(.+)$/i', $line, $matches)) {
-            $prescriptions[] = trim($matches[1]);
-        } elseif (!$inPrescriptions && preg_match('/^-\s*(.+)$/i', $line, $matches)) {
-            $prescriptions[] = trim($matches[1]);
-        }
+// Fetch structured prescription items keyed by ConsultationID
+$prescriptionsByConsult = [];
+if (!empty($consultations)) {
+    $consultIds = array_map('intval', array_column($consultations, 'ConsultationID'));
+    $inList = implode(',', $consultIds);
+    $rxResult = mysqli_query(
+        $conn,
+        "SELECT
+            pr.ConsultationID,
+            pi.MedicineName,
+            pi.Dosage,
+            pi.Frequency,
+            pi.Duration,
+            pi.Instructions
+         FROM prescriptions pr
+         INNER JOIN prescription_items pi ON pr.PrescriptionID = pi.PrescriptionID
+         WHERE pr.ConsultationID IN ($inList)
+           AND pi.MedicineName IS NOT NULL
+           AND pi.MedicineName <> ''
+         ORDER BY pr.PrescriptionID"
+    );
+    while ($rx = mysqli_fetch_assoc($rxResult)) {
+        $prescriptionsByConsult[$rx['ConsultationID']][] = $rx;
     }
-
-    return $prescriptions;
 }
 
 // Parse lab requests
@@ -236,9 +231,9 @@ function parseLabRequests($labRequest) {
         </div>
       <?php else: ?>
         <?php foreach ($consultations as $consult): ?>
-          <?php $prescriptions = parsePrescriptions($consult['Treatment']); ?>
+          <?php $prescriptions = $prescriptionsByConsult[$consult['ConsultationID']] ?? []; ?>
           <?php if (!empty($prescriptions)): ?>
-            <?php foreach ($prescriptions as $index => $prescription): ?>
+            <?php foreach ($prescriptions as $prescription): ?>
               <div class="result-card" onclick="toggleCard(this)">
                 <div class="result-card-header">
                   <div class="result-card-left">
@@ -247,7 +242,7 @@ function parseLabRequests($labRequest) {
                     </div>
                     <div class="result-card-info">
                       <div class="result-card-title-row">
-                        <span class="result-card-title"><?php echo htmlspecialchars($prescription); ?></span>
+                        <span class="result-card-title"><?php echo htmlspecialchars($prescription['MedicineName']); ?></span>
                         <span class="result-status-badge <?php echo $consult['Status'] === 'Completed' ? 'completed' : 'active'; ?>">
                           <?php echo htmlspecialchars($consult['Status']); ?>
                         </span>
@@ -265,17 +260,27 @@ function parseLabRequests($labRequest) {
                 </div>
                 <div class="result-card-body">
                   <div class="result-detail-grid">
+                    <?php if (!empty($prescription['Dosage'])): ?>
                     <div class="result-detail">
-                      <div class="result-detail-label">Diagnosis</div>
-                      <div class="result-detail-value"><?php echo htmlspecialchars($consult['Diagnosis'] ?: 'Not specified'); ?></div>
+                      <div class="result-detail-label">Dosage</div>
+                      <div class="result-detail-value"><?php echo htmlspecialchars($prescription['Dosage']); ?></div>
                     </div>
+                    <?php endif; ?>
+                    <?php if (!empty($prescription['Frequency'])): ?>
+                    <div class="result-detail">
+                      <div class="result-detail-label">Frequency</div>
+                      <div class="result-detail-value"><?php echo htmlspecialchars($prescription['Frequency']); ?></div>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($prescription['Duration'])): ?>
+                    <div class="result-detail">
+                      <div class="result-detail-label">Duration</div>
+                      <div class="result-detail-value"><?php echo htmlspecialchars($prescription['Duration']); ?></div>
+                    </div>
+                    <?php endif; ?>
                     <div class="result-detail">
                       <div class="result-detail-label">Department</div>
                       <div class="result-detail-value"><?php echo htmlspecialchars($consult['DepartmentName']); ?></div>
-                    </div>
-                    <div class="result-detail">
-                      <div class="result-detail-label">Chief Complaint</div>
-                      <div class="result-detail-value"><?php echo htmlspecialchars($consult['ChiefComplaint'] ?: 'Not specified'); ?></div>
                     </div>
                     <div class="result-detail">
                       <div class="result-detail-label">Consultation Date</div>
@@ -287,10 +292,10 @@ function parseLabRequests($labRequest) {
                       <div class="result-detail-value"><?php echo htmlspecialchars($consult['FollowUpDate']); ?></div>
                     </div>
                     <?php endif; ?>
-                    <?php if (!empty($consult['Notes'])): ?>
+                    <?php if (!empty($prescription['Instructions'])): ?>
                     <div class="result-detail full-width">
-                      <div class="result-detail-label">Doctor's Notes</div>
-                      <div class="result-detail-value"><?php echo nl2br(htmlspecialchars($consult['Notes'])); ?></div>
+                      <div class="result-detail-label">Instructions</div>
+                      <div class="result-detail-value"><?php echo nl2br(htmlspecialchars($prescription['Instructions'])); ?></div>
                     </div>
                     <?php endif; ?>
                   </div>
@@ -303,7 +308,7 @@ function parseLabRequests($labRequest) {
         <?php
         $hasAny = false;
         foreach ($consultations as $c) {
-            if (!empty(parsePrescriptions($c['Treatment']))) {
+            if (!empty($prescriptionsByConsult[$c['ConsultationID']])) {
                 $hasAny = true;
                 break;
             }
@@ -363,10 +368,6 @@ function parseLabRequests($labRequest) {
                 </div>
                 <div class="result-card-body">
                   <div class="lab-card-expanded">
-                    <div class="lab-detail-section">
-                      <div class="lab-detail-label">Instructions</div>
-                      <div class="lab-detail-value"><?php echo htmlspecialchars($consult['Notes'] ?: 'No additional instructions provided.'); ?></div>
-                    </div>
                     <div class="lab-card-footer">
                       <div class="lab-footer-item">
                         <span class="lab-footer-label">Status</span>

@@ -15,6 +15,29 @@ function respond(bool $success, string $message): void
     exit();
 }
 
+function sendNotification(
+    mysqli $conn,
+    int $userID,
+    string $title,
+    string $message,
+    int $relatedID
+): void {
+    $stmt = mysqli_prepare(
+        $conn,
+        'INSERT INTO notifications
+            (UserID, Title, Message, Type, RelatedID, RelatedTable, PriorityLevel)
+         VALUES (?, ?, ?, "Appointment", ?, "appointments", "Medium")'
+    );
+
+    if (!$stmt) {
+        return;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'issi', $userID, $title, $message, $relatedID);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+}
+
 if (!isset($_SESSION['UserID'])) {
     respond(false, 'Your session has expired. Please log in again.');
 }
@@ -200,6 +223,52 @@ mysqli_stmt_bind_param(
 
 if (!mysqli_stmt_execute($insertStmt)) {
     respond(false, 'Unable to book the appointment. Please try again.');
+}
+
+$appointmentID = (int) mysqli_insert_id($conn);
+
+$deptStmt = mysqli_prepare(
+    $conn,
+    'SELECT DepartmentName
+     FROM departments
+     WHERE DepartmentID = ?
+     LIMIT 1'
+);
+
+mysqli_stmt_bind_param($deptStmt, 'i', $departmentID);
+mysqli_stmt_execute($deptStmt);
+
+$deptResult = mysqli_stmt_get_result($deptStmt);
+$dept = mysqli_fetch_assoc($deptResult);
+
+mysqli_stmt_close($deptStmt);
+
+$timeLabel = date('g:i A', strtotime($appointmentTime));
+$dateLabel = date('F j, Y', strtotime($appointmentDate));
+$departmentName = $dept['DepartmentName'] ?? '';
+
+$confirmationMessage = 'Your appointment for ' . $dateLabel . ' at ' . $timeLabel
+    . ' at the ' . $departmentName . ' Department has been confirmed.';
+
+sendNotification(
+    $conn,
+    $userID,
+    'Appointment Confirmed',
+    $confirmationMessage,
+    $appointmentID
+);
+
+$reminderStmt = mysqli_prepare(
+    $conn,
+    'INSERT INTO appointment_reminders
+        (AppointmentID, ReminderType, SentAt, SentVia, Status)
+     VALUES (?, "confirmation", NOW(), "push", "sent")'
+);
+
+if ($reminderStmt) {
+    mysqli_stmt_bind_param($reminderStmt, 'i', $appointmentID);
+    mysqli_stmt_execute($reminderStmt);
+    mysqli_stmt_close($reminderStmt);
 }
 
 respond(true, 'Appointment booked successfully.');

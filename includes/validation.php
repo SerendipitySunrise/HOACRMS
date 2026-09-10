@@ -47,7 +47,7 @@ function normalizePhilippinePhone(string $phone): ?string
         $digits = substr($digits, 1);
     }
 
-    if (strlen($digits) !== 9) {
+    if (strlen($digits) !== 10) {
         return null;
     }
 
@@ -55,7 +55,7 @@ function normalizePhilippinePhone(string $phone): ?string
         return null;
     }
 
-    return '09' . $digits;
+    return '0' . $digits;
 }
 
 /**

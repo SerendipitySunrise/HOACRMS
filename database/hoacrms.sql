@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS `appointments` (
   `AppointmentTime` time NOT NULL,
   `Purpose` varchar(255) DEFAULT NULL,
   `Status` varchar(50) NOT NULL DEFAULT 'Pending',
+  `OriginalAppointmentDate` date DEFAULT NULL,
+  `OriginalAppointmentTime` time DEFAULT NULL,
+  `RescheduledAt` datetime DEFAULT NULL,
+  `RescheduleReason` varchar(255) DEFAULT NULL,
   `CreatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `UpdatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`AppointmentID`),
@@ -80,6 +84,45 @@ INSERT INTO `appointments` (`AppointmentID`, `PatientID`, `StaffID`, `Department
 (5, 1, NULL, 5, '0000-00-00', '08:30:00', 'General Consulatation', 'Pending', '2026-08-14 16:33:45', '2026-08-14 16:33:45'),
 (6, 1, NULL, 5, '0000-00-00', '06:00:00', 'General Consulatation', 'Pending', '2026-08-14 16:37:51', '2026-08-14 16:37:51'),
 (7, 1, 2, 5, '2026-05-15', '06:30:00', 'Check up', 'Pending', '2026-08-14 18:00:41', '2026-08-14 18:00:41');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `appointment_reschedule_history`
+--
+
+DROP TABLE IF EXISTS `appointment_reschedule_history`;
+CREATE TABLE IF NOT EXISTS `appointment_reschedule_history` (
+  `RescheduleID` int NOT NULL AUTO_INCREMENT,
+  `AppointmentID` int NOT NULL,
+  `OriginalDate` date NOT NULL,
+  `OriginalTime` time NOT NULL,
+  `NewDate` date NOT NULL,
+  `NewTime` time NOT NULL,
+  `Reason` varchar(255) DEFAULT NULL,
+  `CreatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`RescheduleID`),
+  KEY `fk_reschedule_appointment` (`AppointmentID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `appointment_reminders`
+--
+
+DROP TABLE IF EXISTS `appointment_reminders`;
+CREATE TABLE IF NOT EXISTS `appointment_reminders` (
+  `ReminderID` int NOT NULL AUTO_INCREMENT,
+  `AppointmentID` int NOT NULL,
+  `ReminderType` varchar(20) NOT NULL,
+  `SentAt` datetime NOT NULL,
+  `SentVia` varchar(20) NOT NULL,
+  `Status` varchar(20) DEFAULT 'sent',
+  PRIMARY KEY (`ReminderID`),
+  KEY `fk_reminder_appointment` (`AppointmentID`),
+  CONSTRAINT `fk_reminder_appointment` FOREIGN KEY (`AppointmentID`) REFERENCES `appointments` (`AppointmentID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -128,6 +171,8 @@ CREATE TABLE IF NOT EXISTS `consultations` (
   `BloodPressure` varchar(20) DEFAULT NULL,
   `Temperature` decimal(4,1) DEFAULT NULL,
   `PulseRate` int DEFAULT NULL,
+  `Weight` decimal(5,2) DEFAULT NULL,
+  `Height` decimal(5,2) DEFAULT NULL,
   `CreatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `UpdatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`ConsultationID`),
@@ -151,10 +196,8 @@ CREATE TABLE IF NOT EXISTS `vitals` (
   `BloodPressure` varchar(20) DEFAULT NULL,
   `Temperature` decimal(4,1) DEFAULT NULL,
   `PulseRate` int DEFAULT NULL,
-  `RespiratoryRate` int DEFAULT NULL,
   `Weight` decimal(5,2) DEFAULT NULL,
   `Height` decimal(5,2) DEFAULT NULL,
-  `OxygenSaturation` int DEFAULT NULL,
   `RecordedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`VitalID`),
   KEY `idx_vitals_patient` (`PatientID`),
@@ -455,6 +498,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   `TokenExpiry` datetime DEFAULT NULL,
   `ProfilePhoto` varchar(255) DEFAULT NULL,
   `LastLogin` datetime DEFAULT NULL,
+  `ReminderPreference` varchar(20) DEFAULT 'email',
+  `ReceiveReminders` tinyint(1) DEFAULT '1',
   PRIMARY KEY (`UserID`),
   UNIQUE KEY `Email` (`Email`),
   KEY `FK_Users_Roles` (`RoleID`)

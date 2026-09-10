@@ -356,6 +356,8 @@ if (
     $bloodPressure = trim($_POST['vital_bp'] ?? '');
     $temperature = trim($_POST['vital_temp'] ?? '');
     $pulseRate = trim($_POST['vital_pulse'] ?? '');
+    $weight = trim($_POST['vital_weight'] ?? '');
+    $height = trim($_POST['vital_height'] ?? '');
 
     $chiefComplaint = trim($_POST['chief_complaint'] ?? '');
 
@@ -551,6 +553,8 @@ if (
                 BloodPressure = ?,
                 Temperature = NULLIF(?, ''),
                 PulseRate = NULLIF(?, ''),
+                Weight = NULLIF(?, ''),
+                Height = NULLIF(?, ''),
                 ConsultationDate = ?,
                 ConsultationTime = ?
             WHERE ConsultationID = ?
@@ -570,7 +574,7 @@ if (
 
         mysqli_stmt_bind_param(
             $updateStmt,
-            'sssssssssssii',
+            'sssssssssssssii',
             $chiefComplaint,
             $diagnosis,
             $finalTreatment,
@@ -580,6 +584,8 @@ if (
             $bloodPressure,
             $temperature,
             $pulseRate,
+            $weight,
+            $height,
             $consultationDate,
             $consultationTime,
             $consultationID,
@@ -616,7 +622,9 @@ if (
                 Status,
                 BloodPressure,
                 Temperature,
-                PulseRate
+                PulseRate,
+                Weight,
+                Height
             )
             VALUES
             (
@@ -633,6 +641,9 @@ if (
                 ?,
                 '" . CONSULTATION_STATUS_COMPLETED . "',
                 ?,
+                NULLIF(?, ''),
+                NULLIF(?, ''),
+                NULLIF(?, ''),
                 NULLIF(?, ''),
                 NULLIF(?, '')
             )
@@ -651,7 +662,7 @@ if (
 
         mysqli_stmt_bind_param(
             $insertStmt,
-            'iiisssssssssss',
+            'iiisssssssssssss',
             $appointmentID,
             $patientID,
             $staffID,
@@ -665,7 +676,9 @@ if (
             $followUpDate,
             $bloodPressure,
             $temperature,
-            $pulseRate
+            $pulseRate,
+            $weight,
+            $height
         );
 
         mysqli_stmt_execute($insertStmt);
@@ -1182,6 +1195,8 @@ $queueSql = "
         c.BloodPressure,
         c.Temperature,
         c.PulseRate,
+        c.Weight,
+        c.Height,
         c.ConsultationDate,
         c.ConsultationTime,
         c.LabRequest,
@@ -2004,6 +2019,12 @@ if (isset($_GET['consult'])) {
             $consultPatient['pulse_rate'] =
                 $consultation['PulseRate'] ?? '';
 
+            $consultPatient['weight'] =
+                $consultation['Weight'] ?? '';
+
+            $consultPatient['height'] =
+                $consultation['Height'] ?? '';
+
             /*
              * Load nurse / staff recorded pre-consultation vitals (vitals table).
              * These are stored separately from the consultation record so they
@@ -2015,11 +2036,18 @@ if (isset($_GET['consult'])) {
 
             $nurseVitalsStmt = mysqli_prepare(
                 $conn,
-                'SELECT BloodPressure, Temperature, PulseRate, RespiratoryRate,
-                        Weight, Height, OxygenSaturation, RecordedAt
-                 FROM vitals
-                 WHERE AppointmentID = ? AND PatientID = ?
-                 ORDER BY VitalID DESC
+                'SELECT v.BloodPressure, v.Temperature, v.PulseRate,
+                        v.Weight, v.Height,
+                        v.RecordedAt,
+                        u.FirstName AS RecFirstName,
+                        u.LastName AS RecLastName
+                 FROM vitals v
+                 LEFT JOIN staff s
+                    ON v.StaffID = s.StaffID
+                 LEFT JOIN users u
+                    ON s.UserID = u.UserID
+                 WHERE v.AppointmentID = ? AND v.PatientID = ?
+                 ORDER BY v.VitalID DESC
                  LIMIT 5'
             );
 
@@ -2061,18 +2089,63 @@ if (isset($_GET['consult'])) {
                         $latestNV['PulseRate'];
                 }
 
-                $consultPatient['respiratory_rate'] =
-                    $latestNV['RespiratoryRate'] ?? '';
-
                 $consultPatient['weight'] =
                     $latestNV['Weight'] ?? '';
 
                 $consultPatient['height'] =
                     $latestNV['Height'] ?? '';
 
-                $consultPatient['oxygen_saturation'] =
-                    $latestNV['OxygenSaturation'] ?? '';
+                $consultPatient['vitals_recorded_by'] =
+                    trim(
+                        ($latestNV['RecFirstName'] ?? '') . ' ' .
+                        ($latestNV['RecLastName'] ?? '')
+                    );
+
+                $consultPatient['vitals_recorded_at'] =
+                    $latestNV['RecordedAt'] ?? '';
             }
+
+
+            /*
+             * Load patient's vitals history (all recorded readings,
+             * newest first) for the right-side Vitals History panel.
+             */
+
+            $consultPatient['vitals_history'] = [];
+
+            $vitalsHistoryStmt = mysqli_prepare(
+                $conn,
+                'SELECT v.BloodPressure, v.Temperature, v.PulseRate,
+                        v.Weight, v.Height,
+                        v.RecordedAt,
+                        u.FirstName AS RecFirstName,
+                        u.LastName AS RecLastName
+                 FROM vitals v
+                 LEFT JOIN staff s
+                    ON v.StaffID = s.StaffID
+                 LEFT JOIN users u
+                    ON s.UserID = u.UserID
+                 WHERE v.PatientID = ?
+                 ORDER BY v.VitalID DESC
+                 LIMIT 5'
+            );
+
+            mysqli_stmt_bind_param(
+                $vitalsHistoryStmt,
+                'i',
+                $consultPatient['patient_id']
+            );
+
+            mysqli_stmt_execute($vitalsHistoryStmt);
+
+            $vitalsHistoryResult =
+                mysqli_stmt_get_result($vitalsHistoryStmt);
+
+            while ($vhRow = mysqli_fetch_assoc($vitalsHistoryResult)) {
+                $consultPatient['vitals_history'][] = $vhRow;
+            }
+
+            mysqli_stmt_close($vitalsHistoryStmt);
 
             $consultPatient['follow_up_date'] =
                 $consultation['FollowUpDate'] ?? '';
@@ -3021,6 +3094,128 @@ if (isset($_GET['consult'])) {
 </div>
 
 
+<!-- VITALS HISTORY -->
+
+<div class="consult-panel">
+
+    <div class="consult-panel-head">
+
+        <div class="consult-panel-title">
+
+            Vitals History
+
+        </div>
+
+    </div>
+
+
+    <?php if (empty($consultPatient['vitals_history'])): ?>
+
+        <div class="records-empty">
+
+            No vitals history on file.
+
+        </div>
+
+    <?php else: ?>
+
+        <?php foreach (
+            $consultPatient['vitals_history']
+            as $vh
+        ): ?>
+
+            <?php
+                $vhClassified = classifyVitals([
+                    'blood_pressure'    => $vh['BloodPressure'] ?? '',
+                    'temperature'       => $vh['Temperature'] ?? '',
+                    'pulse_rate'        => $vh['PulseRate'] ?? '',
+                    'weight'            => $vh['Weight'] ?? '',
+                    'height'            => $vh['Height'] ?? '',
+                ]);
+
+                $vhLabel = '';
+                if (!empty($vh['RecFirstName']) || !empty($vh['RecLastName'])) {
+                    $vhLabel = trim(
+                        ($vh['RecFirstName'] ?? '') . ' ' .
+                        ($vh['RecLastName'] ?? '')
+                    );
+                }
+            ?>
+
+        <div class="vh-card">
+
+            <div class="vh-head">
+
+                <span class="vh-datetime">
+                    <?= htmlspecialchars(
+                        date('M d, Y g:i A', strtotime($vh['RecordedAt']))
+                    ) ?>
+                </span>
+
+                <?php if ($vhLabel !== ''): ?>
+
+                <span class="vh-recorder">
+                    <?= htmlspecialchars($vhLabel) ?>
+                </span>
+
+                <?php endif; ?>
+
+            </div>
+
+            <div class="vh-items">
+
+                <?php foreach ($vhClassified as $vhItem): ?>
+
+                    <?php if (
+                        $vhItem['value'] === '' ||
+                        $vhItem['value'] === null ||
+                        $vhItem['key'] === 'bmi'
+                    ): ?>
+                        <?php continue; ?>
+                    <?php endif; ?>
+
+                    <span class="vh-item
+                        <?php
+                            if ($vhItem['status'] === 'warning') {
+                                echo 'vh-item-warning';
+                            } elseif ($vhItem['status'] !== 'normal') {
+                                echo 'vh-item-abnormal';
+                            }
+                        ?>"
+                        title="<?= htmlspecialchars($vhItem['note']) ?>"
+                    >
+
+                        <span class="vh-item-label">
+                            <?= htmlspecialchars($vhItem['label']) ?>:
+                        </span>
+
+                        <span class="vh-item-value">
+                            <?= htmlspecialchars(
+                                $vhItem['value'] . ' ' . $vhItem['unit']
+                            ) ?>
+                        </span>
+
+                        <?php if ($vhItem['status'] === 'warning'): ?>
+                        <span class="vh-item-warn">&#9888;</span>
+                        <?php elseif ($vhItem['status'] !== 'normal'): ?>
+                        <span class="vh-item-warn">&#9888;&#65039;</span>
+                        <?php endif; ?>
+
+                    </span>
+
+                <?php endforeach; ?>
+
+            </div>
+
+        </div>
+
+        <?php endforeach; ?>
+
+    <?php endif; ?>
+
+</div>
+
+
 <!-- VITALS -->
 
 <div class="consult-panel">
@@ -3034,6 +3229,115 @@ if (isset($_GET['consult'])) {
         </div>
 
     </div>
+
+
+    <?php
+        $vitalsCheck = [
+            'blood_pressure'    => $consultPatient['blood_pressure'] ?? '',
+            'temperature'       => $consultPatient['temperature'] ?? '',
+            'pulse_rate'        => $consultPatient['pulse_rate'] ?? '',
+            'weight'            => $consultPatient['weight'] ?? '',
+            'height'            => $consultPatient['height'] ?? '',
+        ];
+
+        $vitalsValidated = validateVitals($vitalsCheck);
+        $vitalsHaveAbnormal = false;
+
+        foreach ($vitalsValidated as $vItem) {
+            if ($vItem['status'] !== 'normal') {
+                $vitalsHaveAbnormal = true;
+                break;
+            }
+        }
+    ?>
+
+
+    <?php if ($vitalsHaveAbnormal): ?>
+
+    <div class="vitals-alert" id="vitals-alert-box">
+
+        <div class="vitals-alert-title">
+
+            <i class="fas fa-exclamation-triangle"></i>
+
+            Abnormal Vitals Alert
+
+        </div>
+
+        <div class="vitals-alert-list">
+
+            <?php foreach ($vitalsValidated as $vItem): ?>
+
+                <?php
+                    if ($vItem['value'] === '' || $vItem['value'] === null) {
+                        continue;
+                    }
+
+                    $vAlertClass = 'vitals-alert-item';
+                    $vAlertIcon  = '&#9888;&#65039;';
+                    $vAlertTag   = htmlspecialchars($vItem['note']);
+
+                    if ($vItem['status'] === 'normal') {
+                        $vAlertClass .= ' vitals-alert-normal';
+                        $vAlertIcon  = '&#9989;';
+                        $vAlertTag   = 'Normal';
+                    } elseif ($vItem['status'] === 'warning') {
+                        $vAlertClass .= ' vitals-alert-warning';
+                    } else {
+                        $vAlertClass .= ' vitals-alert-abnormal';
+                    }
+                ?>
+
+                <div class="<?= $vAlertClass ?>">
+
+                    <span class="vitals-alert-icon">
+                        <?= $vAlertIcon ?>
+                    </span>
+
+                    <span class="vitals-alert-text">
+                        <?= htmlspecialchars($vItem['label']) ?>:
+                        <?= htmlspecialchars(
+                            $vItem['value'] . ' ' . $vItem['unit']
+                        ) ?>
+                        (<?= $vAlertTag ?>)
+                    </span>
+
+                </div>
+
+            <?php endforeach; ?>
+
+        </div>
+
+    </div>
+
+    <?php endif; ?>
+
+
+    <?php if (!empty($consultPatient['vitals_recorded_by'])): ?>
+
+    <div class="vitals-recorded-by">
+
+        <i class="fas fa-user-nurse"></i>
+
+        Vitals recorded by:
+
+        <?= htmlspecialchars($consultPatient['vitals_recorded_by']) ?>
+
+        <?php
+            $vitalRecordedDate =
+                $consultPatient['vitals_recorded_at'] ?? '';
+
+            if ($vitalRecordedDate !== '') {
+                $recordedTs = strtotime($vitalRecordedDate);
+                echo ' on ' . ($recordedTs !== false
+                    ? date('M j, Y g:i A', $recordedTs)
+                    : htmlspecialchars($vitalRecordedDate));
+            }
+        ?>
+
+    </div>
+
+    <?php endif; ?>
 
 
     <div class="vitals-grid">
@@ -3097,6 +3401,50 @@ if (isset($_GET['consult'])) {
                     $consultPatient['pulse_rate'] ?? ''
                 ) ?>"
                 placeholder="72"
+            >
+
+        </div>
+
+
+        <div class="form-field">
+
+            <label for="vital-weight">
+
+                Weight (kg)
+
+            </label>
+
+            <input
+                type="number"
+                step="0.01"
+                id="vital-weight"
+                name="vital_weight"
+                value="<?= htmlspecialchars(
+                    $consultPatient['weight'] ?? ''
+                ) ?>"
+                placeholder="70 (kg)"
+            >
+
+        </div>
+
+
+        <div class="form-field">
+
+            <label for="vital-height">
+
+                Height (cm)
+
+            </label>
+
+            <input
+                type="number"
+                step="0.01"
+                id="vital-height"
+                name="vital_height"
+                value="<?= htmlspecialchars(
+                    $consultPatient['height'] ?? ''
+                ) ?>"
+                placeholder="170 (cm)"
             >
 
         </div>
@@ -4329,6 +4677,135 @@ function submitFollowup() {
     document.body.appendChild(form);
     form.submit();
 }
+
+
+/* ==========================================================
+   LIVE ABNORMAL VITALS ALERT
+   Rebuilds the alert box as the doctor types in the vitals.
+========================================================== */
+
+function classifyVitalJS(key, value) {
+    if (value === '' || value === null || value === undefined) {
+        return { status: 'normal', note: '' };
+    }
+
+    switch (key) {
+        case 'blood_pressure': {
+            var m = String(value).match(/^\s*(\d{2,3})\s*\/\s*(\d{2,3})\s*$/);
+            if (!m) { return { status: 'normal', note: '' }; }
+            var sys = parseInt(m[1], 10), dia = parseInt(m[2], 10);
+            if (sys >= 140 || dia >= 90) { return { status: 'high', note: 'Hypertension range (≥140/90)' }; }
+            if (sys > 120 || dia > 80) { return { status: 'warning', note: 'Elevated blood pressure (121–139/81–89)' }; }
+            if (sys < 90 || dia < 60) { return { status: 'low', note: 'Low blood pressure (<90/60)' }; }
+            return { status: 'normal', note: '' };
+        }
+        case 'temperature': {
+            var t = parseFloat(value);
+            if (isNaN(t) || t <= 0) { return { status: 'normal', note: '' }; }
+            if (t > 37.5) { return { status: 'high', note: 'Fever (>37.5\u00B0C)' }; }
+            if (t > 37.2) { return { status: 'warning', note: 'Elevated temperature (37.3\u201337.5\u00B0C)' }; }
+            if (t < 36.1) { return { status: 'low', note: 'Hypothermia (<36.1\u00B0C)' }; }
+            return { status: 'normal', note: '' };
+        }
+        case 'pulse_rate': {
+            var p = parseInt(value, 10);
+            if (isNaN(p)) { return { status: 'normal', note: '' }; }
+            if (p > 120) { return { status: 'high', note: 'Tachycardia (>120 bpm)' }; }
+            if (p > 100) { return { status: 'warning', note: 'Elevated pulse (101\u2013120 bpm)' }; }
+            if (p < 50) { return { status: 'low', note: 'Bradycardia (<50 bpm)' }; }
+            return { status: 'normal', note: '' };
+        }
+        default:
+            return { status: 'normal', note: '' };
+    }
+}
+
+function updateVitalsAlert() {
+    var fields = {
+        'blood_pressure':    ['vital-bp', 'Blood Pressure', 'mmHg'],
+        'temperature':       ['vital-temp', 'Temperature', '\u00B0C'],
+        'pulse_rate':        ['vital-pulse', 'Pulse', 'bpm']
+    };
+
+    var list = [];
+    var hasAbnormal = false;
+
+    Object.keys(fields).forEach(function(key) {
+        var el = document.getElementById(fields[key][0]);
+        if (!el) { return; }
+        var value = el.value.trim();
+        var cls = classifyVitalJS(key, value);
+        var status = value === '' ? 'empty' : cls.status;
+        if (status === 'high' || status === 'low' || status === 'warning') { hasAbnormal = true; }
+
+        var itemClass = 'vitals-alert-item';
+        var flag;
+        var note;
+        if (status === 'empty') {
+            list.push({
+                status: status,
+                text: ''
+            });
+            return;
+        }
+        if (status === 'high' || status === 'low') {
+            itemClass += ' vitals-alert-abnormal';
+            flag = '\u26A0\uFE0F';
+            note = ' (' + cls.note + ')';
+        } else if (status === 'warning') {
+            itemClass += ' vitals-alert-warning';
+            flag = '\u26A0\uFE0F';
+            note = ' (' + cls.note + ')';
+        } else {
+            itemClass += ' vitals-alert-normal';
+            flag = '\u2705';
+            note = ' (Normal)';
+        }
+
+        list.push({
+            status: status,
+            itemClass: itemClass,
+            flag: flag,
+            text: fields[key][1] + ': ' + value + ' ' + fields[key][2] + note
+        });
+    });
+
+    var box = document.getElementById('vitals-alert-box');
+
+    if (hasAbnormal) {
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'vitals-alert-box';
+            box.className = 'vitals-alert';
+            var host = document.querySelector('.vitals-recorded-by');
+            if (!host) {
+                var panel = document.querySelector('.consult-panel-title');
+                host = panel && panel.parentElement ? panel.parentElement.parentElement : null;
+            }
+            var grid = document.querySelector('.vitals-grid');
+            if (grid && host) { host.insertBefore(box, grid); }
+        }
+        box.innerHTML =
+            '<div class="vitals-alert-title"><i class="fas fa-exclamation-triangle"></i> Abnormal Vitals Alert</div>' +
+            '<div class="vitals-alert-list">' +
+            list.filter(function(i){ return i.status !== 'empty'; })
+                .map(function(i){ return '<div class="' + i.itemClass + '"><span class="vitals-alert-icon">' + i.flag + '</span><span class="vitals-alert-text">' + i.text + '</span></div>'; })
+                .join('') +
+            '</div>';
+    } else if (box) {
+        box.remove();
+    }
+}
+
+(function() {
+    var vitalsInputs = ['vital-bp', 'vital-temp', 'vital-pulse'];
+    vitalsInputs.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', updateVitalsAlert);
+        }
+    });
+})();
 
 </script>
 

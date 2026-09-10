@@ -126,10 +126,8 @@ $latestVitals = [
     'blood_pressure'    => '',
     'temperature'       => '',
     'pulse_rate'        => '',
-    'respiratory_rate'  => '',
     'weight'            => '',
     'height'            => '',
-    'oxygen_saturation' => '',
 ];
 
 $vitalsHistory = [];
@@ -137,8 +135,8 @@ $vitalsHistory = [];
 if (!$patientNotFound) {
     $latestStmt = mysqli_prepare(
         $conn,
-        'SELECT BloodPressure, Temperature, PulseRate, RespiratoryRate,
-                Weight, Height, OxygenSaturation, RecordedAt
+        'SELECT BloodPressure, Temperature, PulseRate,
+                Weight, Height, RecordedAt
          FROM vitals
          WHERE PatientID = ?
          ORDER BY VitalID DESC
@@ -153,17 +151,15 @@ if (!$patientNotFound) {
             'blood_pressure'    => $latestRow['BloodPressure'] ?? '',
             'temperature'       => $latestRow['Temperature'] ?? '',
             'pulse_rate'        => $latestRow['PulseRate'] ?? '',
-            'respiratory_rate'  => $latestRow['RespiratoryRate'] ?? '',
             'weight'            => $latestRow['Weight'] ?? '',
             'height'            => $latestRow['Height'] ?? '',
-            'oxygen_saturation' => $latestRow['OxygenSaturation'] ?? '',
         ];
     }
 
     $historyStmt = mysqli_prepare(
         $conn,
-        'SELECT BloodPressure, Temperature, PulseRate, RespiratoryRate,
-                Weight, Height, OxygenSaturation, RecordedAt
+        'SELECT BloodPressure, Temperature, PulseRate,
+                Weight, Height, RecordedAt
          FROM vitals
          WHERE PatientID = ?
          ORDER BY VitalID DESC
@@ -194,19 +190,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     $bloodPressure   = trim($_POST['blood_pressure'] ?? '');
     $temperature     = trim($_POST['temperature'] ?? '');
     $pulseRate       = trim($_POST['pulse_rate'] ?? '');
-    $respiratoryRate = trim($_POST['respiratory_rate'] ?? '');
     $weight          = trim($_POST['weight'] ?? '');
     $height          = trim($_POST['height'] ?? '');
-    $oxygenSaturation = trim($_POST['oxygen_saturation'] ?? '');
 
     // Simple validation
     if ($bloodPressure === ''
         && $temperature === ''
         && $pulseRate === ''
-        && $respiratoryRate === ''
         && $weight === ''
         && $height === ''
-        && $oxygenSaturation === ''
     ) {
         $message = 'Enter at least one vital sign.';
         $messageType = 'error';
@@ -229,24 +221,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
             $conn,
             'INSERT INTO vitals
                 (AppointmentID, PatientID, StaffID,
-                 BloodPressure, Temperature, PulseRate, RespiratoryRate,
-                 Weight, Height, OxygenSaturation)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                 BloodPressure, Temperature, PulseRate,
+                 Weight, Height)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
+
+        $bindBP = $bloodPressure === '' || $bloodPressure === null
+            ? null : $bloodPressure;
+        $bindTemp = $temperature === '' || $temperature === null
+            ? null : (float) $temperature;
+        $bindPulse = $pulseRate === '' || $pulseRate === null
+            ? null : (int) $pulseRate;
+        $bindWeight = $weight === '' || $weight === null
+            ? null : (float) $weight;
+        $bindHeight = $height === '' || $height === null
+            ? null : (float) $height;
 
         mysqli_stmt_bind_param(
             $insertStmt,
-            'iiisssssss',
+            'iiisdidd',
             $appointmentID,
             $patientID,
             $staffID,
-            $bloodPressure,
-            $temperature === '' ? null : $temperature,
-            $pulseRate === '' ? null : $pulseRate,
-            $respiratoryRate === '' ? null : $respiratoryRate,
-            $weight === '' ? null : $weight,
-            $height === '' ? null : $height,
-            $oxygenSaturation === '' ? null : $oxygenSaturation
+            $bindBP,
+            $bindTemp,
+            $bindPulse,
+            $bindWeight,
+            $bindHeight
         );
 
         if (mysqli_stmt_execute($insertStmt)) {
@@ -258,10 +259,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 'blood_pressure'    => $bloodPressure,
                 'temperature'       => $temperature,
                 'pulse_rate'        => $pulseRate,
-                'respiratory_rate'  => $respiratoryRate,
                 'weight'            => $weight,
                 'height'            => $height,
-                'oxygen_saturation' => $oxygenSaturation,
             ];
             $abnormalItems = abnormalVitals($saved);
 
@@ -270,8 +269,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 
             $historyStmt = mysqli_prepare(
                 $conn,
-                'SELECT BloodPressure, Temperature, PulseRate, RespiratoryRate,
-                        Weight, Height, OxygenSaturation, RecordedAt
+                'SELECT BloodPressure, Temperature, PulseRate,
+                        Weight, Height, RecordedAt
                  FROM vitals
                  WHERE PatientID = ?
                  ORDER BY VitalID DESC
@@ -371,6 +370,7 @@ foreach ($latestVitals as $k => $v) {
   .vital-badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
   .vital-badge-high { background: #fee2e2; color: #b91c1c; }
   .vital-badge-low { background: #e0e7ff; color: #3730a3; }
+  .vital-badge-warning { background: #fef3c7; color: #b45309; }
 
   @media (max-width: 900px) { .vitals-grid { grid-template-columns: 1fr 1fr; } }
 </style>
@@ -496,11 +496,6 @@ foreach ($latestVitals as $k => $v) {
             </div>
 
             <div class="vitals-field">
-              <label for="respiratory_rate">Respiratory Rate (/min)</label>
-              <input type="number" id="respiratory_rate" name="respiratory_rate" placeholder="16" value="<?= htmlspecialchars($latestVitals['respiratory_rate']) ?>">
-            </div>
-
-            <div class="vitals-field">
               <label for="weight">Weight (kg)</label>
               <input type="number" step="0.01" id="weight" name="weight" placeholder="65.0" value="<?= htmlspecialchars($latestVitals['weight']) ?>">
             </div>
@@ -508,11 +503,6 @@ foreach ($latestVitals as $k => $v) {
             <div class="vitals-field">
               <label for="height">Height (cm)</label>
               <input type="number" step="0.01" id="height" name="height" placeholder="170" value="<?= htmlspecialchars($latestVitals['height']) ?>">
-            </div>
-
-            <div class="vitals-field">
-              <label for="oxygen_saturation">Oxygen Saturation / SpO2 (%)</label>
-              <input type="number" id="oxygen_saturation" name="oxygen_saturation" placeholder="98" value="<?= htmlspecialchars($latestVitals['oxygen_saturation']) ?>">
             </div>
 
           </div>
@@ -532,10 +522,8 @@ foreach ($latestVitals as $k => $v) {
                 <th>BP</th>
                 <th>Temp</th>
                 <th>Pulse</th>
-                <th>Resp</th>
                 <th>Wt (kg)</th>
                 <th>Ht (cm)</th>
-                <th>SpO2</th>
               </tr>
             </thead>
             <tbody>
@@ -544,18 +532,16 @@ foreach ($latestVitals as $k => $v) {
                     'blood_pressure'    => $h['BloodPressure'] ?? '',
                     'temperature'       => $h['Temperature'] ?? '',
                     'pulse_rate'        => $h['PulseRate'] ?? '',
-                    'respiratory_rate'  => $h['RespiratoryRate'] ?? '',
-                    'oxygen_saturation' => $h['OxygenSaturation'] ?? '',
+                    'weight'            => $h['Weight'] ?? '',
+                    'height'            => $h['Height'] ?? '',
                 ]); ?>
                 <tr>
                   <td><?= htmlspecialchars(date('M d, g:i A', strtotime($h['RecordedAt']))) ?></td>
                   <td><?= htmlspecialchars($h['BloodPressure'] ?? '') ?><?php if (($hItems[0]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[0]); } ?></td>
                   <td><?= htmlspecialchars($h['Temperature'] ?? '') ?><?php if (($hItems[1]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[1]); } ?></td>
                   <td><?= htmlspecialchars($h['PulseRate'] ?? '') ?><?php if (($hItems[2]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[2]); } ?></td>
-                  <td><?= htmlspecialchars($h['RespiratoryRate'] ?? '') ?><?php if (($hItems[3]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[3]); } ?></td>
                   <td><?= htmlspecialchars($h['Weight'] ?? '') ?></td>
                   <td><?= htmlspecialchars($h['Height'] ?? '') ?></td>
-                  <td><?= htmlspecialchars($h['OxygenSaturation'] ?? '') ?><?php if (($hItems[4]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[4]); } ?></td>
                 </tr>
               <?php endforeach; ?>
             </tbody>

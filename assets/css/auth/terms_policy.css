@@ -1,0 +1,213 @@
+/* terms_policy.css – Shared Terms & Data Privacy consent + modal styling */
+
+/* Consent checkbox */
+.form-options {
+  margin-bottom: 24px;
+}
+
+.form-check-label.terms-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.form-check-label.terms-consent input[type="checkbox"] {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: #149385;
+  cursor: pointer;
+}
+
+.terms-consent .terms-link {
+  color: #149385;
+  text-decoration: underline;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.terms-consent .terms-link:hover {
+  color: #0e7a6e;
+}
+
+.form-check-label.terms-consent.terms-invalid,
+.form-check-label.terms-consent.terms-invalid span,
+.form-check-label.terms-consent.terms-invalid .terms-link {
+  color: #ef4444;
+}
+
+.terms-consent input:focus-visible {
+  outline: 2px solid #149385;
+  outline-offset: 2px;
+}
+
+/* Inline error for the consent checkbox */
+.terms-error {
+  display: none;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #ef4444;
+}
+
+.terms-error:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Modal overlay */
+.terms-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.terms-modal-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+body.terms-modal-open {
+  overflow: hidden;
+}
+
+/* Modal card */
+.terms-modal {
+  background: #ffffff;
+  border-radius: 14px;
+  max-width: 640px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+}
+
+.terms-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.terms-modal-header h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.terms-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.terms-modal-close:hover {
+  color: #1f2937;
+  background: #e2e8f0;
+}
+
+/* Scrollable body with smooth scrolling */
+.terms-modal-body {
+  padding: 20px 22px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.terms-last-updated {
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+  margin: 0 0 14px;
+}
+
+.terms-policy-list {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.terms-policy-list li {
+  margin-bottom: 16px;
+}
+
+.terms-policy-list li:last-child {
+  margin-bottom: 0;
+}
+
+.terms-policy-list strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 3px;
+}
+
+.terms-policy-list p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #4b5563;
+  margin: 0;
+}
+
+.terms-modal-footer {
+  padding: 14px 22px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  background: #f8fafc;
+}
+
+.terms-modal-agree {
+  background: #149385;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.terms-modal-agree:hover {
+  background: #0e7a6e;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .terms-modal {
+    max-height: 88vh;
+  }
+  .terms-modal-body {
+    padding: 16px;
+  }
+}

@@ -77,6 +77,36 @@ $appointments = [];
 while ($row = mysqli_fetch_assoc($appointmentsResult)) {
     $appointments[] = $row;
 }
+
+// Reschedule history count per appointment (for the 3-reschedule limit)
+$reschedCountMap = [];
+$reschedStmt = mysqli_prepare(
+    $conn,
+    'SELECT arh.AppointmentID, COUNT(*) AS total
+     FROM appointment_reschedule_history arh
+     INNER JOIN appointments a ON arh.AppointmentID = a.AppointmentID
+     WHERE a.PatientID = ?
+     GROUP BY arh.AppointmentID'
+);
+mysqli_stmt_bind_param($reschedStmt, 'i', $patientID);
+mysqli_stmt_execute($reschedStmt);
+$reschedResult = mysqli_stmt_get_result($reschedStmt);
+while ($reschedRow = mysqli_fetch_assoc($reschedResult)) {
+    $reschedCountMap[(int)$reschedRow['AppointmentID']] = (int)$reschedRow['total'];
+}
+
+// Distinct departments & doctors for the advanced filter dropdowns
+$departments = [];
+$doctors = [];
+foreach ($appointments as $appt) {
+    if (!empty($appt['DepartmentName'])) {
+        $departments[$appt['DepartmentName']] = $appt['DepartmentName'];
+    }
+    if (!empty($appt['StaffFirstName'])) {
+        $doctorName = 'Dr. ' . $appt['StaffFirstName'] . ' ' . $appt['StaffLastName'];
+        $doctors[$doctorName] = $doctorName;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -176,6 +206,12 @@ while ($row = mysqli_fetch_assoc($appointmentsResult)) {
       <p>Book and manage your appointments</p>
     </div>
 
+    <?php if (isset($_GET['msg']) && $_GET['msg'] !== ''): ?>
+      <div class="msg-banner">
+        <?php echo htmlspecialchars($_GET['msg']); ?>
+      </div>
+    <?php endif; ?>
+
     <!-- Tabs -->
     <div class="tab-switch">
       <button class="tab-btn active" type="button">My Appointments</button>
@@ -206,25 +242,41 @@ while ($row = mysqli_fetch_assoc($appointmentsResult)) {
         <button type="button" class="filter-tab" data-tab="upcoming">Upcoming</button>
         <button type="button" class="filter-tab" data-tab="completed">Completed</button>
         <button type="button" class="filter-tab" data-tab="cancelled">Cancelled</button>
+        <button type="button" class="filter-tab" data-tab="archive">Archive</button>
       </div>
 
       <div class="filter-row">
         <div class="filter-field">
-          <label for="presetSelect">Quick Preset</label>
-          <select id="presetSelect" class="filter-select">
-            <option value="all_time" selected>All Time</option>
-            <option value="this_month">This Month</option>
-            <option value="last_30">Last 30 Days</option>
-            <option value="this_year">This Year</option>
-            <option value="custom">Custom Range</option>
+          <label for="deptSelect">Department</label>
+          <select id="deptSelect" class="filter-select">
+            <option value="">All Departments</option>
+            <?php foreach ($departments as $departmentName): ?>
+              <option value="<?php echo htmlspecialchars($departmentName); ?>">
+                <?php echo htmlspecialchars($departmentName); ?>
+              </option>
+            <?php endforeach; ?>
           </select>
         </div>
 
-        <div class="filter-field" id="dateRangeFields" style="display:none;">
+        <div class="filter-field">
+          <label for="docSelect">Doctor</label>
+          <select id="docSelect" class="filter-select">
+            <option value="">All Doctors</option>
+            <?php foreach ($doctors as $doctorName): ?>
+              <option value="<?php echo htmlspecialchars($doctorName); ?>">
+                <?php echo htmlspecialchars($doctorName); ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="filter-field">
           <label for="startDate">From</label>
-          <input type="date" id="startDate" class="filter-date">
-          <span class="filter-date-sep">to</span>
-          <input type="date" id="endDate" class="filter-date">
+          <div class="filter-date-range">
+            <input type="date" id="startDate" class="filter-date">
+            <span class="filter-date-sep">to</span>
+            <input type="date" id="endDate" class="filter-date">
+          </div>
         </div>
 
         <button type="button" class="btn-clear" id="clearFilters">Clear Filters</button>
@@ -255,6 +307,10 @@ while ($row = mysqli_fetch_assoc($appointmentsResult)) {
           $formattedDate = date('F d, Y', strtotime($apptDate));
           $formattedTime = date('g:i A', strtotime($appointment['AppointmentTime']));
 
+          $apptStartTime = strtotime($apptDate . ' ' . ($appointment['AppointmentTime'] ?? '00:00:00'));
+          $isWithin24h = ($apptStartTime !== false) && ($apptStartTime < (time() + 86400));
+          $reschedCount = $reschedCountMap[(int)$appointment['AppointmentID']] ?? 0;
+
           $statusClass = match($apptStatus) {
               'Pending'          => 'pending',
               'Cancelled'        => 'cancelled',
@@ -268,7 +324,9 @@ while ($row = mysqli_fetch_assoc($appointmentsResult)) {
           <div
             class="appt-row"
             data-date="<?php echo htmlspecialchars($apptDate); ?>"
-            data-status="<?php echo htmlspecialchars($apptStatus); ?>">
+            data-status="<?php echo htmlspecialchars($apptStatus); ?>"
+            data-dep="<?php echo htmlspecialchars(strtolower($appointment['DepartmentName'] ?? '')); ?>"
+            data-doc="<?php echo htmlspecialchars(strtolower(trim(($appointment['StaffFirstName'] ?? '') . ' ' . ($appointment['StaffLastName'] ?? '')))); ?>">
 
             <div class="appt-row-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -302,18 +360,48 @@ while ($row = mysqli_fetch_assoc($appointmentsResult)) {
                 <?php echo htmlspecialchars($apptStatus); ?>
               </span>
 
-              <?php if (
+              <?php
+              $reschedulableStatus = in_array(
+                  $apptStatus,
+                  ['Pending', 'Scheduled', 'Confirmed'],
+                  true
+              );
+
+              $canReschedule = $reschedulableStatus && $reschedCount < 3 && !$isWithin24h;
+
+              $canCancel =
                   $apptStatus !== 'Cancelled' &&
                   $apptStatus !== 'Completed' &&
                   $apptStatus !== 'Checked In' &&
-                  $apptStatus !== 'In Consultation'
-              ): ?>
-                <button
-                  class="btn-cancel"
-                  type="button"
-                  data-id="<?php echo (int)$appointment['AppointmentID']; ?>">
-                  Cancel
-                </button>
+                  $apptStatus !== 'In Consultation';
+              ?>
+
+              <?php if ($canReschedule || $canCancel): ?>
+                <div class="appt-actions">
+
+                  <?php if ($canReschedule): ?>
+                    <button
+                      class="btn-reschedule"
+                      type="button"
+                      data-id="<?php echo (int)$appointment['AppointmentID']; ?>">
+                      Reschedule
+                    </button>
+                  <?php else: ?>
+                    <?php if ($reschedulableStatus && ($reschedCount >= 3 || $isWithin24h)): ?>
+                      <span class="resched-locked">Reschedule unavailable</span>
+                    <?php endif; ?>
+                  <?php endif; ?>
+
+                  <?php if ($canCancel): ?>
+                    <button
+                      class="btn-cancel"
+                      type="button"
+                      data-id="<?php echo (int)$appointment['AppointmentID']; ?>">
+                      Cancel
+                    </button>
+                  <?php endif; ?>
+
+                </div>
               <?php endif; ?>
 
             </div>
@@ -331,6 +419,15 @@ while ($row = mysqli_fetch_assoc($appointmentsResult)) {
 </div>
 
 <script>
+document.querySelectorAll('.btn-reschedule').forEach(button => {
+    button.addEventListener('click', () => {
+        const appointmentID = button.dataset.id;
+
+        window.location.href =
+            'reschedule_appointment.php?appointment_id=' + appointmentID;
+    });
+});
+
 document.querySelectorAll('.btn-cancel').forEach(button => {
     button.addEventListener('click', () => {
         const appointmentID = button.dataset.id;
@@ -395,10 +492,10 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
 // ---------- Filtering ----------
 (function () {
     const tabs = document.querySelectorAll('.filter-tab');
-    const presetSelect = document.getElementById('presetSelect');
+    const deptSelect = document.getElementById('deptSelect');
+    const docSelect = document.getElementById('docSelect');
     const startDate = document.getElementById('startDate');
     const endDate = document.getElementById('endDate');
-    const dateRangeFields = document.getElementById('dateRangeFields');
     const clearBtn = document.getElementById('clearFilters');
     const apptList = document.getElementById('apptList');
     const listTitle = document.getElementById('listTitle');
@@ -407,7 +504,8 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
         all: 'All Appointments',
         upcoming: 'Upcoming Appointments',
         completed: 'Completed Appointments',
-        cancelled: 'Cancelled Appointments'
+        cancelled: 'Cancelled Appointments',
+        archive: 'Archived Appointments'
     };
 
     let activeTab = 'all';
@@ -417,49 +515,25 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
         return d.toISOString().slice(0, 10);
     }
 
-    function addDays(iso, days) {
-        const d = new Date(iso + 'T00:00:00');
-        d.setDate(d.getDate() + days);
-        return d.toISOString().slice(0, 10);
-    }
-
     function getDateRange() {
-        const preset = presetSelect.value;
-        const today = todayISO();
-
-        switch (preset) {
-            case 'this_month': {
-                const d = new Date(today + 'T00:00:00');
-                const start = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
-                return { start, end: today };
-            }
-            case 'last_30':
-                return { start: addDays(today, -29), end: today };
-            case 'this_year':
-                return { start: today.slice(0, 4) + '-01-01', end: today };
-            case 'custom':
-                if (startDate.value && endDate.value) {
-                    return { start: startDate.value, end: endDate.value };
-                }
-                return null;
-            case 'all_time':
-            default:
-                return null;
+        if (startDate.value && endDate.value) {
+            return { start: startDate.value, end: endDate.value };
         }
+        return null;
     }
 
-    function matchesStatus(status) {
+    function matchesStatus(status, date) {
         const today = todayISO();
 
         switch (activeTab) {
             case 'upcoming':
-                return (status === 'Pending' || status === 'Confirmed' ||
-                        status === 'Checked In' || status === 'Called' ||
-                        status === 'In Consultation');
+                return status !== 'Cancelled' && status !== 'Completed' && date >= today;
             case 'completed':
                 return status === 'Completed';
             case 'cancelled':
                 return status === 'Cancelled';
+            case 'archive':
+                return date < today;
             case 'all':
             default:
                 return true;
@@ -468,6 +542,8 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
 
     function applyFilters() {
         const range = getDateRange();
+        const deptFilter = deptSelect.value.toLowerCase();
+        const docFilter = docSelect.value.toLowerCase();
         let visible = 0;
 
         tabs.forEach(t => {
@@ -479,11 +555,21 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
         apptList.querySelectorAll('.appt-row').forEach(row => {
             const date = row.dataset.date;
             const status = row.dataset.status;
+            const rowDept = (row.dataset.dep || '').toLowerCase();
+            const rowDoc = (row.dataset.doc || '').toLowerCase();
 
-            let show = matchesStatus(status);
+            let show = matchesStatus(status, date);
 
             if (show && range) {
                 show = date >= range.start && date <= range.end;
+            }
+
+            if (show && deptFilter) {
+                show = rowDept === deptFilter;
+            }
+
+            if (show && docFilter) {
+                show = rowDoc === docFilter;
             }
 
             row.style.display = show ? '' : 'none';
@@ -518,21 +604,17 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
         });
     });
 
-    presetSelect.addEventListener('change', () => {
-        const showCustom = presetSelect.value === 'custom';
-        dateRangeFields.style.display = showCustom ? 'flex' : 'none';
-        applyFilters();
-    });
-
+    deptSelect.addEventListener('change', applyFilters);
+    docSelect.addEventListener('change', applyFilters);
     startDate.addEventListener('change', applyFilters);
     endDate.addEventListener('change', applyFilters);
 
     clearBtn.addEventListener('click', () => {
         activeTab = 'all';
-        presetSelect.value = 'all_time';
+        deptSelect.value = '';
+        docSelect.value = '';
         startDate.value = '';
         endDate.value = '';
-        dateRangeFields.style.display = 'none';
         applyFilters();
     });
 

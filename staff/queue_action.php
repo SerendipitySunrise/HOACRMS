@@ -45,12 +45,15 @@ if ($action === 'call') {
                AND Status = ?'
         );
 
+        $queueStatus = QUEUE_STATUS_CALLED;
+        $queueFrom   = QUEUE_STATUS_WAITING;
+
         mysqli_stmt_bind_param(
             $stmt,
             'sis',
-            $queueStatus = QUEUE_STATUS_CALLED,
+            $queueStatus,
             $queueID,
-            $queueFrom = QUEUE_STATUS_WAITING
+            $queueFrom
         );
 
         if (!mysqli_stmt_execute($stmt) || mysqli_stmt_affected_rows($stmt) < 1) {
@@ -73,10 +76,12 @@ if ($action === 'call') {
                 $conn,
                 'UPDATE appointments SET Status = ? WHERE AppointmentID = ?'
             );
+            $apptStatus = APPT_STATUS_CALLED;
+
             mysqli_stmt_bind_param(
                 $updAppt,
                 'si',
-                $apptStatus = APPT_STATUS_CALLED,
+                $apptStatus,
                 $apptID
             );
             if (!mysqli_stmt_execute($updAppt)) {
@@ -110,12 +115,15 @@ if ($action === 'call') {
                AND Status = ?'
         );
 
+        $queueStatus = QUEUE_STATUS_COMPLETED;
+        $queueFrom   = QUEUE_STATUS_IN_CONSULTATION;
+
         mysqli_stmt_bind_param(
             $stmt,
             'sis',
-            $queueStatus = QUEUE_STATUS_COMPLETED,
+            $queueStatus,
             $queueID,
-            $queueFrom = QUEUE_STATUS_IN_CONSULTATION
+            $queueFrom
         );
 
         if (!mysqli_stmt_execute($stmt) || mysqli_stmt_affected_rows($stmt) < 1) {
@@ -138,10 +146,12 @@ if ($action === 'call') {
                 $conn,
                 'UPDATE appointments SET Status = ? WHERE AppointmentID = ?'
             );
+            $apptStatus = APPT_STATUS_COMPLETED;
+
             mysqli_stmt_bind_param(
                 $updAppt,
                 'si',
-                $apptStatus = APPT_STATUS_COMPLETED,
+                $apptStatus,
                 $apptID
             );
             if (!mysqli_stmt_execute($updAppt)) {

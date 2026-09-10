@@ -31,6 +31,7 @@ $userID = $_SESSION['UserID'];
 $sql = "SELECT
             u.UserID, u.FirstName, u.MiddleName, u.LastName, u.Email, u.Sex,
             u.DateOfBirth, u.ContactNumber, u.Address, u.ProfilePhoto,
+            u.ReminderPreference, u.ReceiveReminders,
             p.PatientID, p.CivilStatus, p.Religion, p.IsPWD, p.DisabilityType,
             p.BloodType, p.Allergies, p.PastMedicalCondition, p.CurrentMedication,
             p.FamilyMedicalHistory, p.EmergencyContactName, p.EmergencyContactNo,
@@ -392,6 +393,49 @@ if (!empty($patient['CurrentMedication'])) {
         </div>
       </div>
 
+      <!-- Notification Preferences -->
+      <div class="panel">
+        <div class="profile-panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <h2>Notification Preferences</h2>
+        </div>
+
+        <div class="info-fields">
+          <div class="info-field" style="grid-column: 1 / -1;">
+            <div class="pref-toggle-row">
+              <label class="pref-switch">
+                <input type="checkbox" id="ReceiveReminders" <?php echo ((int)$patient['ReceiveReminders'] === 1) ? 'checked' : ''; ?>>
+                <span class="slider"></span>
+              </label>
+              <div>
+                <div class="pref-label">Receive appointment reminders</div>
+                <div class="pref-hint">Get notified before your scheduled appointments.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-field" style="grid-column: 1 / -1;">
+            <div class="pref-field">
+              <label class="pref-label" for="ReminderPreference">Preferred reminder method</label>
+              <select id="ReminderPreference" class="pref-select">
+                <option value="email" <?php echo ($patient['ReminderPreference'] === 'email') ? 'selected' : ''; ?>>Email</option>
+                <option value="push" <?php echo ($patient['ReminderPreference'] === 'push') ? 'selected' : ''; ?>>In-App Notification</option>
+              </select>
+              <div class="pref-hint">
+                <?php echo field($patient['Email']); ?> will be used for email reminders.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pref-actions">
+          <button type="button" class="btn-primary-solid" id="savePrefsBtn">
+            Save Preferences
+          </button>
+        </div>
+        <div class="form-message" id="prefMessage"></div>
+      </div>
+
     </div>
   </main>
 
@@ -567,7 +611,7 @@ document.getElementById('editProfileForm').addEventListener('submit', function(e
 
   const formData = new FormData(form);
 
-  fetch('update_profile.php', {
+  fetch('../update_profile.php', {
     method: 'POST',
     body: formData
   })
@@ -651,6 +695,53 @@ avatarInput.addEventListener('change', function() {
   })
   .catch(() => {
     alert('An error occurred while uploading.');
+  });
+});
+
+// Notification preferences
+const receiveCheckbox = document.getElementById('ReceiveReminders');
+const prefSelect = document.getElementById('ReminderPreference');
+const savePrefsBtn = document.getElementById('savePrefsBtn');
+const prefMessage = document.getElementById('prefMessage');
+
+function syncPrefMethod() {
+  prefSelect.disabled = !receiveCheckbox.checked;
+  prefSelect.style.opacity = receiveCheckbox.checked ? '1' : '0.5';
+}
+
+receiveCheckbox.addEventListener('change', syncPrefMethod);
+syncPrefMethod();
+
+savePrefsBtn.addEventListener('click', function() {
+  const body = new URLSearchParams();
+  if (receiveCheckbox.checked) body.append('ReceiveReminders', '1');
+  body.append('ReminderPreference', prefSelect.value);
+
+  savePrefsBtn.disabled = true;
+
+  fetch('../update_reminder_prefs.php', {
+    method: 'POST',
+    body: body
+  })
+  .then(response => response.json())
+  .then(data => {
+    prefMessage.textContent = data.message;
+    prefMessage.className = 'form-message ' + (data.success ? 'success' : 'error');
+    prefMessage.style.display = 'block';
+
+    if (data.success) {
+      setTimeout(() => {
+        prefMessage.style.display = 'none';
+      }, 4000);
+    }
+  })
+  .catch(() => {
+    prefMessage.textContent = 'An error occurred. Please try again.';
+    prefMessage.className = 'form-message error';
+    prefMessage.style.display = 'block';
+  })
+  .finally(() => {
+    savePrefsBtn.disabled = false;
   });
 });
 </script>

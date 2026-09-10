@@ -54,8 +54,11 @@ function classifyVital(string $key, $value): array
             if ($systolic === null || $diastolic === null) {
                 return $normal;
             }
-            if ($systolic > 139 || $diastolic > 89) {
-                return ['value' => $value, 'status' => 'high', 'note' => 'Hypertension range (>139/89)'];
+            if ($systolic >= 140 || $diastolic >= 90) {
+                return ['value' => $value, 'status' => 'high', 'note' => 'Hypertension range (≥140/90)'];
+            }
+            if ($systolic > 120 || $diastolic > 80) {
+                return ['value' => $value, 'status' => 'warning', 'note' => 'Elevated blood pressure (121–139/81–89)'];
             }
             if ($systolic < 90 || $diastolic < 60) {
                 return ['value' => $value, 'status' => 'low', 'note' => 'Low blood pressure (<90/60)'];
@@ -68,47 +71,42 @@ function classifyVital(string $key, $value): array
                 return $normal;
             }
             if ($temp > 37.5) {
-                return ['value' => $value, 'status' => 'high', 'note' => 'Fever (>37.5\u00B0C)'];
+                return ['value' => $value, 'status' => 'high', 'note' => 'Fever (>37.5°C)'];
+            }
+            if ($temp > 37.2) {
+                return ['value' => $value, 'status' => 'warning', 'note' => 'Elevated temperature (37.3–37.5°C)'];
             }
             if ($temp < 36.1) {
-                return ['value' => $value, 'status' => 'low', 'note' => 'Hypothermia (<36.1\u00B0C)'];
+                return ['value' => $value, 'status' => 'low', 'note' => 'Hypothermia (<36.1°C)'];
             }
             return $normal;
 
         case 'pulse_rate':
             $pulse = (int)$value;
+            if ($pulse > 120) {
+                return ['value' => $value, 'status' => 'high', 'note' => 'Tachycardia (>120 bpm)'];
+            }
             if ($pulse > 100) {
-                return ['value' => $value, 'status' => 'high', 'note' => 'Tachycardia (>100 bpm)'];
+                return ['value' => $value, 'status' => 'warning', 'note' => 'Elevated pulse (101–120 bpm)'];
+            }
+            if ($pulse < 50) {
+                return ['value' => $value, 'status' => 'low', 'note' => 'Bradycardia (<50 bpm)'];
             }
             if ($pulse < 60) {
-                return ['value' => $value, 'status' => 'low', 'note' => 'Bradycardia (<60 bpm)'];
-            }
-            return $normal;
-
-        case 'respiratory_rate':
-            $rr = (int)$value;
-            if ($rr > 20) {
-                return ['value' => $value, 'status' => 'high', 'note' => 'Tachypnea (>20 bpm)'];
-            }
-            if ($rr < 12) {
-                return ['value' => $value, 'status' => 'low', 'note' => 'Bradypnea (<12 bpm)'];
-            }
-            return $normal;
-
-        case 'oxygen_saturation':
-            $spo2 = (int)$value;
-            if ($spo2 > 0 && $spo2 < 95) {
-                return ['value' => $value, 'status' => 'low', 'note' => 'Hypoxemia (SpO2 <95%)'];
+                return ['value' => $value, 'status' => 'warning', 'note' => 'Low pulse (50–59 bpm)'];
             }
             return $normal;
 
         case 'bmi':
             $bmiValue = (float)$value;
             if ($bmiValue >= 30) {
-                return ['value' => $value, 'status' => 'high', 'note' => 'Obese (BMI \u226530)'];
+                return ['value' => $value, 'status' => 'high', 'note' => 'Obese (BMI >= 30)'];
             }
             if ($bmiValue >= 25) {
-                return ['value' => $value, 'status' => 'high', 'note' => 'Overweight (BMI 25-29.9)'];
+                return ['value' => $value, 'status' => 'warning', 'note' => 'Overweight (BMI 25–29.9)'];
+            }
+            if ($bmiValue >= 23) {
+                return ['value' => $value, 'status' => 'warning', 'note' => 'At risk (BMI 23–24.9)'];
             }
             if ($bmiValue < 18.5) {
                 return ['value' => $value, 'status' => 'low', 'note' => 'Underweight (BMI <18.5)'];
@@ -130,10 +128,8 @@ function classifyVitals(array $vitals): array
 {
     $definitions = [
         'blood_pressure'     => ['label' => 'Blood Pressure', 'unit' => 'mmHg'],
-        'temperature'        => ['label' => 'Temperature',    'unit' => '\u00B0C'],
+        'temperature'        => ['label' => 'Temperature',    'unit' => '°C'],
         'pulse_rate'         => ['label' => 'Pulse',          'unit' => 'bpm'],
-        'respiratory_rate'   => ['label' => 'Respiratory Rate', 'unit' => '/min'],
-        'oxygen_saturation'  => ['label' => 'Oxygen Saturation', 'unit' => '%'],
         'weight'             => ['label' => 'Weight',         'unit' => 'kg'],
         'height'             => ['label' => 'Height',         'unit' => 'cm'],
     ];
@@ -173,13 +169,34 @@ function classifyVitals(array $vitals): array
             'key'    => 'bmi',
             'label'  => 'BMI',
             'value'  => $bmi,
-            'unit'   => 'kg/m\u00B2',
+            'unit'   => 'kg/m²',
             'status' => $classified['status'],
             'note'   => $classified['note'],
         ];
     }
 
     return $items;
+}
+
+/**
+ * Validate a full set of vitals against the normal ranges.
+ *
+ * Convenience wrapper around classifyVitals() that returns the
+ * classification keyed by vital key instead of an ordered list.
+ *
+ * @param array $data Associative array keyed by vital key
+ *                    (blood_pressure, temperature, pulse_rate, weight, height).
+ * @return array<string, array{key: string, label: string, value: mixed, unit: string, status: string, note: string}>
+ */
+function validateVitals(array $data): array
+{
+    $validated = [];
+
+    foreach (classifyVitals($data) as $item) {
+        $validated[$item['key']] = $item;
+    }
+
+    return $validated;
 }
 
 /**
