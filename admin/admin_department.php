@@ -166,13 +166,16 @@ requireRole('Admin');
       <div class="form-group">
         <label>Operating Days</label>
         <div class="days-grid" id="days-grid">
-          <label class="day-check"><input type="checkbox" value="Mon" /> Monday</label>
-          <label class="day-check"><input type="checkbox" value="Tue" /> Tuesday</label>
-          <label class="day-check"><input type="checkbox" value="Wed" /> Wednesday</label>
-          <label class="day-check"><input type="checkbox" value="Thu" /> Thursday</label>
-          <label class="day-check"><input type="checkbox" value="Fri" /> Friday</label>
-          <label class="day-check"><input type="checkbox" value="Sat" /> Saturday</label>
-          <label class="day-check"><input type="checkbox" value="Sun" /> Sunday</label>
+          <label class="day-toggle"><input type="checkbox" value="Mon"  /> <span>Mon</span></label>
+          <label class="day-toggle"><input type="checkbox" value="Tue"  /> <span>Tue</span></label>
+          <label class="day-toggle"><input type="checkbox" value="Wed"  /> <span>Wed</span></label>
+          <label class="day-toggle"><input type="checkbox" value="Thu"  /> <span>Thu</span></label>
+          <label class="day-toggle"><input type="checkbox" value="Fri"  /> <span>Fri</span></label>
+        </div>
+
+        <div class="days-quick-actions">
+          <button type="button" class="quick-btn" onclick="selectAllDays()">All</button>
+          <button type="button" class="quick-btn" onclick="clearAllDays()">Clear</button>
         </div>
       </div>
 
@@ -451,6 +454,29 @@ requireRole('Admin');
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   document.getElementById('today-date').textContent = dateStr;
+
+  // ================= QUICK SELECT HELPERS =================
+function selectAllDays() {
+  dayCheckboxes.forEach(cb => cb.checked = true);
+}
+
+function clearAllDays() {
+  dayCheckboxes.forEach(cb => cb.checked = false);
+}
+
+function selectWeekdays() {
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  dayCheckboxes.forEach(cb => {
+    cb.checked = weekdays.includes(cb.value);
+  });
+}
+
+function selectWeekends() {
+  const weekends = ['Sat', 'Sun'];
+  dayCheckboxes.forEach(cb => {
+    cb.checked = weekends.includes(cb.value);
+  });
+}
 </script>
 </body>
 </html>

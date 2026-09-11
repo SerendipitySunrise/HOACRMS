@@ -403,28 +403,94 @@ body {
 
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
+/* ---------- Operating Days (toggle grid) ---------- */
 .days-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 4px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 6px;
 }
 
-.day-check {
+.day-toggle {
+  position: relative;
+  cursor: pointer;
+  display: block;
+  margin: 0;
+}
+
+/* Hide the native checkbox but keep it accessible */
+.day-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+/* The visible "button" */
+.day-toggle span {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--color-ink);
-  cursor: pointer;
+  justify-content: center;
+  padding: 10px 4px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  background: #fff;
+  text-align: center;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
-.day-check input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-primary);
+/* Hover state */
+.day-toggle:hover span {
+  border-color: var(--color-primary-light);
+  color: var(--color-ink);
+}
+
+/* Selected state */
+.day-toggle input[type="checkbox"]:checked + span {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+/* Focus state (keyboard accessibility) */
+.day-toggle input[type="checkbox"]:focus + span {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Quick-select helper buttons */
+.days-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.quick-btn {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  color: var(--color-ink-soft);
+  font-family: var(--font-family);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
   cursor: pointer;
+  transition: all 0.15s;
+}
+
+.quick-btn:hover {
+  background: var(--color-primary-tint);
+  border-color: var(--color-primary-tint-border);
+  color: var(--color-primary-hover);
 }
 
 .modal-actions {
@@ -470,15 +536,22 @@ body {
 
 /* ---------- RESPONSIVE ---------- */
 @media (max-width: 800px) {
-  .app { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-  .main { padding: 20px; }
-  .form-row { grid-template-columns: 1fr; }
-  .modal-card { padding: 20px; width: 95%; }
-  .staff-table-wrap table { min-width: 720px; }
+  .days-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 @media (max-width: 480px) {
-  .days-grid { gap: 6px; }
-  .day-check { font-size: 0.78rem; }
+  .days-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .day-toggle span {
+    font-size: 0.75rem;
+    padding: 8px 4px;
+  }
+  .quick-btn {
+    font-size: 0.7rem;
+    padding: 4px 10px;
+  }
 }

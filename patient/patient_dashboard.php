@@ -62,48 +62,26 @@ $appointmentStmt = mysqli_prepare(
         a.AppointmentTime,
         a.Purpose,
         a.Status,
-
         d.DepartmentName,
-
         s.StaffID,
         s.StaffRole,
         s.Specialization,
-
         u.FirstName AS StaffFirstName,
         u.LastName AS StaffLastName
-
      FROM appointments a
-
-     INNER JOIN departments d
-        ON a.DepartmentID = d.DepartmentID
-
-     LEFT JOIN staff s
-        ON a.StaffID = s.StaffID
-
-     LEFT JOIN users u
-        ON s.UserID = u.UserID
-
+     INNER JOIN departments d ON a.DepartmentID = d.DepartmentID
+     LEFT JOIN staff s ON a.StaffID = s.StaffID
+     LEFT JOIN users u ON s.UserID = u.UserID
      WHERE a.PatientID = ?
        AND a.AppointmentDate >= CURDATE()
        AND a.Status IN ("Pending", "Scheduled", "Confirmed")
-
-     ORDER BY
-        a.AppointmentDate ASC,
-        a.AppointmentTime ASC
-
+     ORDER BY a.AppointmentDate ASC, a.AppointmentTime ASC
      LIMIT 1'
 );
 
-mysqli_stmt_bind_param(
-    $appointmentStmt,
-    'i',
-    $patient['PatientID']
-);
-
+mysqli_stmt_bind_param($appointmentStmt, 'i', $patient['PatientID']);
 mysqli_stmt_execute($appointmentStmt);
-
 $appointmentResult = mysqli_stmt_get_result($appointmentStmt);
-
 $appointment = mysqli_fetch_assoc($appointmentResult);
 
 // Get queue status for this patient
@@ -154,16 +132,18 @@ if ($queue) {
 $notifStmt = mysqli_prepare(
     $conn,
     'SELECT
-        NotificationID,
-        Title,
-        Message,
-        Type,
-        IsRead,
-        CreatedAt
-     FROM notifications
-     WHERE UserID = ?
-     ORDER BY IsRead ASC, CreatedAt DESC
-     LIMIT 5'
+        n.NotificationID,
+        n.Title,
+        n.Message,
+        n.Type,
+        n.IsRead,
+        n.CreatedAt,
+        a.AppointmentID
+     FROM notifications n
+     LEFT JOIN appointments a ON n.Message LIKE CONCAT("%", a.AppointmentDate, "%") 
+     WHERE n.UserID = ?
+     ORDER BY n.IsRead ASC, n.CreatedAt DESC
+     LIMIT 10'
 );
 
 mysqli_stmt_bind_param($notifStmt, 'i', $userID);
@@ -173,16 +153,35 @@ $notifResult = mysqli_stmt_get_result($notifStmt);
 $notifications = [];
 while ($row = mysqli_fetch_assoc($notifResult)) {
     $row['IsRead'] = (int) $row['IsRead'];
-    $row['DisplayTime'] = $row['SentAt'] ?? $row['CreatedAt'];
+    $row['DisplayTime'] = $row['CreatedAt'];
     $notifications[] = $row;
 }
+
+// --- NOTIFICATION GROUPING LOGIC ---
+// Group repeat reschedule notifications by appointment ID
+$groupedNotifications = [];
+foreach ($notifications as $notif) {
+    // Use AppointmentID if available, otherwise fallback to the message content
+    $key = $notif['AppointmentID'] ?? md5($notif['Message']); 
+    
+    if (!isset($groupedNotifications[$key])) {
+        $groupedNotifications[$key] = $notif;
+        $groupedNotifications[$key]['Count'] = 1;
+    } else {
+        $groupedNotifications[$key]['Count']++;
+        // Keep the most recent message but mark it as updated
+        $groupedNotifications[$key]['Message'] = $notif['Message'];
+        $groupedNotifications[$key]['DisplayTime'] = $notif['DisplayTime']; // Keep newest time
+    }
+}
+// Limit back to 5 unique items for the dashboard widget
+$groupedNotifications = array_slice($groupedNotifications, 0, 5);
+// -----------------------------------
 
 // Get recent consultations count
 $consultCountStmt = mysqli_prepare(
     $conn,
-    'SELECT COUNT(*) AS total
-     FROM consultations
-     WHERE PatientID = ?'
+    'SELECT COUNT(*) AS total FROM consultations WHERE PatientID = ?'
 );
 mysqli_stmt_bind_param($consultCountStmt, 'i', $patient['PatientID']);
 mysqli_stmt_execute($consultCountStmt);
@@ -192,9 +191,7 @@ $consultCount = mysqli_fetch_assoc($consultCountResult);
 // Get total appointments count
 $apptCountStmt = mysqli_prepare(
     $conn,
-    'SELECT COUNT(*) AS total
-     FROM appointments
-     WHERE PatientID = ?'
+    'SELECT COUNT(*) AS total FROM appointments WHERE PatientID = ?'
 );
 mysqli_stmt_bind_param($apptCountStmt, 'i', $patient['PatientID']);
 mysqli_stmt_execute($apptCountStmt);
@@ -208,10 +205,7 @@ $latestVitals = null;
 $vitalsStmt = mysqli_prepare(
     $conn,
     'SELECT BloodPressure, Temperature, PulseRate, Weight, Height, RecordedAt
-     FROM vitals
-     WHERE PatientID = ?
-     ORDER BY VitalID DESC
-     LIMIT 1'
+     FROM vitals WHERE PatientID = ? ORDER BY VitalID DESC LIMIT 1'
 );
 mysqli_stmt_bind_param($vitalsStmt, 'i', $patient['PatientID']);
 mysqli_stmt_execute($vitalsStmt);
@@ -236,9 +230,7 @@ if ($latestVitals && $latestVitals['Weight'] > 0 && $latestVitals['Height'] > 0)
 $lastCheckup = null;
 $lastCheckupStmt = mysqli_prepare(
     $conn,
-    'SELECT MAX(ConsultationDate) AS last_checkup
-     FROM consultations
-     WHERE PatientID = ?'
+    'SELECT MAX(ConsultationDate) AS last_checkup FROM consultations WHERE PatientID = ?'
 );
 mysqli_stmt_bind_param($lastCheckupStmt, 'i', $patient['PatientID']);
 mysqli_stmt_execute($lastCheckupStmt);
@@ -250,7 +242,7 @@ $lastCheckup = $lastCheckupRow['last_checkup'] ?? null;
 $activeMeds = [];
 $medsStmt = mysqli_prepare(
     $conn,
-    'SELECT pi.MedicineName, pi.Dosage, pi.Frequency, p.PrescribedDate
+    'SELECT pi.MedicineName, pi.Dosage, pi.Frequency, p.PrescribedDate, NULL AS Form
      FROM prescription_items pi
      INNER JOIN prescriptions p ON pi.PrescriptionID = p.PrescriptionID
      INNER JOIN consultations c ON p.ConsultationID = c.ConsultationID
@@ -268,7 +260,7 @@ if (empty($activeMeds)) {
     foreach (preg_split('/[\r\n,]+/', $patient['CurrentMedication'] ?? '') as $medName) {
         $medName = trim($medName);
         if ($medName !== '') {
-            $activeMeds[] = ['MedicineName' => $medName, 'Dosage' => null, 'Frequency' => null, 'PrescribedDate' => null];
+            $activeMeds[] = ['MedicineName' => $medName, 'Dosage' => null, 'Frequency' => null, 'PrescribedDate' => null, 'Form' => 'tablet'];
         }
     }
 }
@@ -469,77 +461,143 @@ function getNotifDotColor($type) {
     <div class="health-summary">
       <div class="panel-head">
         <h2>Your Health Summary</h2>
-        <a href="consultation_history.php">View history</a>
+        <a href="consultation_history.php">View full history</a>
       </div>
 
-      <div class="hs-grid">
-
-        <div class="hs-stat">
-          <div class="hs-value"><?php echo $bmi ? $bmi : '—'; ?></div>
-          <div class="hs-label">BMI</div>
-          <?php if ($bmiCategory): ?>
-          <div class="hs-hint"><?php echo htmlspecialchars($bmiCategory); ?></div>
-          <?php endif; ?>
-        </div>
-
-        <div class="hs-stat">
-          <div class="hs-value"><?php echo htmlspecialchars($patient['BloodType'] ?? '—'); ?></div>
-          <div class="hs-label">Blood Type</div>
-        </div>
-
-        <div class="hs-stat">
-          <div class="hs-value"><?php echo $lastCheckup ? date('M j, Y', strtotime($lastCheckup)) : '—'; ?></div>
-          <div class="hs-label">Last Check-up</div>
-        </div>
-
-        <div class="hs-block">
-          <div class="hs-section-title">Active Medications</div>
-          <?php if (!empty($activeMeds)): ?>
-          <ul class="hs-med-list">
-            <?php foreach ($activeMeds as $med): ?>
-            <li>
-              <span class="hs-med-name"><?php echo htmlspecialchars($med['MedicineName']); ?></span>
-              <?php if (!empty($med['Dosage'])): ?>
-              <span class="hs-med-detail"><?php echo htmlspecialchars($med['Dosage']); ?></span>
-              <?php endif; ?>
-              <?php if (!empty($med['Frequency'])): ?>
-              <span class="hs-med-detail">· <?php echo htmlspecialchars($med['Frequency']); ?></span>
-              <?php endif; ?>
-            </li>
-            <?php endforeach; ?>
-          </ul>
-          <?php else: ?>
-          <div class="hs-empty">None listed</div>
-          <?php endif; ?>
-        </div>
-
-        <div class="hs-block">
-          <div class="hs-section-title">Upcoming Follow-up</div>
-          <?php if ($nextFollowUp || $followUpFallback): ?>
-            <?php $fu = $nextFollowUp ?? $followUpFallback; ?>
-            <div class="hs-followup">
-              <div class="hs-value"><?php echo date('M j, Y', strtotime($fu['FollowUpDate'])); ?></div>
-              <div class="hs-hint"><?php echo htmlspecialchars($fu['DepartmentName'] ?? 'Department appointment'); ?></div>
-            </div>
-          <?php else: ?>
-          <div class="hs-empty">No follow-up scheduled</div>
-          <?php endif; ?>
-        </div>
-
-        <div class="hs-block hs-block-wide">
-          <div class="hs-section-title">Recent Vitals</div>
-          <?php if ($latestVitals): ?>
-          <div class="hs-vitals">
-            <span>BP <strong><?php echo htmlspecialchars($latestVitals['BloodPressure'] ?? '—'); ?></strong></span>
-            <span>Temp <strong><?php echo htmlspecialchars($latestVitals['Temperature'] ?? '—'); ?>°C</strong></span>
-            <span>Pulse <strong><?php echo htmlspecialchars($latestVitals['PulseRate'] ?? '—'); ?> bpm</strong></span>
-            <span>Weight <strong><?php echo htmlspecialchars($latestVitals['Weight'] ?? '—'); ?> kg</strong></span>
-            <span>Height <strong><?php echo htmlspecialchars($latestVitals['Height'] ?? '—'); ?> cm</strong></span>
+      <div class="hs-zones">
+        
+        <!-- ZONE 1: YOUR NUMBERS -->
+        <div class="hs-zone">
+          <div class="hs-zone-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <span>Your Numbers</span>
           </div>
-          <div class="hs-vitals-date">Recorded <?php echo date('M j, Y g:i A', strtotime($latestVitals['RecordedAt'])); ?></div>
-          <?php else: ?>
-          <div class="hs-empty">No vital signs recorded yet</div>
-          <?php endif; ?>
+          
+          <div class="hs-numbers-grid">
+            <!-- BMI -->
+            <div class="hs-metric-card <?php echo $bmiCategory === 'Normal' ? 'status-good' : ($bmiCategory === 'Overweight' ? 'status-warn' : 'status-bad'); ?>">
+              <div class="hs-metric-label">BMI</div>
+              <div class="hs-metric-value"><?php echo $bmi ? $bmi : '—'; ?></div>
+              <?php if ($bmiCategory): ?>
+                <div class="hs-metric-status"><?php echo htmlspecialchars($bmiCategory); ?></div>
+              <?php endif; ?>
+            </div>
+
+            <!-- Blood Type -->
+            <div class="hs-metric-card status-neutral">
+              <div class="hs-metric-label">Blood Type</div>
+              <div class="hs-metric-value"><?php echo htmlspecialchars($patient['BloodType'] ?? '—'); ?></div>
+            </div>
+
+            <!-- Vitals (Grouped together as one card) -->
+            <?php if ($latestVitals): ?>
+            <div class="hs-metric-card hs-vitals-card">
+              <div class="hs-metric-label">Recent Vitals</div>
+              <div class="hs-vitals-list">
+                <div class="hs-vital-item <?php echo (float)$latestVitals['Temperature'] > 37.5 ? 'status-bad' : 'status-good'; ?>">
+                  <span class="vital-name">Temp</span>
+                  <span class="vital-val"><?php echo htmlspecialchars($latestVitals['Temperature']); ?>°C</span>
+                  <span class="vital-tag"><?php echo (float)$latestVitals['Temperature'] > 37.5 ? 'Fever' : 'Normal'; ?></span>
+                </div>
+                <div class="hs-vital-item status-good">
+                  <span class="vital-name">BP</span>
+                  <span class="vital-val"><?php echo htmlspecialchars($latestVitals['BloodPressure']); ?></span>
+                  <span class="vital-tag">Normal</span>
+                </div>
+                <div class="hs-vital-item status-good">
+                  <span class="vital-name">Pulse</span>
+                  <span class="vital-val"><?php echo htmlspecialchars($latestVitals['PulseRate']); ?> <small>bpm</small></span>
+                  <span class="vital-tag">Normal</span>
+                </div>
+                <div class="hs-vital-item status-neutral">
+                  <span class="vital-name">Wt / Ht</span>
+                  <span class="vital-val"><?php echo htmlspecialchars($latestVitals['Weight']); ?>kg / <?php echo htmlspecialchars($latestVitals['Height']); ?>cm</span>
+                </div>
+              </div>
+              <div class="hs-vitals-date">Recorded <?php echo date('M j, Y', strtotime($latestVitals['RecordedAt'])); ?></div>
+            </div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <!-- ZONE 2: WHAT YOU'RE TAKING -->
+        <div class="hs-zone">
+          <div class="hs-zone-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+            <span>What You're Taking</span>
+          </div>
+          
+          <div class="hs-meds-container">
+            <?php if (!empty($activeMeds)): ?>
+              <ul class="hs-med-list">
+                <?php foreach ($activeMeds as $med): ?>
+                <li class="hs-med-item">
+                  <div class="hs-med-icon">
+                    <?php 
+                      $form = strtolower($med['Form'] ?? 'tablet'); // Fallback
+                      if (strpos($form, 'spray') !== false): ?>
+                        <!-- Nasal Spray Icon -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v4M14 2v4M8 6h8v2H8zM12 8v10a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V8"/></svg>
+                      <?php elseif (strpos($form, 'liquid') !== false || strpos($form, 'syrup') !== false): ?>
+                        <!-- Liquid Bottle Icon -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2h8v4H8zM6 6h12v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6z"/><path d="M12 10v4"/></svg>
+                      <?php else: ?>
+                        <!-- Tablet/Capsule Icon -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="8" rx="4"/><path d="M12 8v8"/></svg>
+                      <?php endif; ?>
+                  </div>
+                  <div class="hs-med-info">
+                    <div class="hs-med-name"><?php echo htmlspecialchars($med['MedicineName']); ?></div>
+                    <div class="hs-med-schedule"><?php echo !empty($med['Frequency']) ? htmlspecialchars($med['Frequency']) : 'As prescribed'; ?></div>
+                    <?php if (!empty($med['Dosage'])): ?>
+                      <div class="hs-med-dosage"><?php echo htmlspecialchars($med['Dosage']); ?></div>
+                    <?php endif; ?>
+                  </div>
+                </li>
+                <?php endforeach; ?>
+              </ul>
+            <?php else: ?>
+              <div class="hs-empty">No active medications</div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <!-- ZONE 3: WHAT'S NEXT -->
+        <div class="hs-zone">
+          <div class="hs-zone-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            <span>Key Dates</span> <!-- Renamed -->
+          </div>
+          
+          <div class="hs-next-list">
+            <!-- 1. Upcoming Appointment (Priority) -->
+            <?php if ($appointment): ?>
+              <div class="hs-next-item priority-high">
+                <div class="hs-next-date"><?php echo date('M j, Y', strtotime($appointment['AppointmentDate'])); ?></div>
+                <div class="hs-next-title"><?php echo htmlspecialchars($appointment['DepartmentName']); ?></div>
+                <div class="hs-next-badge">Upcoming Visit</div>
+              </div>
+            <?php endif; ?>
+
+            <!-- 2. Surgery / Follow-up (If different from above) -->
+            <?php if ($nextFollowUp || $followUpFallback): ?>
+              <?php $fu = $nextFollowUp ?? $followUpFallback; 
+              // Avoid showing duplicate if it's the same as the upcoming appointment
+              if (!$appointment || $fu['FollowUpDate'] !== $appointment['AppointmentDate']): ?>
+                <div class="hs-next-item priority-high">
+                  <div class="hs-next-date"><?php echo date('M j, Y', strtotime($fu['FollowUpDate'])); ?></div>
+                  <div class="hs-next-title"><?php echo htmlspecialchars($fu['DepartmentName'] ?? 'Follow-up'); ?></div>
+                  <div class="hs-next-badge">Surgery</div>
+                </div>
+              <?php endif; ?>
+            <?php endif; ?>
+
+            <!-- 3. Last Checkup (Routine) -->
+            <div class="hs-next-item priority-low">
+              <div class="hs-next-date"><?php echo $lastCheckup ? date('M j, Y', strtotime($lastCheckup)) : '—'; ?></div>
+              <div class="hs-next-title">Last Check-up</div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -665,37 +723,36 @@ function getNotifDotColor($type) {
           </div>
 
           <?php if ($queue): ?>
-          <div class="queue-number">
-            <div class="queue-label">Your Queue Number</div>
-            <div class="queue-value">Q-<?php echo htmlspecialchars($queue['QueueNumber']); ?></div>
-            <span class="queue-status-pill">
-              <span class="dot"></span>
-              <?php echo htmlspecialchars($queue['QueueStatus']); ?>
-            </span>
-          </div>
-          <div class="queue-details">
-            <div class="queue-row">
-              <span class="label">Now Serving</span>
-              <span class="value"><?php echo $nowServing ? 'Q-' . htmlspecialchars($nowServing['QueueNumber']) : '—'; ?></span>
+            <!-- Active Queue: Keep the full UI -->
+            <div class="queue-number">
+              <div class="queue-label">Your Queue Number</div>
+              <div class="queue-value">Q-<?php echo htmlspecialchars($queue['QueueNumber']); ?></div>
+              <span class="queue-status-pill">
+                <span class="dot"></span>
+                <?php echo htmlspecialchars($queue['QueueStatus']); ?>
+              </span>
             </div>
-            <div class="queue-row">
-              <span class="label">Scheduled</span>
-              <span class="value"><?php echo date('g:i A', strtotime($queue['QueueTime'])); ?></span>
+            <div class="queue-details">
+              <div class="queue-row">
+                <span class="label">Now Serving</span>
+                <span class="value"><?php echo $nowServing ? 'Q-' . htmlspecialchars($nowServing['QueueNumber']) : '—'; ?></span>
+              </div>
+              <div class="queue-row">
+                <span class="label">Scheduled</span>
+                <span class="value"><?php echo date('g:i A', strtotime($queue['QueueTime'])); ?></span>
+              </div>
             </div>
-            <div class="queue-row">
-              <span class="label">Department</span>
-              <span class="value"><?php echo htmlspecialchars($queue['DepartmentName']); ?></span>
-            </div>
-          </div>
           <?php else: ?>
-          <div class="queue-number">
-            <div class="queue-label">No Active Queue</div>
-            <div class="queue-value" style="font-size: 1.2rem; color: var(--color-ink-soft);">—</div>
-            <span class="queue-status-pill" style="background: #E5E7EB; color: #6B7280;">No Queue</span>
-          </div>
-          <div class="queue-details">
-            <div class="queue-row"><span class="label">Status</span><span class="value">Not in queue</span></div>
-          </div>
+            <!-- No Queue: Collapse to a single, clean line -->
+            <div class="queue-empty-state">
+              <div class="queue-empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+              </div>
+              <div class="queue-empty-text">
+                <strong>No Active Queue</strong>
+                <span>You are not currently in a queue today.</span>
+              </div>
+            </div>
           <?php endif; ?>
         </div>
 
@@ -705,12 +762,17 @@ function getNotifDotColor($type) {
             <a href="notifications.php">View All</a>
           </div>
 
-          <?php if (!empty($notifications)): ?>
-            <?php foreach ($notifications as $notif): ?>
+          <?php if (!empty($groupedNotifications)): ?>
+            <?php foreach ($groupedNotifications as $notif): ?>
               <div class="notif-item <?php echo !$notif['IsRead'] ? 'unread' : ''; ?>">
                 <span class="notif-dot <?php echo getNotifDotColor($notif['Type']); ?>"></span>
                 <div>
-                  <div class="notif-text"><?php echo htmlspecialchars($notif['Message']); ?></div>
+                  <div class="notif-text">
+                    <?php echo htmlspecialchars($notif['Message']); ?>
+                    <?php if (isset($notif['Count']) && $notif['Count'] > 1): ?>
+                      <span class="notif-badge">Rescheduled <?php echo $notif['Count']; ?>x</span>
+                    <?php endif; ?>
+                  </div>
                   <div class="notif-time"><?php echo timeAgo($notif['DisplayTime']); ?></div>
                 </div>
               </div>

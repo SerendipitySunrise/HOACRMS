@@ -596,16 +596,80 @@ $waitingPatients = array_filter(
 | NOTIFICATIONS
 |--------------------------------------------------------------------------
 |
-| There is currently no notifications table in the database structure
-| you provided.
-|
-| Therefore, DO NOT create fake notifications.
+| Notifications are stored per-user in the `notifications` table.
+| Handle mark-read actions before rendering.
 |
 */
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    if (isset($_POST['mark_all_read'])) {
+
+        $stmtMarkAll = $conn->prepare(
+            'UPDATE notifications SET IsRead = 1, ReadAt = NOW()
+              WHERE UserID = ? AND IsRead = 0'
+        );
+
+        if ($stmtMarkAll) {
+            $stmtMarkAll->bind_param('i', $userID);
+            $stmtMarkAll->execute();
+            $stmtMarkAll->close();
+        }
+
+        header('Location: doctor_dashboard.php');
+        exit;
+    }
+}
+
+// Unread count (for the bell badge)
+$stmtCount = $conn->prepare(
+    'SELECT COUNT(*) AS cnt
+       FROM notifications
+      WHERE UserID = ? AND IsRead = 0'
+);
+
+$stmtCount->bind_param('i', $userID);
+$stmtCount->execute();
+$notificationCount = (int) $stmtCount->get_result()->fetch_assoc()['cnt'];
+$stmtCount->close();
+
+// Recent notifications for the list
 $notifications = [];
 
-$notificationCount = 0;
+$stmtNotif = $conn->prepare(
+    "SELECT
+         NotificationID,
+         Title,
+         Message,
+         CreatedAt,
+         IsRead + 0 AS IsReadInt
+       FROM notifications
+      WHERE UserID = ?
+      ORDER BY CreatedAt DESC, NotificationID DESC
+      LIMIT 6"
+);
+
+$stmtNotif->bind_param('i', $userID);
+$stmtNotif->execute();
+$resultNotif = $stmtNotif->get_result();
+
+while ($rowNotif = $resultNotif->fetch_assoc()) {
+
+    $notifMessage = $rowNotif['Title'];
+
+    if (!empty($rowNotif['Message'])) {
+        $notifMessage .= ' — ' . $rowNotif['Message'];
+    }
+
+    $notifications[] = [
+        'id' => (int) $rowNotif['NotificationID'],
+        'message' => $notifMessage,
+        'time' => formatNotificationTime($rowNotif['CreatedAt']),
+        'is_read' => (int) $rowNotif['IsReadInt'] === 1,
+    ];
+}
+
+$stmtNotif->close();
 
 
 /*
@@ -643,6 +707,35 @@ function formatAppointmentTime($time)
         'g:i A',
         strtotime($time)
     );
+}
+
+function formatNotificationTime($dateTime)
+{
+    if (empty($dateTime)) {
+        return '';
+    }
+
+    $ts = strtotime($dateTime);
+
+    if ($ts === false) {
+        return '';
+    }
+
+    $diff = time() - $ts;
+
+    if ($diff < 60) {
+        return 'just now';
+    }
+
+    if ($diff < 3600) {
+        return floor($diff / 60) . 'm ago';
+    }
+
+    if ($diff < 86400) {
+        return floor($diff / 3600) . 'h ago';
+    }
+
+    return date('M j, g:i A', $ts);
 }
 
 ?>
@@ -935,7 +1028,7 @@ function formatAppointmentTime($time)
         </div>
 
 
-        <div class="notif-bell">
+        <div class="notif-bell" title="<?= $notificationCount > 0 ? $notificationCount . ' unread notification' . ($notificationCount > 1 ? 's' : '') : 'No new notifications' ?>">
 
             <svg
                 viewBox="0 0 24 24"
@@ -975,14 +1068,17 @@ function formatAppointmentTime($time)
 
     <div class="doctor-stats">
 
-
         <div class="doctor-stat-card">
+
+            <div class="doctor-stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            </div>
 
             <div class="doctor-stat-label">
                 Today's Appointments
             </div>
 
-            <div class="doctor-stat-value">
+            <div class="doctor-stat-value slate">
                 <?= $counts['today'] ?>
             </div>
 
@@ -990,6 +1086,10 @@ function formatAppointmentTime($time)
 
 
         <div class="doctor-stat-card">
+
+            <div class="doctor-stat-icon orange">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
 
             <div class="doctor-stat-label">
                 Waiting
@@ -1004,6 +1104,10 @@ function formatAppointmentTime($time)
 
         <div class="doctor-stat-card">
 
+            <div class="doctor-stat-icon purple">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2H2"/><path d="M22 20H2"/><path d="M6 2v4a4 4 0 0 0 4 4 4 4 0 0 0 4-4V2"/><path d="M6 22v-4a4 4 0 0 1 4-4 4 4 0 0 1 4 4v4"/><path d="M8 12h8"/></svg>
+            </div>
+
             <div class="doctor-stat-label">
                 In Progress
             </div>
@@ -1016,6 +1120,10 @@ function formatAppointmentTime($time)
 
 
         <div class="doctor-stat-card">
+
+            <div class="doctor-stat-icon green">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
 
             <div class="doctor-stat-label">
                 Completed
@@ -1035,7 +1143,13 @@ function formatAppointmentTime($time)
          QUICK ACTIONS
     ======================================================= -->
 
-    <div class="doctor-quick-actions">
+    <div class="doctor-actions-zone">
+
+        <div class="doctor-actions-label">
+            Quick actions
+        </div>
+
+        <div class="doctor-quick-actions">
 
 
         <a
@@ -1134,6 +1248,7 @@ function formatAppointmentTime($time)
 
         <?php endif; ?>
 
+    </div>
 
     </div>
 
@@ -1203,7 +1318,13 @@ function formatAppointmentTime($time)
 
                     <div class="notification-empty">
 
-                        No appointments scheduled for today.
+                        <svg class="ne-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+
+                        <div class="ne-text">
+
+                            No appointments scheduled for today.
+
+                        </div>
 
                     </div>
 
@@ -1432,9 +1553,21 @@ function formatAppointmentTime($time)
 
                     <span class="panel-head-meta">
 
-                        <?= $notificationCount ?> new
+                        <?= $notificationCount ?> unread
 
                     </span>
+
+                    <?php if ($notificationCount > 0): ?>
+
+                        <form method="POST" action="doctor_dashboard.php" class="mark-all-form">
+
+                            <button type="submit" name="mark_all_read" value="1" class="mark-all-read-btn">
+                                Mark all read
+                            </button>
+
+                        </form>
+
+                    <?php endif; ?>
 
                 </div>
 
@@ -1451,7 +1584,13 @@ function formatAppointmentTime($time)
 
                     <div class="notification-empty">
 
-                        No notifications.
+                        <svg class="ne-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+
+                        <div class="ne-text">
+
+                            No notifications.
+
+                        </div>
 
                     </div>
 
@@ -1462,7 +1601,7 @@ function formatAppointmentTime($time)
                     <?php foreach ($notifications as $notification): ?>
 
 
-                        <div class="notification-item">
+                        <div class="notification-item<?= $notification['is_read'] ? '' : ' unread' ?>">
 
 
                             <div class="notification-icon">

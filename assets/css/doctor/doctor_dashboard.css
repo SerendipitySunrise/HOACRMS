@@ -300,7 +300,26 @@ body {
   border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 18px;
+  display: flex;
+  flex-direction: column;
 }
+
+.doctor-stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.doctor-stat-icon svg { width: 17px; height: 17px; }
+.doctor-stat-icon.orange { background: #fef3c7; color: var(--color-orange); }
+.doctor-stat-icon.purple { background: #ede9fe; color: var(--color-purple); }
+.doctor-stat-icon.green { background: #d1fae5; color: var(--color-green); }
 
 .doctor-stat-label {
   font-size: 0.8rem;
@@ -312,6 +331,11 @@ body {
   font-size: 1.7rem;
   font-weight: 800;
   color: var(--color-ink);
+  margin-top: auto;
+}
+
+.doctor-stat-value.slate {
+  color: #64748b;
 }
 
 .doctor-stat-value.orange {
@@ -326,11 +350,25 @@ body {
   color: var(--color-purple);
 }
 
-/* ---------- QUICK ACTIONS ---------- */
+/* ---------- QUICK ACTIONS ZONE ---------- */
+.doctor-actions-zone {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.doctor-actions-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-soft);
+  margin-bottom: 10px;
+}
+
 .doctor-quick-actions {
   display: flex;
   gap: 12px;
-  margin-top: 18px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -2561,3 +2599,66 @@ body {
   height: 16px;
 }
 .tl-btn-report:hover { background: #ede9fe; }
+
+/* -------------------------------------------------------
+   COMPACT EMPTY STATES + MARK-ALL-READ (doctor dashboard)
+------------------------------------------------------- */
+.notification-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 26px 16px;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  background: #fafbfc;
+}
+.notification-empty .ne-icon {
+  width: 26px;
+  height: 26px;
+  color: #cbd5e1;
+}
+.notification-empty .ne-text {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Unread notification row */
+.notification-item {
+  border-left: 3px solid transparent;
+}
+.notification-item.unread {
+  border-left-color: var(--color-primary);
+}
+.notification-item.unread .notification-text {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.notification-item.unread .notification-icon {
+  background: var(--color-primary-tint);
+  color: var(--color-primary-hover);
+}
+
+/* Mark all read */
+.mark-all-form {
+  display: inline;
+}
+.mark-all-read-btn {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  color: var(--color-blue);
+  font-family: var(--font-family);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.mark-all-read-btn:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}

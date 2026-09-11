@@ -26,7 +26,7 @@ $logoutMessage = isset($_GET['logout']);
             <li><a href="#contact">Contact</a></li>
         </ul>
         <div class="nav-actions">
-            <a href="auth/login.php" class="nav-signin">Sign In</a>
+            <a href="auth/login.php" class="nav-signin">Log In</a>
             <a href="portal-select.php?action=register" class="btn-primary">Get started</a>
         </div>
     </header>

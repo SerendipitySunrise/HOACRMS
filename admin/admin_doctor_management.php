@@ -412,7 +412,7 @@ $doctors = fetchDoctors($conn);
     <div class="staff-topbar">
       <div class="page-header">
         <h1>Doctor Management</h1>
-        <p id="today-date"></p>
+        <p id="doctor-count"><?php echo count($doctors); ?> doctors</p>
       </div>
       <button class="notif-bell" aria-label="Notifications">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
@@ -441,11 +441,24 @@ $doctors = fetchDoctors($conn);
         </div>
       <?php endif; ?>
 
-      <!-- Doctor Cards Grid -->
-      <div class="doctor-grid" id="doctor-grid">
-        <!-- Rendered by JavaScript -->
+      <!-- Doctor Table -->
+      <div class="table-wrap">
+        <table class="staff-table">
+          <thead>
+            <tr>
+              <th>Doctor</th>
+              <th>Department</th>
+              <th>Specialization</th>
+              <th>Schedule</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="doctor-rows">
+            <!-- Rendered by JavaScript -->
+          </tbody>
+        </table>
       </div>
-    </div>
 
   </main>
 </div>
@@ -666,76 +679,66 @@ $doctors = fetchDoctors($conn);
 
   // ================= RENDER DOCTOR CARDS =================
   function renderDoctors() {
-    if (!doctors.length) {
-      grid.innerHTML = `<div class="empty-state">No doctors found. Click "Add New Doctor" to create one.</div>`;
-      return;
-    }
+  const tbody = document.getElementById('doctor-rows');
+  const doctorCount = document.getElementById('doctor-count');
 
-    let html = '';
-    doctors.forEach((d, i) => {
-      const statusClass = getStatusClass(d.status);
-      const initials = getInitials(d.name);
-      const activeBadge = d.active ? 'Active' : 'Inactive';
-      const activeClass = d.active ? 'badge-active' : 'badge-inactive';
+  if (doctorCount) {
+    doctorCount.textContent = `${doctors.length} doctor${doctors.length === 1 ? '' : 's'}`;
+  }
 
-      html += `
-        <div class="doctor-card">
-          <div class="doctor-card-header">
-            <div class="doctor-avatar">${initials}</div>
-            <div class="doctor-card-title">
-              <div class="doctor-name">${d.name}</div>
-              <div class="doctor-specialty">${d.department || d.specialization || 'General Practice'}</div>
-            </div>
-            <div class="doctor-license-badge">${d.license || '—'}</div>
-          </div>
-          <div class="doctor-status-row">
-            <span class="doctor-status ${statusClass}">${d.status}</span>
-            <span class="doctor-active-badge ${activeClass}">${activeBadge}</span>
-          </div>
-          <div class="doctor-stats">
-            <div class="stat-item">
-              <div class="stat-number">${d.experience}yr</div>
-              <div class="stat-label">Experience</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-number">${d.department || '—'}</div>
-              <div class="stat-label">Department</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-number">${d.patients.toLocaleString()}</div>
-              <div class="stat-label">Patients</div>
-            </div>
-          </div>
-          <div class="doctor-duty">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            ${d.startTime || '08:00'} - ${d.endTime || '17:00'}
-          </div>
-          <div class="doctor-actions">
-            <button type="button" class="btn-edit" data-index="${i}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-              Edit
+  if (!doctors.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-row">No doctors found. Click "Add New Doctor" to create one.</td></tr>`;
+    return;
+  }
+
+  let html = '';
+  doctors.forEach((d, i) => {
+    const statusClass = d.status.toLowerCase().replace(/\s+/g, '-');
+    const activeBadge = d.active ? 'Active' : 'Inactive';
+    const activeClass = d.active ? 'badge-active' : 'badge-inactive';
+    const schedule = `${d.startTime || '08:00'} - ${d.endTime || '17:00'}`;
+
+    html += `
+      <tr>
+        <td>
+          <div class="doctor-name">${d.name}</div>
+          <div class="doctor-email">${d.email || ''}</div>
+        </td>
+        <td>${d.department || '—'}</td>
+        <td>${d.specialization || '—'}</td>
+        <td><span class="schedule-time">${schedule}</span></td>
+        <td>
+          <span class="status-badge ${statusClass}">${d.status}</span>
+          <span class="active-badge ${activeClass}">${activeBadge}</span>
+        </td>
+
+        <td>
+          <div class="action-group">
+            <button class="action-btn edit-btn" data-index="${i}">
+              <svg viewBox="0 0 24 24" ...><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
             </button>
-            <form class="toggle-form" action="admin_doctor_management.php" method="POST">
+            <form class="toggle-form" action="admin_doctor_management.php" method="POST" style="display:inline;">
               <input type="hidden" name="action" value="toggle">
               <input type="hidden" name="user_id" value="${d.userId}">
               <input type="hidden" name="current_status" value="${d.userStatus}">
-              <button type="submit" class="btn-toggle">${d.active ? 'Deactivate' : 'Activate'}</button>
+              <button type="submit" class="action-btn toggle-btn">${d.active ? 'Deactivate' : 'Activate'}</button>
             </form>
           </div>
-        </div>
-      `;
-    });
-    grid.innerHTML = html;
+        </td>
+      </tr>
+    `;
+  });
+  tbody.innerHTML = html;
 
-    // Attach edit events
-    document.querySelectorAll('.btn-edit').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = +btn.dataset.index;
-        const doctor = doctors[idx];
-        if (doctor) openModal(doctor, idx);
-      });
+  // Attach edit events
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = +btn.dataset.index;
+      const doctor = doctors[idx];
+      if (doctor) openModal(doctor, idx);
     });
-  }
+  });
+}
 
   // ================= SAVE DOCTOR (validation only; form POSTs to itself) =================
   function validateDoctorForm() {
@@ -774,9 +777,7 @@ $doctors = fetchDoctors($conn);
   renderDoctors();
 
   // Set today's date
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  document.getElementById('today-date').textContent = dateStr;
+  
 </script>
 </body>
 </html>

@@ -127,6 +127,50 @@ mysqli_stmt_bind_param($stmt, 'i', $departmentId);
 mysqli_stmt_execute($stmt);
 $vitalsToday = (int) mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['cnt'];
 
+// Yesterday's totals (single aggregate, for trend context)
+$yesterdayStats = ['appointments' => 0, 'checked' => 0, 'queue' => 0, 'completed' => 0, 'vitals' => 0];
+$stmt = mysqli_prepare(
+    $conn,
+    "SELECT
+       (SELECT COUNT(*) FROM appointments
+         WHERE DepartmentID = ? AND AppointmentDate = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+           AND Status != '" . APPT_STATUS_CANCELLED . "') AS appointments,
+       (SELECT COUNT(*) FROM queue q
+         INNER JOIN appointments a ON q.AppointmentID = a.AppointmentID
+         WHERE a.DepartmentID = ? AND q.QueueDate = DATE_SUB(CURDATE(), INTERVAL 1 DAY)) AS checked,
+       (SELECT COUNT(*) FROM queue q
+         INNER JOIN appointments a ON q.AppointmentID = a.AppointmentID
+         WHERE a.DepartmentID = ? AND q.QueueDate = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+           AND q.Status != '" . QUEUE_STATUS_COMPLETED . "') AS queue,
+       (SELECT COUNT(*) FROM queue q
+         INNER JOIN appointments a ON q.AppointmentID = a.AppointmentID
+         WHERE a.DepartmentID = ? AND q.QueueDate = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+           AND q.Status = '" . QUEUE_STATUS_COMPLETED . "') AS completed,
+       (SELECT COUNT(DISTINCT v.PatientID) FROM vitals v
+         INNER JOIN appointments a ON v.AppointmentID = a.AppointmentID
+         WHERE a.DepartmentID = ? AND v.RecordedAt >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+           AND v.RecordedAt < CURDATE()) AS vitals"
+);
+mysqli_stmt_bind_param($stmt, 'iiiii', $departmentId, $departmentId, $departmentId, $departmentId, $departmentId);
+mysqli_stmt_execute($stmt);
+$yesterdayRow = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+if ($yesterdayRow) {
+    foreach ($yesterdayRow as $key => $val) {
+        $yesterdayStats[$key] = (int) $val;
+    }
+}
+
+$nowLabel = date('g:i A');
+
+// Trend chips ("vs yesterday"), empty string = nothing meaningful to compare
+$deltaChips = [
+    'appointments' => statDelta($todaysAppointments, $yesterdayStats['appointments']),
+    'vitals'       => statDelta($vitalsToday, $yesterdayStats['vitals']),
+    'checked'      => statDelta($checkedIn, $yesterdayStats['checked']),
+    'queue'        => statDelta($inQueue, $yesterdayStats['queue']),
+    'completed'    => statDelta($completedToday, $yesterdayStats['completed']),
+];
+
 /* -------------------------------------------------------
    PENDING VITALS ALERT
    (Checked-in patients today with no vitals recorded yet)
@@ -241,6 +285,25 @@ function statusLabel(string $status): string
         'waiting' => 'waiting',
         default => strtolower($status),
     };
+}
+
+/**
+ * Small "vs yesterday" trend chip. Returns raw HTML (numbers are ints,
+ * markup is static) or '' when there's nothing meaningful to compare.
+ */
+function statDelta(int $todayCount, int $yesterdayCount): string
+{
+    $diff = $todayCount - $yesterdayCount;
+    if ($diff > 0) {
+        return '<span class="stat-delta up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>+' . $diff . ' vs yesterday</span>';
+    }
+    if ($diff < 0) {
+        return '<span class="stat-delta down"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>' . $diff . ' vs yesterday</span>';
+    }
+    if ($yesterdayCount > 0) {
+        return '<span class="stat-delta flat">same as yesterday</span>';
+    }
+    return '';
 }
 ?>
 <!DOCTYPE html>
@@ -381,27 +444,71 @@ function statusLabel(string $status): string
     <?php endif; ?>
 
     <!-- STATS -->
-    <div class="staff-stats">
-      <div class="staff-stat-card">
-        <div class="staff-stat-label">Today's Appointments</div>
-        <div class="staff-stat-value"><?php echo $todaysAppointments; ?></div>
+    <div class="staff-stats-stack">
+
+      <!-- Context stats (not part of the day's patient-flow pipeline) -->
+      <div class="staff-stats-context">
+        <div class="staff-stat-card">
+          <div class="skeleton"></div>
+          <div class="staff-stat-top">
+            <div class="staff-stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            </div>
+            <div class="staff-stat-label">Today's Appointments</div>
+          </div>
+          <div class="staff-stat-value"><?php echo $todaysAppointments; ?></div>
+          <div class="staff-stat-meta">as of <?php echo htmlspecialchars($nowLabel); ?><?php if ($deltaChips['appointments'] !== '') echo '&nbsp;<span class="dot-sep">·</span>&nbsp;' . $deltaChips['appointments']; ?></div>
+        </div>
+        <div class="staff-stat-card">
+          <div class="skeleton"></div>
+          <div class="staff-stat-top">
+            <div class="staff-stat-icon teal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <div class="staff-stat-label">Vitals Done</div>
+          </div>
+          <div class="staff-stat-value teal"><?php echo $vitalsToday; ?></div>
+          <div class="staff-stat-meta">as of <?php echo htmlspecialchars($nowLabel); ?><?php if ($deltaChips['vitals'] !== '') echo '&nbsp;<span class="dot-sep">·</span>&nbsp;' . $deltaChips['vitals']; ?></div>
+        </div>
       </div>
-      <div class="staff-stat-card">
-        <div class="staff-stat-label">Checked In</div>
-        <div class="staff-stat-value blue"><?php echo $checkedIn; ?></div>
+
+      <!-- Patient-flow pipeline: Checked In → In Queue → Completed -->
+      <div class="staff-flow">
+        <div class="staff-flow-step">
+          <div class="skeleton"></div>
+          <div class="staff-flow-icon blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
+          </div>
+          <div class="staff-flow-label">Checked In</div>
+          <div class="staff-flow-value blue"><?php echo $checkedIn; ?></div>
+          <div class="staff-stat-meta">as of <?php echo htmlspecialchars($nowLabel); ?><?php if ($deltaChips['checked'] !== '') echo '&nbsp;<span class="dot-sep">·</span>&nbsp;' . $deltaChips['checked']; ?></div>
+        </div>
+        <div class="staff-flow-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div class="staff-flow-step">
+          <div class="skeleton"></div>
+          <div class="staff-flow-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="staff-flow-label">In Queue</div>
+          <div class="staff-flow-value orange"><?php echo $inQueue; ?></div>
+          <div class="staff-stat-meta">as of <?php echo htmlspecialchars($nowLabel); ?><?php if ($deltaChips['queue'] !== '') echo '&nbsp;<span class="dot-sep">·</span>&nbsp;' . $deltaChips['queue']; ?></div>
+        </div>
+        <div class="staff-flow-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div class="staff-flow-step">
+          <div class="skeleton"></div>
+          <div class="staff-flow-icon green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="staff-flow-label">Completed</div>
+          <div class="staff-flow-value green"><?php echo $completedToday; ?></div>
+          <div class="staff-stat-meta">as of <?php echo htmlspecialchars($nowLabel); ?><?php if ($deltaChips['completed'] !== '') echo '&nbsp;<span class="dot-sep">·</span>&nbsp;' . $deltaChips['completed']; ?></div>
+        </div>
       </div>
-      <div class="staff-stat-card">
-        <div class="staff-stat-label">In Queue</div>
-        <div class="staff-stat-value orange"><?php echo $inQueue; ?></div>
-      </div>
-      <div class="staff-stat-card">
-        <div class="staff-stat-label">Completed</div>
-        <div class="staff-stat-value green"><?php echo $completedToday; ?></div>
-      </div>
-      <div class="staff-stat-card">
-        <div class="staff-stat-label">Vitals Done</div>
-        <div class="staff-stat-value teal"><?php echo $vitalsToday; ?></div>
-      </div>
+
     </div>
 
     <!-- QUICK ACTIONS -->
@@ -429,40 +536,43 @@ function statusLabel(string $status): string
           <div class="panel-head-meta"><?php echo count($scheduledToday); ?> to check in</div>
         </div>
 
-        <?php if (empty($scheduledToday)): ?>
-          <div class="empty-state">All patients checked in</div>
-        <?php else: ?>
-          <div class="queue-list">
-            <?php foreach ($scheduledToday as $appt): ?>
-              <div class="queue-list-row">
-                <div class="queue-info">
-                  <div class="queue-name"><?php echo htmlspecialchars($appt['PatientName']); ?></div>
-                  <div class="queue-sub">
-                    <?php echo htmlspecialchars(formatTimeRange($appt['AppointmentTime'])); ?>
-                    <?php if (!empty($appt['Purpose'])): ?>
-                      | <?php echo htmlspecialchars($appt['Purpose']); ?>
+        <div class="panel-body">
+          <div class="skeleton"></div>
+          <?php if (empty($scheduledToday)): ?>
+            <div class="empty-state">All patients checked in</div>
+          <?php else: ?>
+            <div class="queue-list">
+              <?php foreach ($scheduledToday as $appt): ?>
+                <div class="queue-list-row">
+                  <div class="queue-info">
+                    <div class="queue-name"><?php echo htmlspecialchars($appt['PatientName']); ?></div>
+                    <div class="queue-sub">
+                      <?php echo htmlspecialchars(formatTimeRange($appt['AppointmentTime'])); ?>
+                      <?php if (!empty($appt['Purpose'])): ?>
+                        | <?php echo htmlspecialchars($appt['Purpose']); ?>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="vitals-indicator">
+                    <?php if ((int) $appt['vitals_today'] > 0): ?>
+                      <span class="vitals-status recorded" title="Vitals recorded today">✅ Recorded</span>
+                    <?php else: ?>
+                      <span class="vitals-status pending" title="Vitals not recorded today">⚠️ Pending</span>
                     <?php endif; ?>
                   </div>
+                  <div class="queue-actions">
+                    <a
+                      href="record_vitals.php?appointment_id=<?php echo (int) $appt['AppointmentID']; ?>&patient_id=<?php echo (int) $appt['PatientID']; ?>"
+                      class="btn-vitals-sm"
+                      title="Record vitals for this patient"
+                    >📊 Vitals</a>
+                    <a href="checkin_patient.php?appointment_id=<?php echo (int) $appt['AppointmentID']; ?>" class="btn-call">Check In</a>
+                  </div>
                 </div>
-                <div class="vitals-indicator">
-                  <?php if ((int) $appt['vitals_today'] > 0): ?>
-                    <span class="vitals-status recorded" title="Vitals recorded today">✅ Recorded</span>
-                  <?php else: ?>
-                    <span class="vitals-status pending" title="Vitals not recorded today">⚠️ Pending</span>
-                  <?php endif; ?>
-                </div>
-                <div class="queue-actions">
-                  <a
-                    href="record_vitals.php?appointment_id=<?php echo (int) $appt['AppointmentID']; ?>&patient_id=<?php echo (int) $appt['PatientID']; ?>"
-                    class="btn-vitals-sm"
-                    title="Record vitals for this patient"
-                  >📊 Vitals</a>
-                  <a href="checkin_patient.php?appointment_id=<?php echo (int) $appt['AppointmentID']; ?>" class="btn-call">Check In</a>
-                </div>
-              </div>
-            <?php endforeach; ?>
-          </div>
-        <?php endif; ?>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+        </div>
       </div>
 
       <!-- ACTIVE QUEUE -->
@@ -475,64 +585,66 @@ function statusLabel(string $status): string
           <div class="panel-head-meta"><?php echo count($activeQueue); ?> active</div>
         </div>
 
-        <?php if (empty($activeQueue)): ?>
-          <div class="empty-state">No patients in queue</div>
-        <?php else: ?>
-          <div class="queue-list">
-            <?php foreach ($activeQueue as $q): ?>
-              <?php
-                $status = strtolower($q['QueueStatus']);
-                $isHighlighted = $status === 'inconsultation';
-                $badge = queueBadge($q['DepartmentName'], (int) $q['QueueNumber']);
-                $isUrgent = strtolower($q['PriorityLevel']) !== 'normal';
-              ?>
-              <div class="queue-list-row<?php echo $isHighlighted ? ' highlight' : ''; ?>">
-                <div class="queue-badge"><?php echo htmlspecialchars($badge); ?></div>
-                <div class="queue-info">
-                  <div class="queue-name">
-                    <?php echo htmlspecialchars($q['PatientName']); ?>
-                    <?php if ($isUrgent): ?>
-                      <span class="urgent-badge"><?php echo htmlspecialchars($q['PriorityLevel']); ?></span>
+        <div class="panel-body">
+          <div class="skeleton"></div>
+          <?php if (empty($activeQueue)): ?>
+            <div class="empty-state">No patients in queue</div>
+          <?php else: ?>
+            <div class="queue-list">
+              <?php foreach ($activeQueue as $q): ?>
+                <?php
+                  $status = strtolower($q['QueueStatus']);
+                  $isHighlighted = $status === 'inconsultation';
+                  $badge = queueBadge($q['DepartmentName'], (int) $q['QueueNumber']);
+                  $isUrgent = strtolower($q['PriorityLevel']) !== 'normal';
+                ?>
+                <div class="queue-list-row<?php echo $isHighlighted ? ' highlight' : ''; ?>">
+                  <div class="queue-badge"><?php echo htmlspecialchars($badge); ?></div>
+                  <div class="queue-info">
+                    <div class="queue-name">
+                      <?php echo htmlspecialchars($q['PatientName']); ?>
+                      <?php if ($isUrgent): ?>
+                        <span class="urgent-badge"><?php echo htmlspecialchars($q['PriorityLevel']); ?></span>
+                      <?php endif; ?>
+                    </div>
+                    <div class="queue-sub">
+                      <?php echo htmlspecialchars(formatTimeRange($q['AppointmentTime'])); ?>
+                      | <?php echo htmlspecialchars($q['DepartmentName']); ?>
+                      <?php if ($isHighlighted): ?>
+                        | In Consultation
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="vitals-indicator">
+                    <?php if ((int) $q['vitals_today'] > 0): ?>
+                      <span
+                        class="vitals-check"
+                        title="Vitals recorded today"
+                      >✅</span>
+                    <?php else: ?>
+                      <span
+                        class="vitals-missing"
+                        title="Vitals not recorded today"
+                      >⚠️</span>
                     <?php endif; ?>
                   </div>
-                  <div class="queue-sub">
-                    <?php echo htmlspecialchars(formatTimeRange($q['AppointmentTime'])); ?>
-                    | <?php echo htmlspecialchars($q['DepartmentName']); ?>
+                  <div class="queue-actions">
                     <?php if ($isHighlighted): ?>
-                      | In Consultation
-                    <?php endif; ?>
-                  </div>
-                </div>
-                <div class="vitals-indicator">
-                  <?php if ((int) $q['vitals_today'] > 0): ?>
-                    <span
-                      class="vitals-check"
-                      title="Vitals recorded today"
-                    >✅</span>
-                  <?php else: ?>
-                    <span
-                      class="vitals-missing"
-                      title="Vitals not recorded today"
-                    >⚠️</span>
-                  <?php endif; ?>
-                </div>
-                <div class="queue-actions">
-                  <?php if ($isHighlighted): ?>
-                    <form method="POST" action="queue_action.php" style="display:inline;">
-                      <input type="hidden" name="queue_id" value="<?php echo (int) $q['QueueID']; ?>">
-                      <input type="hidden" name="action" value="complete">
-                      <button class="btn-complete" type="submit">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        Complete
-                      </button>
-                    </form>
-                  <?php elseif ($status === 'called'): ?>
-                    <span class="queue-status called">called</span>
-                  <?php else: ?>
-                    <span class="queue-status waiting">waiting</span>
-                    <form method="POST" action="queue_action.php" style="display:inline;">
-                      <input type="hidden" name="queue_id" value="<?php echo (int) $q['QueueID']; ?>">
-                      <input type="hidden" name="action" value="call">
+                      <form method="POST" action="queue_action.php" style="display:inline;">
+                        <input type="hidden" name="queue_id" value="<?php echo (int) $q['QueueID']; ?>">
+                        <input type="hidden" name="action" value="complete">
+                        <button class="btn-complete" type="submit">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          Complete
+                        </button>
+                      </form>
+                    <?php elseif ($status === 'called'): ?>
+                      <span class="queue-status called">called</span>
+                    <?php else: ?>
+                      <span class="queue-status waiting">waiting</span>
+                      <form method="POST" action="queue_action.php" style="display:inline;">
+                        <input type="hidden" name="queue_id" value="<?php echo (int) $q['QueueID']; ?>">
+                        <input type="hidden" name="action" value="call">
                       <button class="btn-call" type="submit">Call</button>
                     </form>
                   <?php endif; ?>
@@ -541,6 +653,7 @@ function statusLabel(string $status): string
             <?php endforeach; ?>
           </div>
         <?php endif; ?>
+        </div>
       </div>
 
     </div>
