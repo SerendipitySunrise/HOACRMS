@@ -143,7 +143,9 @@ requireRole('Admin');
         <div class="form-group">
           <label for="announcement-audience">Audience</label>
           <select id="announcement-audience">
+            <option value="Select">Select Audience</option>
             <option value="All Staff">All Staff</option>
+            <option value="Patients Only">Patients Only</option>
             <option value="Doctors Only">Doctors Only</option>
             <option value="Nurses Only">Nurses Only</option>
             <option value="Administration">Administration</option>

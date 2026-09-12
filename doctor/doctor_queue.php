@@ -644,7 +644,6 @@ if (
                 NULLIF(?, ''),
                 NULLIF(?, ''),
                 NULLIF(?, ''),
-                NULLIF(?, ''),
                 NULLIF(?, '')
             )
         ";
@@ -1763,6 +1762,22 @@ if (isset($_GET['consult'])) {
                     date('H:i:s');
 
 
+                /* ==================================================
+                   ✅ FIX: CONSULTATION_STATUS_ONGOING was inside
+                   the double-quoted SQL string without concatenation,
+                   so PHP passed the LITERAL text
+                   "CONSULTATION_STATUS_ONGOING" to MySQL, which made
+                   mysqli_prepare() return false and caused:
+
+                       mysqli_stmt_bind_param(): Argument #1
+                       ($statement) must be of type mysqli_stmt,
+                       false given
+
+                   We now concatenate the PHP constant properly,
+                   exactly like we do for CONSULTATION_STATUS_COMPLETED
+                   and APPT_STATUS_* elsewhere in this file.
+                ================================================== */
+
                 $startSql = "
                     INSERT INTO consultations
                     (
@@ -1782,7 +1797,7 @@ if (isset($_GET['consult'])) {
                         ?,
                         ?,
                         ?,
-                        CONSULTATION_STATUS_ONGOING
+                        '" . CONSULTATION_STATUS_ONGOING . "'
                     )
                 ";
 
@@ -1791,6 +1806,19 @@ if (isset($_GET['consult'])) {
                         $conn,
                         $startSql
                     );
+
+                /* ✅ FIX: surface the real MySQL error if the
+                   prepare still fails, instead of a confusing
+                   "false given" TypeError. */
+                if (!$startStmt) {
+                    die(
+                        'Failed to prepare start consultation: ' .
+                        mysqli_error($conn) .
+                        '<br><br>Query: <pre>' .
+                        htmlspecialchars($startSql) .
+                        '</pre>'
+                    );
+                }
 
 
                 $chiefComplaint =
