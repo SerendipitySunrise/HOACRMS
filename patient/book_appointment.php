@@ -254,7 +254,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>Book Appointment — MediCare Patient Portal</title>
+<title>Book Appointment — CarePath Patient Portal</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 
 <link rel="preconnect"
       href="https://fonts.googleapis.com">
@@ -281,23 +282,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
         <div class="brand-icon">
 
-            <svg viewBox="0 0 24 24"
-                 fill="none"
-                 stroke="currentColor"
-                 stroke-width="2"
-                 stroke-linecap="round"
-                 stroke-linejoin="round">
-
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-
-            </svg>
+            <img src="../assets/images/carepath-icon.png" alt="CarePath">
 
         </div>
 
         <div class="brand-text">
 
             <div class="brand-title">
-                MediCare
+                Care<strong>Path</strong>
             </div>
 
             <div class="brand-sub">

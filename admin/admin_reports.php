@@ -10,7 +10,8 @@ requireRole('Admin');
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reports & Analytics — MediCare Admin Portal</title>
+<title>Reports & Analytics — CarePath Admin Portal</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="stylesheet" href="../assets/css/admin/admin_reports.css">
 </head>
 <body>
@@ -20,10 +21,10 @@ requireRole('Admin');
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 8.5H9.5l1.5-2 2 4 1.5-2h6.28"/></svg>
+        <img src="../assets/images/carepath-icon.png" alt="CarePath">
       </div>
       <div class="brand-text">
-        <div class="brand-title">MediCare</div>
+        <div class="brand-title">Care<strong>Path</strong></div>
         <div class="brand-sub">Admin Portal</div>
       </div>
     </div>

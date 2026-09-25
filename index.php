@@ -6,7 +6,8 @@ $logoutMessage = isset($_GET['logout']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediCare — Patient Portal</title>
+    <title>CarePath — Patient Portal</title>
+    <link rel="icon" type="image/png" href="assets/images/favicon.png">
     <link rel="stylesheet" href="assets/css/landing.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -17,9 +18,7 @@ $logoutMessage = isset($_GET['logout']);
     <?php endif; ?>
 
     <header class="landing-nav" id="landingNav">
-        <a href="index.php" class="brand">
-            <span>MediCare</span>
-        </a>
+        <a href="index.php" class="brand"><img src="assets/images/carepath-icon.png" alt="CarePath" class="brand-img"><span>Care<strong>Path</strong></span></a>
         <ul class="nav-links">
             <li><a href="#features">Features</a></li>
             <li><a href="#how-it-works">How It Works</a></li>
@@ -162,7 +161,7 @@ $logoutMessage = isset($_GET['logout']);
                             </div>
                             <div>
                                 <div class="contact-info-title">Email Support</div>
-                                <div class="contact-info-detail">support@medicareportal.com</div>
+                                <div class="contact-info-detail">support@carepathportal.com</div>
                             </div>
                         </div>
 
@@ -189,7 +188,7 @@ $logoutMessage = isset($_GET['logout']);
     </section>
 
     <footer class="landing-footer">
-        &copy; <?php echo date('Y'); ?> MediCare Outpatient Portal
+        &copy; <?php echo date('Y'); ?> CarePath Outpatient Portal
     </footer>
 
     <script>

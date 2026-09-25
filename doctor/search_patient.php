@@ -368,6 +368,7 @@ if (!empty($patients) && isset($_GET['patient_id'])) {
 >
 
 <title>Patient Search — Doctor Portal</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 
 <link
     rel="stylesheet"
@@ -391,23 +392,14 @@ if (!empty($patients) && isset($_GET['patient_id'])) {
 
         <div class="brand-icon">
 
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-            >
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
+            <img src="../assets/images/carepath-icon.png" alt="CarePath">
 
         </div>
 
         <div class="brand-text">
 
             <div class="brand-title">
-                MediCare
+                Care<strong>Path</strong>
             </div>
 
             <div class="brand-sub">

@@ -39,14 +39,15 @@ body.portal-select-page {
   color: var(--color-primary);
   text-decoration: none;
   font-weight: 500;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   font-size: 0.9rem;
 }
 
 .portal-select-header .logo img {
-  height: 64px;
-  margin-bottom: 16px;
+  height: 46px;
+  margin-bottom: 22px;
 }
+.brand-logo-full { display: block; max-width: 100%; height: auto; object-fit: contain; }
 
 .portal-select-header h1 {
   font-size: 1.75rem;

@@ -53,11 +53,28 @@ body.landing-page {
 .landing-nav .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
   text-decoration: none;
   color: var(--color-text-white);
   font-weight: 700;
   font-size: 1.25rem;
+}
+.brand-logo-full {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.landing-nav .brand-logo-full {
+  height: 38px;
+  width: auto;
+}
+
+.landing-nav .brand .brand-img {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .landing-nav .nav-links {
@@ -543,3 +560,6 @@ body.landing-page {
     align-items: center;
   }
 }
+
+.landing-nav .brand strong { font-weight: 800; }
+

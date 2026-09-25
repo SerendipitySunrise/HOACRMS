@@ -625,11 +625,11 @@ try {
             if (!empty($staffRow['Email'])) {
                 $mailerPath = __DIR__ . '/../../includes/mailer.php';
 
-                if (is_file($mailerPath) && !function_exists('sendMediCareEmail')) {
+                if (is_file($mailerPath) && !function_exists('sendCarePathEmail')) {
                     require_once $mailerPath;
                 }
 
-                if (function_exists('sendMediCareEmail')) {
+                if (function_exists('sendCarePathEmail')) {
                     $doctorName = trim(($staffRow['FirstName'] ?? '') . ' ' . ($staffRow['LastName'] ?? ''));
                     $subject = 'Appointment Rescheduled - ' . $departmentName;
 
@@ -639,7 +639,7 @@ try {
                         '<p>Patient: <strong>' . htmlspecialchars($patientName) . '</strong><br>' .
                         'Department: ' . htmlspecialchars($departmentName) . '</p>';
 
-                    sendMediCareEmail(
+                    sendCarePathEmail(
                         $staffRow['Email'],
                         $subject,
                         $emailBody

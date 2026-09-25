@@ -50,7 +50,7 @@ function pdf_multi_cell(FPDF $pdf, float $w, float $h, string $txt, bool $border
  */
 function pdf_document_header(FPDF $pdf, array $d): void
 {
-    $clinic = (string)($d['clinic_name'] ?? 'MediCare Clinic');
+    $clinic = (string)($d['clinic_name'] ?? 'CarePath Clinic');
     $info = (string)($d['clinic_info'] ?? '');
 
     $pdf->SetFont('Helvetica', 'B', 15);

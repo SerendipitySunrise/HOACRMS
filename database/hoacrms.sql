@@ -438,6 +438,25 @@ INSERT INTO `roles` (`RoleID`, `RoleName`) VALUES
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `role_permissions`
+--
+
+DROP TABLE IF EXISTS `role_permissions`;
+CREATE TABLE IF NOT EXISTS `role_permissions` (
+  `RoleID` int NOT NULL,
+  `PermissionKey` varchar(100) NOT NULL,
+  `PermissionLabel` varchar(255) NOT NULL,
+  `IsEnabled` tinyint(1) NOT NULL DEFAULT '0',
+  `UpdatedBy` int DEFAULT NULL,
+  `UpdatedAt` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`RoleID`,`PermissionKey`),
+  KEY `fk_rp_role` (`RoleID`),
+  CONSTRAINT `fk_rp_role` FOREIGN KEY (`RoleID`) REFERENCES `roles` (`RoleID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `staff`
 --
 

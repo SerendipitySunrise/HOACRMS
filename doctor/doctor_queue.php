@@ -994,8 +994,8 @@ if (
     $allergiesAlerts = trim((string)($appt['Allergies'] ?? ''));
 
     $data = [
-        'clinic_name' => 'MediCare Clinic',
-        'clinic_info' => 'MediCare Outpatient Portal | Tel: (02) 1234-5678',
+        'clinic_name' => 'CarePath Clinic',
+        'clinic_info' => 'CarePath Outpatient Portal | Tel: (02) 1234-5678',
         'doctor_name' => $doctorName,
         'doctor_specialization' => $doctorSpecialization,
         'doctor_license' => '',
@@ -2263,6 +2263,7 @@ if (isset($_GET['consult'])) {
     <?= $consultPatient ? 'Consultation' : 'Live Queue' ?>
     — Doctor Portal
 </title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 
 <link
     rel="stylesheet"
@@ -2287,18 +2288,7 @@ if (isset($_GET['consult'])) {
 
         <div class="brand-icon">
 
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-            >
-
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-
-            </svg>
+            <img src="../assets/images/carepath-icon.png" alt="CarePath">
 
         </div>
 
@@ -2306,7 +2296,7 @@ if (isset($_GET['consult'])) {
         <div class="brand-text">
 
             <div class="brand-title">
-                MediCare
+                Care<strong>Path</strong>
             </div>
 
             <div class="brand-sub">

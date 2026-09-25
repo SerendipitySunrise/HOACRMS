@@ -150,7 +150,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Doctor Registration - MediCare</title>
+    <title>Doctor Registration - CarePath</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
     <link rel="stylesheet" href="../assets/css/auth/register_staff.css">
     <link rel="stylesheet" href="../assets/css/auth/terms_policy.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -165,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="brand-header">
             <div class="logo">
-                <img src="../assets/images/logo.png" alt="MediCare Logo" class="logo-img" onerror="this.style.display='none'">
+                <img src="../assets/images/logo.png" alt="CarePath Logo" class="logo-img" onerror="this.style.display='none'">
             </div>
             <h1>Doctor Registration</h1>
             <p class="subtitle">Invitation-only doctor account setup</p>
