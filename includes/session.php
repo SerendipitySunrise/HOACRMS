@@ -1,7 +1,12 @@
 <?php
 session_start();
 
+// Protected dashboards live in role subdirectories (for example, /admin).
+// Redirects must point to the application root, where portal-select.php lives.
 $_SESSION_BASE = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');
+if (preg_match('#/(admin|doctor|patient|staff|auth)$#', $_SESSION_BASE)) {
+    $_SESSION_BASE = rtrim(dirname($_SESSION_BASE), '/');
+}
 
 if (!isset($_SESSION['UserID'])) {
     header('Location: ' . $_SESSION_BASE . '/portal-select.php?action=login');

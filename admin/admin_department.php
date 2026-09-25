@@ -2,7 +2,131 @@
 
 require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/admin_notifications.php';
 requireRole('Admin');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+
+    if ($_POST['action'] === 'add_department') {
+
+        $departmentName = trim($_POST['department_name'] ?? '');
+
+        if ($departmentName === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Department name is required.'
+            ]);
+            exit;
+        }
+
+        $stmt = mysqli_prepare($conn, "INSERT INTO departments (DepartmentName) VALUES (?)");
+
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "s", $departmentName);
+
+            if (mysqli_stmt_execute($stmt)) {
+              $departmentId = (int) mysqli_insert_id($conn);
+              adminNotificationCreateForActiveAdmins(
+                $conn,
+                'Department Created',
+                'Department "' . $departmentName . '" was created.',
+                'Department',
+                $departmentId,
+                'departments',
+                'Low'
+              );
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Department added successfully.',
+                'id' => $departmentId
+                ]);
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Failed to save department.'
+                ]);
+            }
+
+            mysqli_stmt_close($stmt);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to prepare database query.'
+            ]);
+        }
+
+        exit;
+    }
+
+    if ($_POST['action'] === 'update_department') {
+
+    $departmentId = (int)($_POST['department_id'] ?? 0);
+    $departmentName = trim($_POST['department_name'] ?? '');
+
+    if ($departmentId <= 0 || $departmentName === '') {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Invalid department information.'
+        ]);
+        exit;
+    }
+
+    $stmt = mysqli_prepare(
+        $conn,
+        "UPDATE departments SET DepartmentName = ? WHERE DepartmentID = ?"
+    );
+
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "si", $departmentName, $departmentId);
+
+        if (mysqli_stmt_execute($stmt)) {
+          if (mysqli_stmt_affected_rows($stmt) > 0) {
+            adminNotificationCreateForActiveAdmins(
+              $conn,
+              'Department Updated',
+              'Department "' . $departmentName . '" was updated.',
+              'Department',
+              $departmentId,
+              'departments',
+              'Low'
+            );
+          }
+            echo json_encode([
+                'success' => true,
+                'message' => 'Department updated successfully.'
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to update department.'
+            ]);
+        }
+
+        mysqli_stmt_close($stmt);
+    } else {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Failed to prepare database query.'
+        ]);
+    }
+
+    exit;
+}
+}
+
+// LOAD DEPARTMENTS FROM DATABASE
+$departmentsFromDB = [];
+
+$result = mysqli_query($conn, "SELECT DepartmentID, DepartmentName FROM departments ORDER BY DepartmentID ASC");
+
+if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $departmentsFromDB[] = [
+            'id' => (int)$row['DepartmentID'],
+            'name' => $row['DepartmentName']
+        ];
+    }
+}
 
 ?>
 <!DOCTYPE html>
@@ -11,8 +135,10 @@ requireRole('Admin');
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Department Management — Curora Admin Portal</title>
-    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
-<link rel="stylesheet" href="../assets/css/admin/admin_department.css">
+<link rel="icon" type="image/png" href="../assets/images/favicon.png">
+<link rel="stylesheet" href="../assets/css/admin/admin_department.css?v=20260922">
+<link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
+<script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
 </head>
 <body>
 <div class="app">
@@ -90,54 +216,60 @@ requireRole('Admin');
   </aside>
 
   <!-- ================= MAIN ================= -->
-  <main class="main">
+<main class="main">
 
-    <div class="staff-topbar">
-      <div class="page-header">
-        <h1>Department Management</h1>
-        <p id="today-date">Sunday, May 10, 2026</p>
-      </div>
-      <button class="notif-bell" aria-label="Notifications">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-        <span class="notif-badge">2</span>
-      </button>
+  <div class="staff-topbar">
+
+    <div class="page-header">
+      <h1>Department Management</h1>
+      <p id="today-date">Sunday, May 10, 2026</p>
     </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-head-title" style="font-size:1.15rem;">Departments</div>
-          <div class="panel-head-meta" style="margin-top:4px;">Manage department schedules and appointment rules</div>
-        </div>
-        <div class="staff-header-actions">
-          <button class="btn-checkin-solid" id="add-department-btn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Department
-          </button>
-        </div>
+   <?php include __DIR__ . '/../includes/admin_notification_widget.php'; ?>
+
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-head-title" style="font-size:1.15rem;">Departments</div>
+        <div class="panel-head-meta" style="margin-top:4px;">Manage department schedules and appointment rules</div>
       </div>
 
-      <div class="staff-table-wrap" style="margin-top:0;">
-        <table class="staff-table">
-          <thead>
-            <tr>
-              <th>Department</th>
-              <th>Operating Days</th>
-              <th>Morning</th>
-              <th>Afternoon</th>
-              <th>Slots</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="department-rows">
-            <!-- rows rendered by JS -->
-          </tbody>
-        </table>
+      <div class="staff-header-actions">
+        <button class="btn-checkin-solid" id="add-department-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add Department
+        </button>
       </div>
     </div>
 
-  </main>
+    <div class="staff-table-wrap" style="margin-top:0;">
+      <table class="staff-table">
+        <thead>
+          <tr>
+            <th>Department</th>
+            <th>Operating Days</th>
+            <th>Morning</th>
+            <th>Afternoon</th>
+            <th>Slots</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody id="department-rows">
+          <!-- rows rendered by JS -->
+        </tbody>
+
+      </table>
+    </div>
+  </div>
+
+</main>
 </div>
 
 <!-- ================= ADD / EDIT DEPARTMENT MODAL ================= -->
@@ -228,74 +360,108 @@ requireRole('Admin');
 
 <script>
   // ================= DEPARTMENT DATA =================
-  const departments = [
-    {
-      name: "Orthopedics",
-      desc: "Advanced joint replacement, sports medicine, and minimal invasive surgery...",
-      days: ["Tue", "Fri"],
+
+const defaultDepartments = [
+  {
+    name: "Orthopedics",
+    desc: "Advanced joint replacement, sports medicine, and minimal invasive surgery...",
+    days: ["Tue", "Fri"],
+    morning: "06:00",
+    morningEnd: "11:59",
+    afternoon: "12:00",
+    afternoonEnd: "17:00",
+    slots: 20,
+    active: true
+  },
+
+  {
+    name: "Internal Medicine",
+    desc: "Preventive care, chronic disease management, and complete checkups...",
+    days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    morning: "06:00",
+    morningEnd: "11:59",
+    afternoon: "12:00",
+    afternoonEnd: "17:00",
+    slots: 20,
+    active: true
+  },
+
+  {
+    name: "Obstetrics & Gynecology",
+    desc: "Complete women's health services from prenatal care, to postpartum and beyond...",
+    days: ["Wed", "Fri"],
+    morning: "06:00",
+    morningEnd: "11:59",
+    afternoon: "12:00",
+    afternoonEnd: "17:00",
+    slots: 20,
+    active: true
+  },
+
+  {
+    name: "Cardiology",
+    desc: "Comprehensive heart care including advanced diagnostics, in-patient, and outpatient services...",
+    days: ["Mon", "Tue"],
+    morning: "06:00",
+    morningEnd: "11:59",
+    afternoon: "12:00",
+    afternoonEnd: "17:00",
+    slots: 20,
+    active: true
+  },
+
+  {
+    name: "Neurology",
+    desc: "Expert diagnosis and treatment of complex neurological disorders, strokes, and diseases...",
+    days: ["Mon", "Thu"],
+    morning: "06:00",
+    morningEnd: "11:59",
+    afternoon: "12:00",
+    afternoonEnd: "17:00",
+    slots: 20,
+    active: true
+  },
+
+  {
+    name: "Pediatrics",
+    desc: "General pediatric care, immunizations, developmental screenings...",
+    days: ["Tue", "Thu", "Sat"],
+    morning: "08:00",
+    morningEnd: "13:00",
+    afternoon: "14:00",
+    afternoonEnd: "18:00",
+    slots: 30,
+    active: true
+  }
+];
+
+const departments = defaultDepartments.map(dept => ({
+  ...dept
+}));
+
+// Add departments from database that are not already in the default list
+<?php echo "const databaseDepartments = " . json_encode($departmentsFromDB) . ";"; ?>
+
+databaseDepartments.forEach(dbDept => {
+  const exists = departments.some(
+    dept => dept.name.toLowerCase() === dbDept.name.toLowerCase()
+  );
+
+  if (!exists) {
+    departments.push({
+      name: dbDept.name,
+      desc: "",
+      days: ["Mon"],
       morning: "06:00",
       morningEnd: "11:59",
       afternoon: "12:00",
       afternoonEnd: "17:00",
       slots: 20,
-      active: true
-    },
-    {
-      name: "Internal Medicine",
-      desc: "Preventive care, chronic disease management, and complete checkups...",
-      days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-      morning: "06:00",
-      morningEnd: "11:59",
-      afternoon: "12:00",
-      afternoonEnd: "17:00",
-      slots: 20,
-      active: true
-    },
-    {
-      name: "Obstetrics & Gynecology",
-      desc: "Complete women's health services from prenatal care, to postpartum and beyond...",
-      days: ["Wed", "Fri"],
-      morning: "06:00",
-      morningEnd: "11:59",
-      afternoon: "12:00",
-      afternoonEnd: "17:00",
-      slots: 20,
-      active: true
-    },
-    {
-      name: "Cardiology",
-      desc: "Comprehensive heart care including advanced diagnostics, in-patient, and outpatient services...",
-      days: ["Mon", "Tue"],
-      morning: "06:00",
-      morningEnd: "11:59",
-      afternoon: "12:00",
-      afternoonEnd: "17:00",
-      slots: 20,
-      active: true
-    },
-    {
-      name: "Neurology",
-      desc: "Expert diagnosis and treatment of complex neurological disorders, strokes, and diseases...",
-      days: ["Mon", "Thu"],
-      morning: "06:00",
-      morningEnd: "11:59",
-      afternoon: "12:00",
-      afternoonEnd: "17:00",
-      slots: 20,
-      active: true
-    },
-    {
-      name: "Pediatrics",
-      desc: "General pediatric care, immunizations, developmental screenings...",
-      days: ["Tue", "Thu", "Sat"],
-      morning: "08:00",
-      morningEnd: "13:00",
-      afternoon: "14:00",
-      afternoonEnd: "18:00",
-      slots: 30,
-      active: true
-    }
-  ];
+      active: true,
+      id: dbDept.id
+    });
+  }
+});
 
   // ================= DOM REFS =================
   const tbody = document.getElementById('department-rows');
@@ -409,40 +575,132 @@ requireRole('Admin');
   }
 
   // ================= SAVE DEPARTMENT =================
-  function saveDepartment() {
-    const name = deptName.value.trim();
-    if (!name) { alert('Please enter a department name.'); return; }
-    const days = getSelectedDays();
-    if (!days.length) { alert('Please select at least one operating day.'); return; }
+  async function saveDepartment() {
+  const name = deptName.value.trim();
 
-    const newDept = {
-      name: name,
-      desc: deptDesc.value.trim(),
-      days: days,
-      morning: morningStart.value,
-      morningEnd: morningEnd.value,
-      afternoon: afternoonStart.value,
-      afternoonEnd: afternoonEnd.value,
-      slots: parseInt(deptSlots.value, 10) || 20,
-      active: deptStatus.value === 'active'
-    };
-
-    const idx = parseInt(editIndex.value, 10);
-    if (idx >= 0 && idx < departments.length) {
-      departments[idx] = newDept;
-    } else {
-      departments.push(newDept);
-    }
-    renderRows();
-    closeModal();
+  if (!name) {
+    alert('Please enter a department name.');
+    return;
   }
+
+  const days = getSelectedDays();
+
+  if (!days.length) {
+    alert('Please select at least one operating day.');
+    return;
+  }
+
+  const idx = parseInt(editIndex.value, 10);
+
+  // ADD NEW DEPARTMENT
+  if (idx < 0 || idx >= departments.length) {
+
+    const formData = new FormData();
+    formData.append('action', 'add_department');
+    formData.append('department_name', name);
+
+    try {
+      const response = await fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        alert(result.message || 'Failed to save department.');
+        return;
+      }
+
+      const newDept = {
+        name: name,
+        desc: deptDesc.value.trim(),
+        days: days,
+        morning: morningStart.value,
+        morningEnd: morningEnd.value,
+        afternoon: afternoonStart.value,
+        afternoonEnd: afternoonEnd.value,
+        slots: parseInt(deptSlots.value, 10) || 20,
+        active: deptStatus.value === 'active'
+      };
+
+      departments.push(newDept);
+      renderRows();
+      closeModal();
+
+      alert('Department added successfully.');
+
+    } catch (error) {
+      console.error(error);
+      alert('Unable to connect to the server.');
+    }
+
+    return;
+  }
+
+  // EDIT EXISTING DEPARTMENT
+const currentDept = departments[idx];
+
+if (!currentDept || !currentDept.id) {
+  alert('Unable to identify this department in the database.');
+  return;
+}
+
+const formData = new FormData();
+
+formData.append('action', 'update_department');
+formData.append('department_id', currentDept.id);
+formData.append('department_name', name);
+
+try {
+  const response = await fetch(window.location.href, {
+    method: 'POST',
+    body: formData
+  });
+
+  const result = await response.json();
+
+  if (!result.success) {
+    alert(result.message || 'Failed to update department.');
+    return;
+  }
+
+  const updatedDept = {
+    ...currentDept,
+    name: name,
+    desc: deptDesc.value.trim(),
+    days: days,
+    morning: morningStart.value,
+    morningEnd: morningEnd.value,
+    afternoon: afternoonStart.value,
+    afternoonEnd: afternoonEnd.value,
+    slots: parseInt(deptSlots.value, 10) || 20,
+    active: deptStatus.value === 'active'
+  };
+
+  departments[idx] = updatedDept;
+
+  renderRows();
+  closeModal();
+
+  alert('Department updated successfully.');
+
+} catch (error) {
+  console.error(error);
+  alert('Unable to connect to the server.');
+}
+
+  departments[idx] = newDept;
+
+  renderRows();
+  closeModal();
+}
 
   // ================= EVENT BINDING =================
   addBtn.addEventListener('click', () => openModal(null, -1));
   closeBtn.addEventListener('click', closeModal);
   cancelBtn.addEventListener('click', closeModal);
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-  saveBtn.addEventListener('click', saveDepartment);
   document.getElementById('dept-form').addEventListener('submit', (e) => {
     e.preventDefault();
     saveDepartment();
@@ -479,5 +737,6 @@ function selectWeekends() {
   });
 }
 </script>
+
 </body>
 </html>

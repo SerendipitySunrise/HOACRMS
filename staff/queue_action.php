@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/admin_notifications.php';
 require_once __DIR__ . '/../includes/status_constants.php';
 
 if (!isset($_SESSION['UserID'])) {
@@ -70,6 +71,7 @@ if ($action === 'call') {
         }
         $apptRow = mysqli_fetch_assoc(mysqli_stmt_get_result($getAppt));
 
+        $apptID = 0;
         if ($apptRow) {
             $apptID = (int) $apptRow['AppointmentID'];
             $updAppt = mysqli_prepare(
@@ -90,6 +92,10 @@ if ($action === 'call') {
         }
 
         mysqli_commit($conn);
+
+        if ($apptID > 0) {
+            adminNotificationNotifyAppointmentStatus($conn, $apptID, APPT_STATUS_CALLED);
+        }
 
         $message = 'Patient called successfully.';
         $messageType = 'success';
@@ -140,6 +146,7 @@ if ($action === 'call') {
         }
         $apptRow = mysqli_fetch_assoc(mysqli_stmt_get_result($getAppt));
 
+        $apptID = 0;
         if ($apptRow) {
             $apptID = (int) $apptRow['AppointmentID'];
             $updAppt = mysqli_prepare(
@@ -160,6 +167,10 @@ if ($action === 'call') {
         }
 
         mysqli_commit($conn);
+
+        if ($apptID > 0) {
+            adminNotificationNotifyAppointmentStatus($conn, $apptID, APPT_STATUS_COMPLETED);
+        }
 
         $message = 'Consultation completed.';
         $messageType = 'success';

@@ -190,6 +190,115 @@ width: 38px;
   justify-content: center;
 }
 
+.notification-wrapper {
+  position: relative;
+}
+
+.notification-dropdown {
+  display: none;
+  position: absolute;
+  top: 50px;
+  right: 0;
+  width: 340px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  overflow: visible;
+  animation: notificationSlide 0.2s ease-out;
+}
+
+/* Close button */
+.notification-close {
+  position: absolute;
+  top: -13px;
+  left: -13px;
+  width: 26px;
+  height: 26px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  cursor: pointer;
+  z-index: 10001;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.notification-close:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.notification-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid #eeeeee;
+  background: #ffffff;
+}
+
+.notification-header strong {
+  font-size: 16px;
+  color: #333333;
+}
+
+.notification-item {
+  padding: 15px 18px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.notification-item:hover {
+  background: #f7f9fc;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #333333;
+}
+
+.notification-item span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #777777;
+}
+
+@keyframes notificationSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.notif-bell {
+  transition: transform 0.2s ease;
+}
+
+.notif-bell:hover {
+  transform: scale(1.05);
+}
+
+.notif-bell:active {
+  transform: scale(0.95);
+}
+
 /* ---------- ADMIN STAT CARDS (5-up, colored backgrounds) ---------- */
 .admin-stats {
   display: grid;

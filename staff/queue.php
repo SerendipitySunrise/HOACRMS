@@ -21,6 +21,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/admin_notifications.php';
 require_once __DIR__ . '/../includes/status_constants.php';
 
 
@@ -199,6 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mysqli_fetch_assoc($appointmentResult);
 
 
+                $statusChanged = false;
                 if ($appointmentData) {
 
                     $appointmentID =
@@ -217,13 +219,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $appointmentID
                     );
 
-                    mysqli_stmt_execute(
-                        $appointmentUpdateStmt
-                    );
+                    mysqli_stmt_execute($appointmentUpdateStmt);
+                    $statusChanged = mysqli_stmt_affected_rows($appointmentUpdateStmt) > 0;
                 }
 
 
                 mysqli_commit($conn);
+
+                if ($statusChanged) {
+                    adminNotificationNotifyAppointmentStatus($conn, $appointmentID, APPT_STATUS_CALLED);
+                }
 
                 $message =
                     'Patient called successfully.';
@@ -319,6 +324,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mysqli_stmt_execute(
                         $appointmentUpdateStmt
                     );
+
+                    if (mysqli_stmt_affected_rows($appointmentUpdateStmt) > 0) {
+                        adminNotificationNotifyAppointmentStatus(
+                            $conn,
+                            $appointmentID,
+                            APPT_STATUS_CALLED
+                        );
+                    }
                 }
 
                 $message =
@@ -416,9 +429,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mysqli_stmt_execute(
                         $appointmentUpdateStmt
                     );
+
+                    $statusChanged = mysqli_stmt_affected_rows($appointmentUpdateStmt) > 0;
                 }
 
                 mysqli_commit($conn);
+
+                if (!empty($statusChanged) && $statusChanged) {
+                    adminNotificationNotifyAppointmentStatus($conn, $appointmentID, APPT_STATUS_IN_CONSULTATION);
+                }
 
                 $message =
                     'Consultation started.';
@@ -517,9 +536,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mysqli_stmt_execute(
                         $appointmentUpdateStmt
                     );
+
+                    $statusChanged = mysqli_stmt_affected_rows($appointmentUpdateStmt) > 0;
                 }
 
                 mysqli_commit($conn);
+
+                if (!empty($statusChanged) && $statusChanged) {
+                    adminNotificationNotifyAppointmentStatus($conn, $appointmentID, APPT_STATUS_COMPLETED);
+                }
 
                 $message =
                     'Consultation completed.';
@@ -623,6 +648,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 mysqli_stmt_execute($apptStmt);
 
+                $statusChanged = mysqli_stmt_affected_rows($apptStmt) > 0;
+
                 // Record no-show
                 $noShowDate = date('Y-m-d');
 
@@ -651,6 +678,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 mysqli_commit($conn);
+
+                if ($statusChanged) {
+                    adminNotificationNotifyAppointmentStatus($conn, $appointmentID, APPT_STATUS_NO_SHOW);
+                }
 
                 $message = 'Patient marked as no-show.';
 

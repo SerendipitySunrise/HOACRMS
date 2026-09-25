@@ -22,6 +22,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/admin_notifications.php';
 require_once __DIR__ . '/../includes/status_constants.php';
 require_once __DIR__ . '/../includes/pdf_helper.php';
 require_once __DIR__ . '/../includes/vitals.php';
@@ -836,9 +837,19 @@ if (
         $updateAppointmentStmt
     );
 
+    $statusChanged = mysqli_stmt_affected_rows($updateAppointmentStmt) > 0;
+
     mysqli_stmt_close(
         $updateAppointmentStmt
     );
+
+    if ($statusChanged) {
+        adminNotificationNotifyAppointmentStatus(
+            $conn,
+            $appointmentID,
+            APPT_STATUS_COMPLETED
+        );
+    }
 
 
     /* ------------------------------------------------------------
@@ -1877,10 +1888,19 @@ if (isset($_GET['consult'])) {
                     $calledStmt
                 );
 
+                $statusChanged = mysqli_stmt_affected_rows($calledStmt) > 0;
 
                 mysqli_stmt_close(
                     $calledStmt
                 );
+
+                if ($statusChanged) {
+                    adminNotificationNotifyAppointmentStatus(
+                        $conn,
+                        $appointmentID,
+                        APPT_STATUS_CALLED
+                    );
+                }
 
 
                 /*

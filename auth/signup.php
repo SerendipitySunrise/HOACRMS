@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/admin_notifications.php';
 require_once __DIR__ . '/../includes/validation.php';
 require_once __DIR__ . '/../includes/terms_policy.php';
 
@@ -67,6 +68,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if (mysqli_stmt_execute($patientStmt)) {
                     mysqli_commit($conn);
+                    adminNotificationCreateForActiveAdmins(
+                        $conn,
+                        'New Patient Registration',
+                        $fname . ' ' . $lname . ' has registered as a new patient.',
+                        'Registration',
+                        $userId,
+                        'users',
+                        'Medium'
+                    );
                     header('Location: login.php?portal=patient');
                     exit();
                 }

@@ -157,6 +157,13 @@ width: 38px;
   gap: 20px;
 }
 
+.notification-wrapper {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
 .page-header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
 .page-header p { color: var(--color-ink-soft); font-size: 0.88rem; margin-top: 4px; }
 
@@ -188,6 +195,86 @@ width: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.notification-wrapper .notification-dropdown {
+  display: none;
+  position: absolute;
+  top: 50px;
+  right: 0;
+  width: 340px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  overflow: visible;
+  animation: notificationSlide 0.2s ease-out;
+}
+
+.notification-wrapper .notification-close {
+  position: absolute;
+  top: -13px;
+  left: -13px;
+  width: 26px;
+  height: 26px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  cursor: pointer;
+  z-index: 10001;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.notification-wrapper .notification-close:hover { background: #e2e8f0; color: #1e293b; }
+
+.notification-wrapper .notification-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid #eeeeee;
+  background: #ffffff;
+}
+
+.notification-wrapper .notification-header strong { font-size: 16px; color: #333333; }
+
+.notification-wrapper .notification-item {
+  padding: 15px 18px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.notification-wrapper .notification-item:hover { background: #f7f9fc; }
+.notification-wrapper .notification-item:last-child { border-bottom: none; }
+
+.notification-wrapper .notification-item strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #333333;
+}
+
+.notification-wrapper .notification-item span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #777777;
+}
+
+@keyframes notificationSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ---------- PANEL ---------- */
