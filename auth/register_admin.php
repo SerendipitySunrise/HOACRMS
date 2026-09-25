@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="main-container">
         <div class="back-link">
-            <a href="../portal-select.php?action=register">
+            <a href="../portal-select.php?action=register" style="color:#149385;">
                 <i class="fas fa-arrow-left"></i> Change registration type
             </a>
         </div>
@@ -211,8 +211,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <!-- Phone -->
             <div class="form-group">
-                <label for="phone-number" class="form-label">
-                    Phone Number <span class="optional">(optional)</span>
+                <label for="phone-number" class="form-label" type="number">
+                    Phone Number
                 </label>
                 <div class="input-wrapper">
                     <span class="input-icon-left"><i class="fas fa-phone"></i></span>

@@ -227,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$loginTitle = 'Sign in to Curora';
+$loginTitle = 'Log in to Curora';
 $registerPath = '../portal-select.php?action=register';
 $registerLabel = 'Create an account';
 
@@ -287,7 +287,7 @@ $registerLabel = 'Create an account';
             </h1>
 
             <p class="subtitle">
-                Sign in using your Curora email and password.
+                Enter your email and password to continue.
             </p>
 
         </div>

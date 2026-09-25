@@ -26,7 +26,7 @@ $logoutMessage = isset($_GET['logout']);
         </ul>
         <div class="nav-actions">
             <a href="auth/login.php" class="nav-signin">Log In</a>
-            <a href="portal-select.php?action=register" class="btn-primary">Get started</a>
+            <a href="portal-select.php?action=register" class="btn-primary">Sign Up</a>
         </div>
     </header>
 
@@ -128,8 +128,8 @@ $logoutMessage = isset($_GET['logout']);
             <h2>Ready to Get Started?</h2>
             <p>Join thousands of patients who manage their healthcare with ease. Create your account today.</p>
             <div class="cta-buttons">
-                <a href="portal-select.php?action=register" class="cta-btn-primary">Create Account</a>
-                <a href="auth/login.php" class="cta-btn-secondary">Sign In</a>
+                <a href="portal-select.php?action=register" class="cta-btn-primary">Sign Up</a>
+                <a href="auth/login.php" class="cta-btn-secondary">Log In</a>
             </div>
         </div>
     </section>
