@@ -283,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             type="text" 
                             id="staff_role" 
                             name="staff_role" 
-                            placeholder="e.g. Doctor, Nurse" 
+                            placeholder="e.g. Nurse, Receptionist" 
                             required
                             value="<?php echo htmlspecialchars($formData['staff_role'] ?? ''); ?>"
                         >

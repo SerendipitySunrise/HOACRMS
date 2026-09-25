@@ -3,7 +3,7 @@
  * Shared Terms and Conditions & Data Privacy Policy consent partial.
  * Provides:
  *   - renderTermsCheckbox(): mandatory consent checkbox with a clickable policy link
- *   - renderTermsModal():       modal displaying the full policy with close button
+ *   - renderTermsModal():       modal displaying the full policy; the I Agree button auto-checks the consent checkbox
  */
 
 if (!function_exists('renderTermsCheckbox')) {
@@ -79,7 +79,7 @@ if (!function_exists('renderTermsModal')) {
                     </ol>
                 </div>
                 <div class="terms-modal-footer">
-                    <button type="button" class="terms-modal-agree" onclick="closeTermsModal()">I Agree</button>
+                    <button type="button" class="terms-modal-agree" onclick="onAgreeTerms()">I Agree</button>
                 </div>
             </div>
         </div>
@@ -98,6 +98,21 @@ if (!function_exists('renderTermsModal')) {
                 var modal = document.getElementById('termsModal');
                 if (modal) modal.classList.remove('open');
                 document.body.classList.remove('terms-modal-open');
+            }
+
+            function onAgreeTerms() {
+                var agree = document.getElementById('agree_terms');
+                if (agree) {
+                    agree.checked = true;
+                    var err = document.getElementById('terms-error');
+                    if (err) {
+                        err.hidden = true;
+                        err.textContent = '';
+                    }
+                    var label = agree.closest('label');
+                    if (label) label.classList.remove('terms-invalid');
+                }
+                closeTermsModal();
             }
 
             document.addEventListener('DOMContentLoaded', function() {
