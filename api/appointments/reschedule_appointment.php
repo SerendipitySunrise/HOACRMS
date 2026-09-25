@@ -72,6 +72,7 @@ try {
 
     $userID = (int) $_SESSION['UserID'];
     $appointmentID = (int) ($_POST['appointment_id'] ?? 0);
+    $rescheduleToken = trim((string) ($_POST['reschedule_token'] ?? ''));
     $appointmentDate = trim($_POST['appointment_date'] ?? '');
     $appointmentTime = trim($_POST['appointment_time'] ?? '');
     $reason = trim($_POST['reason'] ?? '');
@@ -136,6 +137,9 @@ try {
             a.AppointmentTime,
             a.Purpose,
             a.Status,
+            a.disruption_reason,
+            a.is_emergency_disruption,
+            a.reschedule_token,
             d.DepartmentName
          FROM appointments a
          INNER JOIN departments d ON a.DepartmentID = d.DepartmentID
@@ -166,6 +170,12 @@ try {
     // -------------------------------------------------
 
     $currentStatus = $appointment['Status'];
+    $hasDisruptionAccess = $currentStatus === 'Cancelled'
+        && $appointment['disruption_reason'] !== null
+        && $appointment['disruption_reason'] !== ''
+        && $rescheduleToken !== ''
+        && hash_equals((string) $appointment['reschedule_token'], $rescheduleToken);
+    $isEmergencyDisruption = $hasDisruptionAccess && (int) $appointment['is_emergency_disruption'] === 1;
 
     if (in_array($currentStatus, ['Checked In', 'Called', 'In Consultation'], true)) {
         respond(false, 'This appointment cannot be rescheduled because you have already arrived at the clinic.');
@@ -175,7 +185,7 @@ try {
         respond(false, 'Completed appointments cannot be rescheduled.');
     }
 
-    if ($currentStatus === 'Cancelled') {
+    if ($currentStatus === 'Cancelled' && !$hasDisruptionAccess) {
         respond(false, 'Cancelled appointments cannot be rescheduled. Please book a new appointment.');
     }
 
@@ -201,7 +211,7 @@ try {
 
     $rescheduleCount = (int) ($limitRow['total'] ?? 0);
 
-    if ($rescheduleCount >= 3) {
+    if (!$isEmergencyDisruption && $rescheduleCount >= 3) {
         respond(
             false,
             'This appointment has already been rescheduled the maximum number of times (3).'
@@ -221,7 +231,7 @@ try {
         );
     }
 
-    if ($currentApptStart && $currentApptStart < (new DateTime())->modify('+24 hours')) {
+    if (!$isEmergencyDisruption && $currentApptStart && $currentApptStart < (new DateTime())->modify('+24 hours')) {
         respond(
             false,
             'This appointment can only be rescheduled at least 24 hours before it starts.'
@@ -471,8 +481,11 @@ try {
                      COALESCE(OriginalAppointmentDate, ?),
                  OriginalAppointmentTime =
                      COALESCE(OriginalAppointmentTime, ?),
-                 RescheduledAt = NOW(),
-                 RescheduleReason = ?
+                     RescheduledAt = NOW(),
+                     RescheduleReason = ?,
+                     disruption_reason = NULL,
+                     is_emergency_disruption = 0,
+                     reschedule_token = NULL
              WHERE AppointmentID = ?
                AND PatientID = ?'
         );

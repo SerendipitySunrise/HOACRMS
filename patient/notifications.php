@@ -92,6 +92,14 @@ function getNotifStyle($type, $priority) {
     $type = strtolower($type ?? '');
     $priority = strtolower($priority ?? 'low');
 
+  if (strpos($type, 'schedule disruption') !== false) {
+    if ($priority === 'high' || $priority === 'urgent' || $priority === 'emergency') {
+      return ['icon' => 'alert', 'bg' => '#FEE2E2', 'color' => '#DC2626'];
+    }
+
+    return ['icon' => 'alert', 'bg' => '#FEF3C7', 'color' => '#D97706'];
+  }
+
     if (strpos($type, 'appointment') !== false || strpos($type, 'reminder') !== false) {
         return ['icon' => 'clock', 'bg' => '#99F6E4', 'color' => '#0D9488'];
     }

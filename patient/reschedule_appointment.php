@@ -59,6 +59,7 @@ $patientID = (int) $patient['PatientID'];
 */
 
 $appointmentID = (int) ($_GET['appointment_id'] ?? 0);
+$rescheduleToken = trim((string) ($_GET['token'] ?? ''));
 
 if ($appointmentID <= 0) {
     header('Location: patient_appointment.php?msg=No appointment was selected.');
@@ -75,6 +76,9 @@ $apptStmt = mysqli_prepare(
         a.AppointmentTime,
         a.Purpose,
         a.Status,
+        a.disruption_reason,
+        a.is_emergency_disruption,
+        a.reschedule_token,
         d.DepartmentName,
         u.FirstName AS StaffFirstName,
         u.LastName AS StaffLastName
@@ -99,8 +103,13 @@ if (!$appointment) {
 }
 
 $reschedulableStatuses = ['Pending', 'Scheduled', 'Confirmed'];
+$hasDisruptionAccess = $appointment['Status'] === 'Cancelled'
+    && $appointment['disruption_reason'] !== null
+    && $appointment['disruption_reason'] !== ''
+    && $rescheduleToken !== ''
+    && hash_equals((string) $appointment['reschedule_token'], $rescheduleToken);
 
-if (!in_array($appointment['Status'], $reschedulableStatuses, true)) {
+if (!in_array($appointment['Status'], $reschedulableStatuses, true) && !$hasDisruptionAccess) {
     header(
         'Location: patient_appointment.php?msg=' .
         urlencode('This appointment cannot be rescheduled.')
@@ -140,11 +149,12 @@ $reschedUsed = (int) ($reschedCountRow['total'] ?? 0);
 $currentStartTs = strtotime($apptDate . ' ' . ($appointment['AppointmentTime'] ?? '00:00:00'));
 $isCurrentWithin24h = ($currentStartTs !== false) && ($currentStartTs < (time() + 86400));
 
-$reschedBlocked = ($reschedUsed >= 3) || $isCurrentWithin24h;
+$isEmergencyDisruption = (int) $appointment['is_emergency_disruption'] === 1 && $hasDisruptionAccess;
+$reschedBlocked = !$isEmergencyDisruption && (($reschedUsed >= 3) || $isCurrentWithin24h);
 $reschedBlockReason = '';
-if ($isCurrentWithin24h) {
+if (!$isEmergencyDisruption && $isCurrentWithin24h) {
     $reschedBlockReason = 'This appointment starts in less than 24 hours and can no longer be rescheduled.';
-} elseif ($reschedUsed >= 3) {
+} elseif (!$isEmergencyDisruption && $reschedUsed >= 3) {
     $reschedBlockReason = 'This appointment has already been rescheduled the maximum number of times (3).';
 }
 ?>
@@ -772,6 +782,7 @@ if ($isCurrentWithin24h) {
 
 <script>
 const appointmentID = <?php echo (int) $appointmentID; ?>;
+const rescheduleToken = <?php echo json_encode($rescheduleToken); ?>;
 const departmentID = <?php echo (int) $departmentID; ?>;
 const departmentName = '<?php echo htmlspecialchars($departmentName, ENT_QUOTES); ?>';
 
@@ -1136,6 +1147,7 @@ function confirmReschedule() {
     const formData = new FormData();
 
     formData.append('appointment_id', appointmentID);
+    formData.append('reschedule_token', rescheduleToken);
     formData.append('appointment_date', selectedDate);
     formData.append('appointment_time', selectedSlot);
     formData.append('purpose', purpose);

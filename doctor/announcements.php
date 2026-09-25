@@ -241,6 +241,7 @@ function esc(string $value): string
           <h1>Announcements</h1>
           <p>Stay up to date with hospital announcements</p>
         </div>
+        <a class="mark-all-read-btn" href="../schedule_disruptions.php">Mark unavailable</a>
         <?php if ($unreadCount > 0): ?>
           <form method="POST" class="mark-all-form">
             <input type="hidden" name="action" value="mark_all">
