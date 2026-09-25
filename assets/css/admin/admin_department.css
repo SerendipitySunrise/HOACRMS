@@ -52,10 +52,12 @@ body {
 }
 
 .brand-icon {
-  width: 38px;
+width: 38px;
   height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+  background: transparent;
+  /* border-radius: 10px; */
+  /* overflow: hidden; */
+  /* background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary)); */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -63,6 +65,7 @@ body {
   flex-shrink: 0;
 }
 .brand-icon svg { width: 20px; height: 20px; }
+.brand-icon img { height: 36px; width: auto; object-fit: contain; display: block; }
 
 .brand-text .brand-title { font-weight: 700; font-size: 0.95rem; color: var(--color-ink); line-height: 1.2; }
 .brand-text .brand-sub { font-size: 0.75rem; color: var(--color-ink-soft); }
@@ -645,3 +648,4 @@ body {
     padding: 4px 10px;
   }
 }
+.brand-text .brand-title strong { font-weight: 800; }

@@ -52,10 +52,12 @@ body {
 }
 
 .brand-icon {
-  width: 38px;
+width: 38px;
   height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
+  background: transparent;
+  /* border-radius: 10px; */
+  /* overflow: hidden; */
+  /* background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary)); */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -63,6 +65,7 @@ body {
   flex-shrink: 0;
 }
 .brand-icon svg { width: 20px; height: 20px; }
+.brand-icon img { height: 36px; width: auto; object-fit: contain; display: block; }
 
 .brand-text .brand-title { font-weight: 700; font-size: 0.95rem; color: var(--color-ink); line-height: 1.2; }
 .brand-text .brand-sub { font-size: 0.75rem; color: var(--color-ink-soft); }
@@ -378,3 +381,247 @@ body {
   .dept-stats { gap: 8px; }
   .dept-stats span { font-size: 0.72rem; }
 }
+
+/* ============================================================
+   NAV LINKS (consolidated — replaces previous inline styles)
+   ============================================================ */
+.nav-item a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  width: 100%;
+}
+
+/* ============================================================
+   FILTER TOOLBAR
+   ============================================================ */
+.report-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+
+.toolbar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.toolbar-group label,
+.export-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.toolbar-group select,
+.toolbar-group input[type="date"] {
+  font-family: var(--font-family);
+  font-size: 0.86rem;
+  color: var(--color-ink);
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 150px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.toolbar-group select:focus,
+.toolbar-group input[type="date"]:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(20, 147, 133, 0.12);
+}
+
+.date-range {
+  display: none;
+  align-items: flex-end;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.date-range.visible {
+  display: flex;
+}
+
+.date-range label { display: none; }
+
+.date-range .date-sep {
+  font-size: 0.82rem;
+  color: var(--color-ink-soft);
+  padding-bottom: 9px;
+  white-space: nowrap;
+}
+
+.date-range input[type="date"] { min-width: 150px; }
+
+/* Buttons */
+.btn {
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+.btn-apply {
+  background: var(--color-primary);
+  color: #ffffff;
+  align-self: flex-end;
+}
+.btn-apply:hover { background: var(--color-primary-hover); }
+
+.btn-ghost {
+  background: #ffffff;
+  border-color: var(--color-border);
+  color: var(--color-ink);
+}
+.btn-ghost:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary-hover);
+  background: var(--color-primary-tint);
+}
+
+.toolbar-export {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.toolbar-export .export-label {
+  padding-bottom: 10px;
+  white-space: nowrap;
+}
+
+.period-note {
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  margin-bottom: 18px;
+}
+.period-note strong { color: var(--color-ink); }
+
+/* ============================================================
+   EMPTY STATE + KPI SUB LABELS
+   ============================================================ */
+.report-empty {
+  text-align: center;
+  background: #ffffff;
+  border: 1px dashed var(--color-border);
+  border-radius: 14px;
+  padding: 36px 24px;
+  color: var(--color-ink-soft);
+  margin-bottom: 24px;
+}
+.report-empty svg {
+  width: 34px;
+  height: 34px;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+.report-empty h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  margin-bottom: 4px;
+}
+.report-empty p { font-size: 0.85rem; }
+
+.kpi-sub {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.list-empty {
+  text-align: center;
+  color: var(--color-ink-soft);
+  font-size: 0.85rem;
+  padding: 30px 10px;
+}
+
+/* ============================================================
+   CHART LAYOUT
+   ============================================================ */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.chart-panel .panel-sub { margin-left: 0; }
+
+.chart-box {
+  position: relative;
+  height: 280px;
+  margin-top: 6px;
+}
+
+/* Doctor workload item: percentage on its own line above the bar */
+.doctor-item {
+  grid-template-columns: 1fr auto;
+}
+
+.progress-label {
+  grid-column: 2;
+  margin-top: 0;
+}
+
+/* ============================================================
+   RESPONSIVE + PRINT
+   ============================================================ */
+@media (max-width: 1100px) {
+  .chart-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 800px) {
+  .report-toolbar { align-items: stretch; }
+  .toolbar-export { margin-left: 0; }
+  .date-range input[type="date"] { flex: 1; }
+}
+
+@media print {
+  .sidebar,
+  .report-toolbar,
+  .period-note,
+  .btn,
+  .btn-ghost,
+  .btn-apply,
+  .report-empty {
+    display: none !important;
+  }
+  .app { display: block; }
+  .main { padding: 0; }
+  .panel,
+  .kpi-card,
+  .chart-panel,
+  .department-item {
+    border-color: #ddd;
+    break-inside: avoid;
+  }
+  .chart-box { height: 240px; }
+}
+
+.brand-text .brand-title strong { font-weight: 800; }
+

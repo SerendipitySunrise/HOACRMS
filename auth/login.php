@@ -3,6 +3,8 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/db_pdo.php';
+require_once __DIR__ . '/../includes/audit_helper.php';
 
 $message = '';
 $messageType = 'error';
@@ -119,6 +121,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['RoleName'] = $user['RoleName'];
                     $_SESSION['LAST_ACTIVITY'] = time();
 
+                    logAudit(
+                        db_pdo(),
+                        'LOGIN',
+                        'users',
+                        (int) $user['UserID'],
+                        null,
+                        is_string($user['RoleName']) ? (string) $user['RoleName'] : null
+                    );
+
                     switch ($userRole) {
 
                         case 'admin':
@@ -216,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$loginTitle = 'Sign in to MediCare';
+$loginTitle = 'Log in to Curora';
 $registerPath = '../portal-select.php?action=register';
 $registerLabel = 'Create an account';
 
@@ -233,8 +244,9 @@ $registerLabel = 'Create an account';
     >
 
     <title>
-        <?php echo htmlspecialchars($loginTitle); ?> — MediCare
+        <?php echo htmlspecialchars($loginTitle); ?> — Curora
     </title>
+    <link rel="icon" type="image/png" href="../assets/images/curora-logo-full.png">
 
     <link
         rel="stylesheet"
@@ -253,7 +265,7 @@ $registerLabel = 'Create an account';
 
         <div class="brand-header">
 
-            <p style="margin-bottom: 16px;">
+            <p style="margin-bottom: 18px;">
                 <a
                     href="../index.php"
                     style="color:#149385;text-decoration:none;font-size:14px;"
@@ -264,8 +276,8 @@ $registerLabel = 'Create an account';
 
             <div class="logo">
                 <img
-                    src="../assets/images/logo.png"
-                    alt="MediCare Logo"
+                    src="../assets/images/curora-logo-full.png"
+                    alt="Curora Logo"
                     class="logo-img"
                 >
             </div>
@@ -275,7 +287,7 @@ $registerLabel = 'Create an account';
             </h1>
 
             <p class="subtitle">
-                Sign in using your MediCare email and password.
+                Enter your email and password to continue.
             </p>
 
         </div>

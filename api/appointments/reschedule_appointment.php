@@ -626,11 +626,11 @@ try {
             if (!empty($staffRow['Email'])) {
                 $mailerPath = __DIR__ . '/../../includes/mailer.php';
 
-                if (is_file($mailerPath) && !function_exists('sendMediCareEmail')) {
+                if (is_file($mailerPath) && !function_exists('sendCuroraEmail')) {
                     require_once $mailerPath;
                 }
 
-                if (function_exists('sendMediCareEmail')) {
+                if (function_exists('sendCuroraEmail')) {
                     $doctorName = trim(($staffRow['FirstName'] ?? '') . ' ' . ($staffRow['LastName'] ?? ''));
                     $subject = 'Appointment Rescheduled - ' . $departmentName;
 
@@ -640,7 +640,7 @@ try {
                         '<p>Patient: <strong>' . htmlspecialchars($patientName) . '</strong><br>' .
                         'Department: ' . htmlspecialchars($departmentName) . '</p>';
 
-                    sendMediCareEmail(
+                    sendCuroraEmail(
                         $staffRow['Email'],
                         $subject,
                         $emailBody

@@ -7,7 +7,7 @@ require_once __DIR__ . '/../PHPMailer/src/Exception.php';
 require_once __DIR__ . '/../PHPMailer/src/PHPMailer.php';
 require_once __DIR__ . '/../PHPMailer/src/SMTP.php';
 
-function sendMediCareEmail(
+function sendCuroraEmail(
     string $to,
     string $subject,
     string $htmlBody
@@ -22,7 +22,7 @@ function sendMediCareEmail(
         $mail->Password = 'zpcf ojvz zkqh dwuq';
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port = 587;
-        $mail->setFrom('lagabanroz22@gmail.com', 'MediCare');
+        $mail->setFrom('lagabanroz22@gmail.com', 'Curora');
         $mail->addAddress($to);
         $mail->isHTML(true);
         $mail->Subject = $subject;

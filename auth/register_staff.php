@@ -136,7 +136,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff Registration - MediCare</title>
+    <title>Staff Registration - Curora</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
     <link rel="stylesheet" href="../assets/css/auth/register_staff.css">
     <link rel="stylesheet" href="../assets/css/auth/terms_policy.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -144,14 +145,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="main-container">
         <div class="back-link">
-            <a href="../portal-select.php?action=register">
+            <a href="../portal-select.php?action=register" style="color:#149385;">
                 <i class="fas fa-arrow-left"></i> Change registration type
             </a>
         </div>
 
         <div class="brand-header">
             <div class="logo">
-                <img src="../assets/images/logo.png" alt="MediCare Logo" class="logo-img" onerror="this.style.display='none'">
+                <img src="../assets/images/curora-logo-full.png" alt="Curora Logo" class="logo-img" onerror="this.style.display='none'">
             </div>
             <h1>Staff Registration</h1>
             <p class="subtitle">Invitation-only staff account setup</p>
@@ -241,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <!-- Phone -->
                 <div class="form-group">
                     <label for="phone-number" class="form-label">
-                        Phone Number <span class="optional">(optional)</span>
+                        Phone Number 
                     </label>
                     <div class="input-wrapper">
                         <span class="input-icon-left"><i class="fas fa-phone"></i></span>
@@ -282,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             type="text" 
                             id="staff_role" 
                             name="staff_role" 
-                            placeholder="e.g. Doctor, Nurse" 
+                            placeholder="e.g. Nurse, Receptionist" 
                             required
                             value="<?php echo htmlspecialchars($formData['staff_role'] ?? ''); ?>"
                         >

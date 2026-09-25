@@ -228,10 +228,10 @@ while ($appt = mysqli_fetch_assoc($candidates)) {
             <p>Please arrive about 15 minutes early to allow time for check-in.</p>
             <p>If you need to reschedule, you can do so anytime from the
                Patient Portal.</p>
-            <p>Thank you,<br>MediCare</p>
+            <p>Thank you,<br>Curora</p>
         </div>';
 
-        $emailOk = sendMediCareEmail(
+        $emailOk = sendCuroraEmail(
             $appt['Email'],
             $emailSubject,
             $emailBody

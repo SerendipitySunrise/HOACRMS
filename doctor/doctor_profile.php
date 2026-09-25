@@ -278,7 +278,8 @@ if (isset($_GET['updated'])) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Profile — MediCare Doctor Portal</title>
+<title>My Profile — Curora Doctor Portal</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/doctor/doctor_dashboard.css">
@@ -602,10 +603,10 @@ if (isset($_GET['updated'])) {
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <img src="../assets/images/curora-icon.png" alt="Curora">
       </div>
       <div class="brand-text">
-        <div class="brand-title">MediCare</div>
+        <div class="brand-title">Curora</div>
         <div class="brand-sub">Doctor Portal</div>
       </div>
     </div>

@@ -78,7 +78,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 $mail->Port = 587;
 
-                $mail->setFrom('lagabanroz22@gmail.com', 'MediCare');
+                $mail->setFrom('lagabanroz22@gmail.com', 'Curora');
                 $mail->addAddress($email);
 
                 $mail->isHTML(true);
@@ -136,7 +136,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Password - MediCare</title>
+    <title>Reset Password - Curora</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
     <link rel="stylesheet" href="../assets/css/auth/forgotpassword.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -145,7 +146,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <div class="main-container">
     <div class="brand-header">
         <div class="logo">
-            <img src="../assets/images/logo.png" alt="MediCare Logo" class="logo-img">
+            <img src="../assets/images/curora-logo-full.png" alt="Curora Logo" class="logo-img">
         </div>
         <h1>Reset Password</h1>
         <p class="subtitle">Enter your email and we'll send you a reset link</p>

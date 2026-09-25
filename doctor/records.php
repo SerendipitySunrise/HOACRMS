@@ -601,8 +601,8 @@ if (
     }
 
     $reportData = [
-        'clinic_name'           => 'MediCare Clinic',
-        'clinic_info'           => 'MediCare Outpatient Portal | Tel: (02) 1234-5678',
+        'clinic_name'           => 'Curora Clinic',
+        'clinic_info'           => 'Curora Outpatient Portal | Tel: (02) 1234-5678',
         'doctor_name'           => $doctorDisplayName,
         'doctor_specialization' => (string) ($report['Specialization'] ?? ''),
         'doctor_license'        => '',
@@ -1418,6 +1418,7 @@ $totalRecords = count($records);
 >
 
 <title>Medical Records — Doctor Portal</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 
 <link
     rel="stylesheet"
@@ -1442,23 +1443,14 @@ $totalRecords = count($records);
 
         <div class="brand-icon">
 
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-            >
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
+            <img src="../assets/images/curora-icon.png" alt="Curora">
 
         </div>
 
         <div class="brand-text">
 
             <div class="brand-title">
-                MediCare
+                Curora
             </div>
 
             <div class="brand-sub">

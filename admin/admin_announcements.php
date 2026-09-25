@@ -2,7 +2,38 @@
 
 require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/db_pdo.php';
 requireRole('Admin');
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+$csrfToken = $_SESSION['csrf_token'];
+
+$pdo = db_pdo();
+
+$stmt = $pdo->query(
+    'SELECT a.id, a.title, a.priority, a.audience, a.content, a.author, a.created_at,
+            COUNT(ar.announcement_id) AS read_count
+     FROM announcements a
+     LEFT JOIN announcement_reads ar ON ar.announcement_id = a.id
+     GROUP BY a.id
+     ORDER BY a.created_at DESC'
+);
+$announcements = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/** Escape output safely. */
+function e(?string $value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+$priorityMap = [
+    'HIGH'   => 'priority-high',
+    'MEDIUM' => 'priority-medium',
+    'LOW'    => 'priority-low',
+];
 
 ?>
 <!DOCTYPE html>
@@ -10,7 +41,8 @@ requireRole('Admin');
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Announcements — MediCare Admin Portal</title>
+<title>Announcements — Curora Admin Portal</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="stylesheet" href="../assets/css/admin/admin_announcements.css">
 </head>
 <body>
@@ -20,10 +52,10 @@ requireRole('Admin');
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 8.5H9.5l1.5-2 2 4 1.5-2h6.28"/></svg>
+        <img src="../assets/images/curora-icon.png" alt="Curora">
       </div>
       <div class="brand-text">
-        <div class="brand-title">MediCare</div>
+        <div class="brand-title">Curora</div>
         <div class="brand-sub">Admin Portal</div>
       </div>
     </div>
@@ -106,7 +138,50 @@ requireRole('Admin');
 
     <!-- Announcements Grid -->
     <div class="announcements-grid" id="announcements-grid">
-      <!-- Rendered by JavaScript -->
+      <?php if (empty($announcements)): ?>
+        <div class="empty-state">No announcements found. Click "New Announcement" to create one.</div>
+      <?php else: ?>
+        <?php foreach ($announcements as $a): ?>
+          <?php
+            $priorityClass = $priorityMap[$a['priority']] ?? 'priority-medium';
+            $created = strtotime((string) $a['created_at']);
+            $dateLabel = $created ? date('M j, Y', $created) : '—';
+          ?>
+          <div class="announcement-card" data-id="<?= (int) $a['id'] ?>">
+            <div class="announcement-header">
+              <div class="announcement-title-group">
+                <h3 class="announcement-title"><?= e($a['title']) ?></h3>
+                <span class="priority-badge <?= e($priorityClass) ?>"><?= e($a['priority']) ?></span>
+              </div>
+              <div class="announcement-actions">
+                <button class="action-btn edit-btn" data-id="<?= (int) $a['id'] ?>"
+                        data-title="<?= e($a['title']) ?>" data-priority="<?= e($a['priority']) ?>"
+                        data-audience="<?= e($a['audience']) ?>" data-content="<?= e($a['content']) ?>"
+                        data-date="<?= e(substr((string) $a['created_at'], 0, 10)) ?>"
+                        title="Edit">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
+                <button class="action-btn delete-btn" data-id="<?= (int) $a['id'] ?>"
+                        data-title="<?= e($a['title']) ?>" title="Delete">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="announcement-meta">
+              <span class="audience-badge"><?= e($a['audience']) ?></span>
+              <span class="announcement-date"><?= e($dateLabel) ?></span>
+            </div>
+            <p class="announcement-content"><?= e($a['content']) ?></p>
+            <div class="announcement-footer">
+              <span class="announcement-author">By <?= e($a['author']) ?></span>
+              <span class="announcement-read">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <?= (int) $a['read_count'] ?> read
+              </span>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
     </div>
 
   </main>
@@ -123,12 +198,16 @@ requireRole('Admin');
       <button class="modal-close" id="modal-close-btn" aria-label="Close">&times;</button>
     </div>
 
+    <div class="modal-message hidden" id="modal-message"></div>
+
     <form id="announcement-form" onsubmit="return false;">
-      <input type="hidden" id="edit-index" value="-1" />
+      <input type="hidden" id="announcement-id" value="" />
+      <input type="hidden" id="csrf-token" value="<?= e($csrfToken) ?>" />
 
       <div class="form-group">
         <label for="announcement-title">Announcement Title</label>
-        <input type="text" id="announcement-title" placeholder="e.g. System Maintenance Tonight" required />
+        <input type="text" id="announcement-title" maxlength="255"
+               placeholder="e.g. System Maintenance Tonight" required />
       </div>
 
       <div class="form-row">
@@ -143,7 +222,6 @@ requireRole('Admin');
         <div class="form-group">
           <label for="announcement-audience">Audience</label>
           <select id="announcement-audience">
-            <option value="Select">Select Audience</option>
             <option value="All Staff">All Staff</option>
             <option value="Patients Only">Patients Only</option>
             <option value="Doctors Only">Doctors Only</option>
@@ -156,23 +234,17 @@ requireRole('Admin');
 
       <div class="form-group">
         <label for="announcement-content">Content</label>
-        <textarea id="announcement-content" rows="4" placeholder="Detailed announcement message..."></textarea>
+        <textarea id="announcement-content" rows="4" placeholder="Detailed announcement message..." required></textarea>
       </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label for="announcement-date">Date</label>
-          <input type="date" id="announcement-date" />
-        </div>
-        <div class="form-group">
-          <label for="announcement-read">Read Count</label>
-          <input type="text" id="announcement-read" placeholder="e.g. 8/12 read" />
-        </div>
+      <div class="form-group">
+        <label for="announcement-date">Date</label>
+        <input type="date" id="announcement-date" />
       </div>
 
       <div class="form-group">
         <label for="announcement-author">Author</label>
-        <input type="text" id="announcement-author" placeholder="admin@hospital.com" />
+        <input type="text" id="announcement-author" value="<?= e(trim((string) ($_SESSION['FirstName'] ?? '') . ' ' . (string) ($_SESSION['LastName'] ?? ''))) ?>" disabled />
       </div>
 
       <div class="modal-actions">
@@ -187,118 +259,70 @@ requireRole('Admin');
 </div>
 
 <script>
-  // ================= ANNOUNCEMENT DATA =================
-  let announcements = [
-    {
-      title: "System Maintenance Tonight",
-      priority: "HIGH",
-      audience: "All Staff",
-      date: "Apr 25",
-      content: "Scheduled maintenance will occur tonight at 11:00 PM. The system will be unavailable for approximately 30 minutes. Please complete all pending consultations before then.",
-      author: "admin@hospital.com",
-      read: "8/12 read"
-    },
-    {
-      title: "New Pediatrics Schedule",
-      priority: "MEDIUM",
-      audience: "Doctors Only",
-      date: "Apr 24",
-      content: "Starting next week, Pediatrics will extend afternoon sessions on Thursdays and Fridays to accommodate increased demand. Please update your availability accordingly.",
-      author: "admin@hospital.com",
-      read: "5/6 read"
-    },
-    {
-      title: "Emergency Protocol Update",
-      priority: "HIGH",
-      audience: "All Staff",
-      date: "Apr 23",
-      content: "All staff must review the updated emergency triage protocol. The new guidelines are available in the shared documents folder. Training session scheduled for next Monday.",
-      author: "admin@hospital.com",
-      read: "11/12 read"
-    },
-    {
-      title: "Nursing Station Equipment Check",
-      priority: "LOW",
-      audience: "Nurses Only",
-      date: "Apr 22",
-      content: "Please ensure all vital signs monitoring equipment is calibrated and functioning. Report any issues to the maintenance team by end of day.",
-      author: "admin@hospital.com",
-      read: "4/5 read"
-    },
-    {
-      title: "Weekend On-Call Roster",
-      priority: "MEDIUM",
-      audience: "Doctors Only",
-      date: "Apr 22",
-      content: "The weekend on-call roster for next week has been posted. Please check your assigned shifts and confirm availability.",
-      author: "admin@hospital.com",
-      read: "4/6 read"
-    }
-  ];
-
   // ================= DOM REFS =================
   const grid = document.getElementById('announcements-grid');
   const modal = document.getElementById('announcement-modal');
   const modalTitle = document.getElementById('modal-title');
   const modalSub = document.getElementById('modal-sub');
-  const editIndex = document.getElementById('edit-index');
+  const modalMessage = document.getElementById('modal-message');
+  const hiddenId = document.getElementById('announcement-id');
+  const csrfToken = document.getElementById('csrf-token').value;
   const annTitle = document.getElementById('announcement-title');
   const annPriority = document.getElementById('announcement-priority');
   const annAudience = document.getElementById('announcement-audience');
   const annContent = document.getElementById('announcement-content');
   const annDate = document.getElementById('announcement-date');
-  const annRead = document.getElementById('announcement-read');
-  const annAuthor = document.getElementById('announcement-author');
   const closeBtn = document.getElementById('modal-close-btn');
   const cancelBtn = document.getElementById('modal-cancel-btn');
   const saveBtn = document.getElementById('modal-save-btn');
   const addBtn = document.getElementById('add-announcement-btn');
 
   // ================= HELPERS =================
-  function getPriorityClass(priority) {
-    const map = {
-      'HIGH': 'priority-high',
-      'MEDIUM': 'priority-medium',
-      'LOW': 'priority-low'
-    };
-    return map[priority] || 'priority-medium';
+  function showMessage(text, isError) {
+    modalMessage.textContent = text;
+    modalMessage.classList.toggle('is-error', !!isError);
+    modalMessage.classList.remove('hidden');
+  }
+
+  function hideMessage() {
+    modalMessage.classList.add('hidden');
+  }
+
+  function todayValue() {
+    return new Date().toISOString().slice(0, 10);
   }
 
   function resetForm() {
+    hiddenId.value = '';
     annTitle.value = '';
     annPriority.value = 'MEDIUM';
     annAudience.value = 'All Staff';
     annContent.value = '';
-    annDate.value = '';
-    annRead.value = '';
-    annAuthor.value = '';
-    editIndex.value = '-1';
+    annDate.value = todayValue();
     modalTitle.textContent = 'New Announcement';
     modalSub.textContent = 'Send a communication to staff members';
     saveBtn.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Send Announcement
     `;
+    hideMessage();
   }
 
-  function openModal(announcementData, index) {
+  function openModal(announcementData) {
+    resetForm();
     if (announcementData) {
-      annTitle.value = announcementData.title || '';
-      annPriority.value = announcementData.priority || 'MEDIUM';
-      annAudience.value = announcementData.audience || 'All Staff';
-      annContent.value = announcementData.content || '';
-      annDate.value = announcementData.date || '';
-      annRead.value = announcementData.read || '';
-      annAuthor.value = announcementData.author || '';
-      editIndex.value = index;
-      modalTitle.textContent = `Edit: ${announcementData.title}`;
+      hiddenId.value = announcementData.id;
+      annTitle.value = announcementData.title;
+      annPriority.value = announcementData.priority;
+      annAudience.value = announcementData.audience;
+      annContent.value = announcementData.content;
+      annDate.value = announcementData.date || todayValue();
+      modalTitle.textContent = 'Edit: ' + announcementData.title;
       modalSub.textContent = 'Update announcement details';
       saveBtn.innerHTML = `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         Update Announcement
       `;
-    } else {
-      resetForm();
     }
     modal.classList.remove('hidden');
   }
@@ -307,108 +331,101 @@ requireRole('Admin');
     modal.classList.add('hidden');
   }
 
-  // ================= RENDER ANNOUNCEMENTS =================
-  function renderAnnouncements() {
-    if (!announcements.length) {
-      grid.innerHTML = `<div class="empty-state">No announcements found. Click "New Announcement" to create one.</div>`;
-      return;
-    }
-
-    let html = '';
-    announcements.forEach((a, i) => {
-      const priorityClass = getPriorityClass(a.priority);
-
-      html += `
-        <div class="announcement-card">
-          <div class="announcement-header">
-            <div class="announcement-title-group">
-              <h3 class="announcement-title">${a.title}</h3>
-              <span class="priority-badge ${priorityClass}">${a.priority}</span>
-            </div>
-            <div class="announcement-actions">
-              <button class="action-btn edit-btn" data-index="${i}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-              </button>
-              <button class="action-btn delete-btn" data-index="${i}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              </button>
-            </div>
-          </div>
-          <div class="announcement-meta">
-            <span class="audience-badge">${a.audience}</span>
-            <span class="announcement-date">${a.date}</span>
-          </div>
-          <p class="announcement-content">${a.content}</p>
-          <div class="announcement-footer">
-            <span class="announcement-author">By ${a.author}</span>
-            <span class="announcement-read">📅 ${a.read}</span>
-          </div>
-        </div>
-      `;
-    });
-    grid.innerHTML = html;
-
-    // Attach edit events
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = +btn.dataset.index;
-        const announcement = announcements[idx];
-        if (announcement) openModal(announcement, idx);
-      });
-    });
-
-    // Attach delete events
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = +btn.dataset.index;
-        if (confirm(`Are you sure you want to delete "${announcements[idx].title}"?`)) {
-          announcements.splice(idx, 1);
-          renderAnnouncements();
-        }
-      });
-    });
+  function disableSave(disabled) {
+    saveBtn.disabled = disabled;
+    saveBtn.style.opacity = disabled ? '0.6' : '';
   }
 
-  // ================= SAVE ANNOUNCEMENT =================
-  function saveAnnouncement() {
+  // ================= API =================
+  async function submitForm() {
+    const id = hiddenId.value;
     const title = annTitle.value.trim();
-    if (!title) { alert('Please enter an announcement title.'); return; }
     const content = annContent.value.trim();
-    if (!content) { alert('Please enter announcement content.'); return; }
+    if (!title) { showMessage('Please enter an announcement title.', true); return; }
+    if (!content) { showMessage('Please enter announcement content.', true); return; }
 
-    const newAnnouncement = {
-      title: title,
-      priority: annPriority.value,
-      audience: annAudience.value,
-      date: annDate.value || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      content: content,
-      author: annAuthor.value.trim() || 'admin@hospital.com',
-      read: annRead.value.trim() || '0/0 read'
-    };
+    const body = new FormData();
+    body.append('csrf_token', csrfToken);
+    body.append('action', id ? 'update' : 'create');
+    if (id) body.append('id', id);
+    body.append('title', title);
+    body.append('priority', annPriority.value);
+    body.append('audience', annAudience.value);
+    body.append('content', content);
+    if (annDate.value) body.append('created_at', annDate.value + ' 00:00:00');
 
-    const idx = parseInt(editIndex.value, 10);
-    if (idx >= 0 && idx < announcements.length) {
-      announcements[idx] = newAnnouncement;
-    } else {
-      announcements.push(newAnnouncement);
+    disableSave(true);
+    hideMessage();
+
+    try {
+      const res = await fetch('../api/announcements.php', {
+        method: 'POST',
+        body: body
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        window.location.reload();
+      } else {
+        showMessage((data && data.message) || 'Something went wrong.', true);
+        disableSave(false);
+      }
+    } catch (err) {
+      showMessage('Network error. Please try again.', true);
+      disableSave(false);
     }
-    renderAnnouncements();
-    closeModal();
+  }
+
+  async function deleteAnnouncement(id, title) {
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+
+    const body = new FormData();
+    body.append('csrf_token', csrfToken);
+    body.append('action', 'delete');
+    body.append('id', id);
+
+    try {
+      const res = await fetch('../api/announcements.php', {
+        method: 'POST',
+        body: body
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        window.location.reload();
+      } else {
+        alert((data && data.message) || 'Something went wrong.');
+      }
+    } catch (err) {
+      alert('Network error. Please try again.');
+    }
   }
 
   // ================= EVENT BINDING =================
-  addBtn.addEventListener('click', () => openModal(null, -1));
+  addBtn.addEventListener('click', () => openModal(null));
+
+  grid.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.edit-btn');
+    const deleteBtn = e.target.closest('.delete-btn');
+    if (editBtn) {
+      openModal({
+        id: editBtn.dataset.id,
+        title: editBtn.dataset.title,
+        priority: editBtn.dataset.priority,
+        audience: editBtn.dataset.audience,
+        content: editBtn.dataset.content,
+        date: (editBtn.dataset.date || todayValue()).slice(0, 10)
+      });
+    } else if (deleteBtn) {
+      deleteAnnouncement(deleteBtn.dataset.id, deleteBtn.dataset.title);
+    }
+  });
+
   closeBtn.addEventListener('click', closeModal);
   cancelBtn.addEventListener('click', closeModal);
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-  saveBtn.addEventListener('click', saveAnnouncement);
   document.getElementById('announcement-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    saveAnnouncement();
+    submitForm();
   });
-
-  // ================= INIT =================
-  renderAnnouncements();
 </script>
 </body>
 </html>

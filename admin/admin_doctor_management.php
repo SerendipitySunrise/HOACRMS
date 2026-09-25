@@ -237,16 +237,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   );
 
                     // Best-effort email of the new credentials
-                    if (is_file(__DIR__ . '/../includes/mailer.php') && !function_exists('sendMediCareEmail')) {
+                    if (is_file(__DIR__ . '/../includes/mailer.php') && !function_exists('sendCuroraEmail')) {
                         require_once __DIR__ . '/../includes/mailer.php';
                     }
-                    if (function_exists('sendMediCareEmail')) {
-                        sendMediCareEmail(
+                    if (function_exists('sendCuroraEmail')) {
+                        sendCuroraEmail(
                             $email,
-                            'Your MediCare doctor account has been created',
+                            'Your Curora doctor account has been created',
                             '<p>Hello ' . htmlspecialchars($firstName) . ',</p>'
                             . '<p>An administrator has created your doctor account for the Hospital Outpatient '
-                            . 'Appointment and Consultation Record Management System (MediCare).</p>'
+                            . 'Appointment and Consultation Record Management System (Curora).</p>'
                             . '<p><strong>Email:</strong> ' . htmlspecialchars($email) . '<br>'
                             . '<strong>Temporary password:</strong> ' . htmlspecialchars($tempPassword) . '</p>'
                             . '<p>Please sign in and change your password as soon as possible.</p>'
@@ -362,7 +362,8 @@ $doctors = fetchDoctors($conn);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Doctor Management — MediCare Admin Portal</title>
+<title>Doctor Management — Curora Admin Portal</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="stylesheet" href="../assets/css/admin/admin_doctor_management.css">
 <link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
 <script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
@@ -374,10 +375,10 @@ $doctors = fetchDoctors($conn);
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 8.5H9.5l1.5-2 2 4 1.5-2h6.28"/></svg>
+        <img src="../assets/images/curora-icon.png" alt="Curora">
       </div>
       <div class="brand-text">
-        <div class="brand-title">MediCare</div>
+        <div class="brand-title">Curora</div>
         <div class="brand-sub">Admin Portal</div>
       </div>
     </div>

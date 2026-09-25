@@ -273,7 +273,8 @@ if (
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Dashboard | MediCare Admin Portal</title>
+<title>Admin Dashboard | Curora Admin Portal</title>
+    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="stylesheet" href="../assets/css/admin/admin_dashboard.css">
 <link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
 <script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
@@ -286,10 +287,10 @@ if (
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>
+        <img src="../assets/images/curora-icon.png" alt="Curora">
       </div>
       <div class="brand-text">
-        <div class="brand-title">MediCare</div>
+        <div class="brand-title">Curora</div>
         <div class="brand-sub">Admin Portal</div>
       </div>
     </div>
