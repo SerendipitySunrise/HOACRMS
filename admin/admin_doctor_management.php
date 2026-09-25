@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/admin_notifications.php';
 requireRole('Admin');
 
 $flashMessage = '';
@@ -135,6 +136,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $toggleStmt = mysqli_prepare($conn, 'UPDATE users SET Status = ? WHERE UserID = ?');
             mysqli_stmt_bind_param($toggleStmt, 'si', $newStatus, $toggleUserId);
             if (mysqli_stmt_execute($toggleStmt)) {
+              if (mysqli_stmt_affected_rows($toggleStmt) > 0) {
+                adminNotificationCreateForActiveAdmins(
+                  $conn,
+                  'Doctor Status Changed',
+                  'A doctor account was changed to ' . $newStatus . '.',
+                  'Doctor',
+                  $toggleUserId,
+                  'users',
+                  'Medium'
+                );
+              }
                 $flashMessage = 'Doctor status updated.';
             } else {
                 $flashMessage = 'Could not update doctor status. Please try again.';
@@ -214,6 +226,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (mysqli_stmt_execute($staffStmt)) {
                     mysqli_commit($conn);
                     $flashMessage = 'Doctor account created for ' . $name . '. Temporary password: ' . $tempPassword;
+                  adminNotificationCreateForActiveAdmins(
+                    $conn,
+                    'Doctor Created',
+                    'Doctor ' . $name . ' was added to the Admin Portal.',
+                    'Doctor',
+                    $userId,
+                    'users',
+                    'Medium'
+                  );
 
                     // Best-effort email of the new credentials
                     if (is_file(__DIR__ . '/../includes/mailer.php') && !function_exists('sendMediCareEmail')) {
@@ -308,8 +329,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
 
                 if (mysqli_stmt_execute($staffStmt)) {
+                  $doctorChanged = mysqli_stmt_affected_rows($userStmt) > 0
+                    || mysqli_stmt_affected_rows($staffStmt) > 0;
                     mysqli_commit($conn);
                     $flashMessage = 'Doctor account updated.';
+                  if ($doctorChanged) {
+                    adminNotificationCreateForActiveAdmins(
+                      $conn,
+                      'Doctor Updated',
+                      'Doctor ' . $name . ' was updated.',
+                      'Doctor',
+                      $userId,
+                      'users',
+                      'Low'
+                    );
+                  }
                 } else {
                     mysqli_rollback($conn);
                     $flashMessage = 'Update failed. Please try again.';
@@ -330,6 +364,8 @@ $doctors = fetchDoctors($conn);
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Doctor Management — MediCare Admin Portal</title>
 <link rel="stylesheet" href="../assets/css/admin/admin_doctor_management.css">
+<link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
+<script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
 </head>
 <body>
 <div class="app">
@@ -414,10 +450,8 @@ $doctors = fetchDoctors($conn);
         <h1>Doctor Management</h1>
         <p id="doctor-count"><?php echo count($doctors); ?> doctors</p>
       </div>
-      <button class="notif-bell" aria-label="Notifications">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-        <span class="notif-badge">2</span>
-      </button>
+
+      <?php include __DIR__ . '/../includes/admin_notification_widget.php'; ?>
     </div>
 
     <div class="panel">
@@ -779,5 +813,8 @@ $doctors = fetchDoctors($conn);
   // Set today's date
   
 </script>
+
+
+
 </body>
 </html>

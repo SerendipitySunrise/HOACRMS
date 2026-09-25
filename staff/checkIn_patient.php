@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/admin_notifications.php';
 require_once __DIR__ . '/../includes/status_constants.php';
 require_once __DIR__ . '/../includes/validation.php';
 
@@ -196,6 +197,12 @@ if (
                     }
 
                     mysqli_commit($conn);
+
+                    adminNotificationNotifyAppointmentStatus(
+                        $conn,
+                        $appointmentID,
+                        APPT_STATUS_CHECKED_IN
+                    );
 
                     $formattedQueueNumber = str_pad((string) $nextQueueNumber, 3, '0', STR_PAD_LEFT);
 
@@ -526,6 +533,31 @@ if (
             // ==================================================
 
             mysqli_commit($conn);
+
+            foreach (adminNotificationAppointmentRecipientUserIds($conn, $newAppointmentId) as $recipientUserId) {
+                if ($recipientUserId !== (int) $newUserId) {
+                    adminNotificationCreateForUser(
+                        $conn,
+                        $recipientUserId,
+                        'Appointment Assigned',
+                        'A walk-in appointment has been assigned to you.',
+                        'Appointment',
+                        $newAppointmentId,
+                        'appointments',
+                        'Medium'
+                    );
+                }
+            }
+
+            adminNotificationCreateForActiveAdmins(
+                $conn,
+                'New Appointment',
+                'A walk-in appointment was created and checked in.',
+                'Appointment',
+                $newAppointmentId,
+                'appointments',
+                'Medium'
+            );
 
             $message =
                 'Walk-in patient added successfully. Queue number: Q' .

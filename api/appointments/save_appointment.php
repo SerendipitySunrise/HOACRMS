@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/admin_notifications.php';
 
 header('Content-Type: application/json');
 
@@ -256,6 +257,31 @@ sendNotification(
     'Appointment Confirmed',
     $confirmationMessage,
     $appointmentID
+);
+
+foreach (adminNotificationAppointmentRecipientUserIds($conn, $appointmentID) as $recipientUserId) {
+    if ($recipientUserId !== $userID) {
+        adminNotificationCreateForUser(
+            $conn,
+            $recipientUserId,
+            'Appointment Assigned',
+            'A new appointment has been assigned to you for ' . $dateLabel . ' at ' . $timeLabel . '.',
+            'Appointment',
+            $appointmentID,
+            'appointments',
+            'Medium'
+        );
+    }
+}
+
+adminNotificationCreateForActiveAdmins(
+    $conn,
+    'New Appointment',
+    'A new appointment was booked for ' . $dateLabel . ' at ' . $timeLabel . '.',
+    'Appointment',
+    $appointmentID,
+    'appointments',
+    'Medium'
 );
 
 $reminderStmt = mysqli_prepare(

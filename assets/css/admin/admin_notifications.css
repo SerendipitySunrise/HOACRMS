@@ -1,0 +1,188 @@
+.admin-notification-wrapper {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.admin-notification-badge.is-hidden {
+  display: none;
+}
+
+.admin-notification-dropdown[hidden] {
+  display: none;
+}
+
+.admin-notification-wrapper .admin-notification-dropdown:not([hidden]) {
+  display: block;
+}
+
+.admin-notification-wrapper .admin-notification-dropdown {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  width: min(340px, calc(100vw - 32px));
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  overflow: visible;
+  animation: adminNotificationSlide 0.2s ease-out;
+}
+
+.admin-notification-wrapper .admin-notification-close {
+  position: absolute;
+  top: -13px;
+  left: -13px;
+  width: 26px;
+  height: 26px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  cursor: pointer;
+  z-index: 10001;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.admin-notification-wrapper .admin-notification-close:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.admin-notification-wrapper .admin-notification-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #eeeeee;
+  background: #ffffff;
+}
+
+.admin-notification-wrapper .admin-notification-header strong {
+  font-size: 16px;
+  color: #333333;
+}
+
+.admin-notification-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-notification-mark-all {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-notification-mark-all:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.admin-notification-clear-all {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #dc2626;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-notification-clear-all:hover {
+  color: #b91c1c;
+  text-decoration: underline;
+}
+
+.admin-notification-wrapper .admin-notification-list {
+  max-height: min(420px, calc(100vh - 160px));
+  overflow-y: auto;
+}
+
+.admin-notification-wrapper .admin-notification-item,
+.admin-notification-wrapper .admin-notification-empty {
+  display: block;
+  width: 100%;
+  padding: 15px 18px;
+  border: 0;
+  border-bottom: 1px solid #f0f0f0;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.2s ease;
+}
+
+.admin-notification-wrapper .admin-notification-item:last-child,
+.admin-notification-wrapper .admin-notification-empty:last-child {
+  border-bottom: none;
+}
+
+.admin-notification-wrapper .admin-notification-item:hover {
+  background: #f7f9fc;
+}
+
+.admin-notification-wrapper .admin-notification-item.is-unread {
+  background: #f0fdf4;
+}
+
+.admin-notification-wrapper .admin-notification-item.is-unread:hover {
+  background: #ecfdf5;
+}
+
+.admin-notification-item-content,
+.admin-notification-item-content strong,
+.admin-notification-item-content span {
+  display: block;
+}
+
+.admin-notification-item-content strong {
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #333333;
+}
+
+.admin-notification-item-content span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #777777;
+}
+
+.admin-notification-item time {
+  display: block;
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.admin-notification-empty {
+  cursor: default;
+}
+
+@keyframes adminNotificationSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -3,6 +3,7 @@
 session_start();
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/admin_notifications.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -669,6 +670,17 @@ try {
 
 
         mysqli_commit($conn);
+
+        adminNotificationCreateForActiveAdmins(
+            $conn,
+            'Appointment Rescheduled',
+            $patientName . "'s appointment for " . $departmentName . ' was rescheduled to '
+            . $newDateLabel . ' at ' . $newTimeLabel . '.',
+            'Appointment',
+            $appointmentID,
+            'appointments',
+            'Medium'
+        );
 
     } catch (Throwable $e) {
 

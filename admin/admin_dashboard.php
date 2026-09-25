@@ -2,60 +2,270 @@
 
 require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/status_constants.php';
 requireRole('Admin');
 
-$displayName = htmlspecialchars(trim(($_SESSION['FirstName'] ?? '') . ' ' . ($_SESSION['LastName'] ?? '')));
-
-// No-show statistics for the admin dashboard
-$noShowCountToday = 0;
-
-$noShowCountStmt = mysqli_prepare(
-    $conn,
-    'SELECT COUNT(*) AS c
-     FROM no_shows
-     WHERE NoShowDate = CURDATE()'
-);
-
-if ($noShowCountStmt) {
-    mysqli_stmt_execute($noShowCountStmt);
-    $noShowCountRow = mysqli_fetch_assoc(
-        mysqli_stmt_get_result($noShowCountStmt)
+/**
+ * Dashboard queries must tolerate installations that use an older HOACRMS
+ * schema. Missing optional tables/columns result in an empty metric instead
+ * of a broken admin dashboard.
+ */
+function dashboardTableExists($conn, $tableName)
+{
+    $stmt = mysqli_prepare(
+        $conn,
+        'SELECT 1
+           FROM information_schema.TABLES
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = ?
+          LIMIT 1'
     );
-    $noShowCountToday = (int) ($noShowCountRow['c'] ?? 0);
+
+    if (!$stmt) {
+        error_log('Admin dashboard: unable to inspect database tables.');
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, 's', $tableName);
+    $executed = mysqli_stmt_execute($stmt);
+    $result = $executed ? mysqli_stmt_get_result($stmt) : false;
+    $exists = $result && mysqli_num_rows($result) > 0;
+    mysqli_stmt_close($stmt);
+
+    return $exists;
 }
+
+function dashboardColumnExists($conn, $tableName, $columnName)
+{
+    $stmt = mysqli_prepare(
+        $conn,
+        'SELECT 1
+           FROM information_schema.COLUMNS
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = ?
+            AND COLUMN_NAME = ?
+          LIMIT 1'
+    );
+
+    if (!$stmt) {
+        error_log('Admin dashboard: unable to inspect database columns.');
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'ss', $tableName, $columnName);
+    $executed = mysqli_stmt_execute($stmt);
+    $result = $executed ? mysqli_stmt_get_result($stmt) : false;
+    $exists = $result && mysqli_num_rows($result) > 0;
+    mysqli_stmt_close($stmt);
+
+    return $exists;
+}
+
+function dashboardScalar($conn, $sql, $key, $default = 0)
+{
+    $result = mysqli_query($conn, $sql);
+
+    if (!$result) {
+        error_log('Admin dashboard query failed: ' . mysqli_error($conn));
+        return $default;
+    }
+
+    $row = mysqli_fetch_assoc($result);
+    mysqli_free_result($result);
+
+    return isset($row[$key]) ? $row[$key] : $default;
+}
+
+function dashboardRows($conn, $sql)
+{
+    $result = mysqli_query($conn, $sql);
+
+    if (!$result) {
+        error_log('Admin dashboard query failed: ' . mysqli_error($conn));
+        return [];
+    }
+
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $rows[] = $row;
+    }
+    mysqli_free_result($result);
+
+    return $rows;
+}
+
+$hasAppointments = dashboardTableExists($conn, 'appointments');
+$hasQueue = dashboardTableExists($conn, 'queue');
+$hasNoShows = dashboardTableExists($conn, 'no_shows');
+$hasDepartmentSchedules = dashboardTableExists($conn, 'department_schedules');
+$hasPatientSlots = $hasDepartmentSchedules
+    && dashboardColumnExists($conn, 'department_schedules', 'PatientSlots');
+
+$totalPatientsToday = 0;
+$waitingToday = 0;
+$inConsultationToday = 0;
+$completedToday = 0;
+$averageWaitMinutes = 0;
+$scheduledToday = 0;
+$pendingToday = 0;
+
+if ($hasAppointments) {
+    $totalPatientsToday = (int) dashboardScalar(
+        $conn,
+        "SELECT COUNT(DISTINCT PatientID) AS total
+           FROM appointments
+          WHERE AppointmentDate = CURDATE()
+            AND Status NOT IN ('" . APPT_STATUS_CANCELLED . "', '" . APPT_STATUS_NO_SHOW . "')",
+        'total'
+    );
+
+    $scheduledToday = (int) dashboardScalar(
+        $conn,
+        "SELECT COUNT(*) AS total
+           FROM appointments
+          WHERE AppointmentDate = CURDATE()
+            AND Status = '" . APPT_STATUS_SCHEDULED . "'",
+        'total'
+    );
+
+    $pendingToday = (int) dashboardScalar(
+        $conn,
+        "SELECT COUNT(*) AS total
+           FROM appointments
+          WHERE AppointmentDate = CURDATE()
+            AND Status = '" . APPT_STATUS_PENDING . "'",
+        'total'
+    );
+}
+
+if ($hasQueue) {
+    $waitingToday = (int) dashboardScalar(
+        $conn,
+        "SELECT COUNT(*) AS total
+           FROM queue
+          WHERE QueueDate = CURDATE()
+            AND Status = '" . QUEUE_STATUS_WAITING . "'",
+        'total'
+    );
+
+    $inConsultationToday = (int) dashboardScalar(
+        $conn,
+        "SELECT COUNT(*) AS total
+           FROM queue
+          WHERE QueueDate = CURDATE()
+            AND Status = '" . QUEUE_STATUS_IN_CONSULTATION . "'",
+        'total'
+    );
+
+    $completedToday = (int) dashboardScalar(
+        $conn,
+        "SELECT COUNT(*) AS total
+           FROM queue
+          WHERE QueueDate = CURDATE()
+            AND Status = '" . QUEUE_STATUS_COMPLETED . "'",
+        'total'
+    );
+
+    // QueueTime is the available timestamp for a patient's current wait.
+    $averageWaitMinutes = (int) dashboardScalar(
+        $conn,
+        "SELECT COALESCE(ROUND(AVG(TIMESTAMPDIFF(MINUTE,
+                    TIMESTAMP(QueueDate, QueueTime), NOW()))), 0) AS total
+           FROM queue
+          WHERE QueueDate = CURDATE()
+            AND Status IN ('" . QUEUE_STATUS_WAITING . "', '" . QUEUE_STATUS_CALLED . "', '" . QUEUE_STATUS_IN_CONSULTATION . "')",
+        'total'
+    );
+}
+
+$noShowCountToday = $hasNoShows
+    ? (int) dashboardScalar(
+        $conn,
+        'SELECT COUNT(*) AS total FROM no_shows WHERE NoShowDate = CURDATE()',
+        'total'
+    )
+    : 0;
+
+$morningAppointments = 0;
+$afternoonAppointments = 0;
+$morningCapacity = null;
+$afternoonCapacity = null;
+
+if ($hasAppointments) {
+    $morningAppointments = (int) dashboardScalar(
+        $conn,
+        "SELECT COUNT(*) AS total
+           FROM appointments
+          WHERE AppointmentDate = CURDATE()
+            AND AppointmentTime < '12:00:00'
+            AND Status NOT IN ('" . APPT_STATUS_CANCELLED . "', '" . APPT_STATUS_NO_SHOW . "')",
+        'total'
+    );
+
+    $afternoonAppointments = (int) dashboardScalar(
+        $conn,
+        "SELECT COUNT(*) AS total
+           FROM appointments
+          WHERE AppointmentDate = CURDATE()
+            AND AppointmentTime >= '12:00:00'
+            AND Status NOT IN ('" . APPT_STATUS_CANCELLED . "', '" . APPT_STATUS_NO_SHOW . "')",
+        'total'
+    );
+}
+
+if ($hasPatientSlots) {
+    $morningCapacity = (int) dashboardScalar(
+        $conn,
+        "SELECT COALESCE(SUM(PatientSlots), 0) AS total
+           FROM department_schedules
+          WHERE DayOfWeek = DAYOFWEEK(CURDATE()) - 1
+            AND SessionName = 'Morning'",
+        'total'
+    );
+
+    $afternoonCapacity = (int) dashboardScalar(
+        $conn,
+        "SELECT COALESCE(SUM(PatientSlots), 0) AS total
+           FROM department_schedules
+          WHERE DayOfWeek = DAYOFWEEK(CURDATE()) - 1
+            AND SessionName = 'Afternoon'",
+        'total'
+    );
+}
+
+$morningProgress = $morningCapacity > 0
+    ? min(100, (int) round(($morningAppointments / $morningCapacity) * 100))
+    : 0;
+$afternoonProgress = $afternoonCapacity > 0
+    ? min(100, (int) round(($afternoonAppointments / $afternoonCapacity) * 100))
+    : 0;
 
 $recentNoShows = [];
-
-$recentNoShowStmt = mysqli_prepare(
-    $conn,
-    'SELECT
-        ns.NoShowID,
-        ns.NoShowDate,
-        ns.NoShowReason,
-        ns.FollowUpStatus,
-        d.DepartmentName,
-        u.FirstName,
-        u.LastName
-     FROM no_shows ns
-     INNER JOIN departments d
-        ON ns.DepartmentID = d.DepartmentID
-     INNER JOIN patients p
-        ON ns.PatientID = p.PatientID
-     INNER JOIN users u
-        ON p.UserID = u.UserID
-     ORDER BY ns.CreatedAt DESC,
-        ns.NoShowID DESC
-     LIMIT 10'
-);
-
-if ($recentNoShowStmt) {
-    mysqli_stmt_execute($recentNoShowStmt);
-    $recentNoShowResult =
-        mysqli_stmt_get_result($recentNoShowStmt);
-    while ($row = mysqli_fetch_assoc($recentNoShowResult)) {
-        $recentNoShows[] = $row;
-    }
+if (
+    $hasNoShows
+    && dashboardTableExists($conn, 'departments')
+    && dashboardTableExists($conn, 'patients')
+    && dashboardTableExists($conn, 'users')
+) {
+    $recentNoShows = dashboardRows(
+        $conn,
+        'SELECT
+            ns.NoShowID,
+            ns.NoShowDate,
+            ns.NoShowReason,
+            ns.FollowUpStatus,
+            d.DepartmentName,
+            u.FirstName,
+            u.LastName
+         FROM no_shows ns
+         INNER JOIN departments d ON ns.DepartmentID = d.DepartmentID
+         INNER JOIN patients p ON ns.PatientID = p.PatientID
+         INNER JOIN users u ON p.UserID = u.UserID
+         ORDER BY ns.CreatedAt DESC, ns.NoShowID DESC
+         LIMIT 10'
+    );
 }
+
 ?>
 
 <!DOCTYPE html>
@@ -65,6 +275,8 @@ if ($recentNoShowStmt) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Dashboard | MediCare Admin Portal</title>
 <link rel="stylesheet" href="../assets/css/admin/admin_dashboard.css">
+<link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
+<script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
 </head>
 <body>
 
@@ -146,36 +358,34 @@ if ($recentNoShowStmt) {
   <main class="main">
 
     <div class="staff-topbar">
-      <div class="page-header">
-        <h1>Admin Dashboard</h1>
-        <p>Overview of hospital operations today</p>
-      </div>
-      <button class="notif-bell" type="button" aria-label="Notifications">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-        <span class="notif-badge">3</span>
-      </button>
-    </div>
+  <div class="page-header">
+    <h1>Admin Dashboard</h1>
+    <p>Overview of hospital operations today</p>
+  </div>
+
+  <?php include __DIR__ . '/../includes/admin_notification_widget.php'; ?>
+</div>
 
     <!-- Stat cards -->
     <div class="admin-stats">
       <div class="admin-stat-card mint">
-        <div class="admin-stat-value">7</div>
+        <div class="admin-stat-value"><?= $totalPatientsToday ?></div>
         <div class="admin-stat-label">Total Patients Today</div>
       </div>
       <div class="admin-stat-card cream">
-        <div class="admin-stat-value">6</div>
+        <div class="admin-stat-value"><?= $waitingToday ?></div>
         <div class="admin-stat-label">Waiting in Queue</div>
       </div>
       <div class="admin-stat-card lavender">
-        <div class="admin-stat-value">1</div>
+        <div class="admin-stat-value"><?= $inConsultationToday ?></div>
         <div class="admin-stat-label">In Consultation</div>
       </div>
       <div class="admin-stat-card green">
-        <div class="admin-stat-value">0</div>
+        <div class="admin-stat-value"><?= $completedToday ?></div>
         <div class="admin-stat-label">Completed Today</div>
       </div>
       <div class="admin-stat-card red">
-        <div class="admin-stat-value">6m</div>
+        <div class="admin-stat-value"><?= $averageWaitMinutes ?>m</div>
         <div class="admin-stat-label">Avg Wait Time</div>
       </div>
       <div class="admin-stat-card red">
@@ -191,20 +401,20 @@ if ($recentNoShowStmt) {
       <section class="panel">
         <div class="panel-head">
           <div class="panel-head-title">Today's Overview</div>
-          <div class="panel-head-meta">10/05/2026</div>
+          <div class="panel-head-meta"><?= date('m/d/Y') ?></div>
         </div>
 
         <div class="overview-metrics">
           <div class="overview-metric">
-            <div class="overview-metric-value">0</div>
+            <div class="overview-metric-value"><?= $scheduledToday ?></div>
             <div class="overview-metric-label">Scheduled</div>
           </div>
           <div class="overview-metric">
-            <div class="overview-metric-value teal">0</div>
+            <div class="overview-metric-value teal"><?= $completedToday ?></div>
             <div class="overview-metric-label">Completed</div>
           </div>
           <div class="overview-metric">
-            <div class="overview-metric-value orange">0</div>
+            <div class="overview-metric-value orange"><?= $pendingToday ?></div>
             <div class="overview-metric-label">Pending</div>
           </div>
         </div>
@@ -212,17 +422,27 @@ if ($recentNoShowStmt) {
         <div class="overview-sessions">
           <div class="overview-session-row">
             <div class="overview-session-name">Morning Session</div>
-            <div class="overview-session-bar">
-              <div class="overview-session-bar-fill" style="width: 60%;"></div>
-            </div>
-            <div class="overview-session-count">6/10</div>
+            <?php if ($morningCapacity !== null): ?>
+              <div class="overview-session-bar">
+                <div class="overview-session-bar-fill" style="width: <?= $morningProgress ?>%;"></div>
+              </div>
+              <div class="overview-session-count"><?= $morningAppointments ?>/<?= $morningCapacity ?></div>
+            <?php else: ?>
+              <div class="overview-session-bar"></div>
+              <div class="overview-session-count"><?= $morningAppointments ?></div>
+            <?php endif; ?>
           </div>
           <div class="overview-session-row">
             <div class="overview-session-name">Afternoon Session</div>
-            <div class="overview-session-bar">
-              <div class="overview-session-bar-fill" style="width: 40%;"></div>
-            </div>
-            <div class="overview-session-count">4/10</div>
+            <?php if ($afternoonCapacity !== null): ?>
+              <div class="overview-session-bar">
+                <div class="overview-session-bar-fill" style="width: <?= $afternoonProgress ?>%;"></div>
+              </div>
+              <div class="overview-session-count"><?= $afternoonAppointments ?>/<?= $afternoonCapacity ?></div>
+            <?php else: ?>
+              <div class="overview-session-bar"></div>
+              <div class="overview-session-count"><?= $afternoonAppointments ?></div>
+            <?php endif; ?>
           </div>
         </div>
       </section>

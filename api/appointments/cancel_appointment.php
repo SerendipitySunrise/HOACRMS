@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/admin_notifications.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -81,7 +82,7 @@ try {
 
     $checkStmt = mysqli_prepare(
         $conn,
-        'SELECT AppointmentID, Status
+        'SELECT AppointmentID, PatientID, StaffID, DepartmentID, Status
          FROM appointments
          WHERE AppointmentID = ?
            AND PatientID = ?
@@ -162,6 +163,23 @@ try {
     if ($affectedRows !== 1) {
         respond(false, 'The appointment could not be cancelled.');
     }
+
+    $cancellationMessage = 'Appointment #' . $appointmentID . ' has been cancelled.';
+    adminNotificationCreateForAppointmentUsers(
+        $conn,
+        $appointmentID,
+        'Appointment Cancelled',
+        $cancellationMessage
+    );
+    adminNotificationCreateForActiveAdmins(
+        $conn,
+        'Appointment Cancelled',
+        'Appointment #' . $appointmentID . ' was cancelled by the patient.',
+        'Appointment',
+        $appointmentID,
+        'appointments',
+        'Medium'
+    );
 
     respond(true, 'Appointment cancelled successfully.');
 

@@ -4,6 +4,283 @@ require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/db.php';
 requireRole('Admin');
 
+$flashMessage = '';
+$flashType = 'success';
+
+function emailExists(mysqli $conn, string $email, int $excludeUserId = 0): bool
+{
+    $stmt = mysqli_prepare($conn, 'SELECT UserID FROM users WHERE Email = ? AND UserID <> ?');
+    if (!$stmt) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'si', $email, $excludeUserId);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    return mysqli_num_rows($result) > 0;
+}
+
+function generatePatientEmail(mysqli $conn, string $firstName, string $lastName, string $phone): string
+{
+    $base = strtolower(preg_replace('/[^a-z0-9]+/i', '', $firstName . '.' . $lastName));
+    if ($base === '') {
+        $base = 'patient';
+    }
+
+    $phoneDigits = preg_replace('/[^0-9]/', '', $phone);
+    $suffix = $phoneDigits !== '' ? substr($phoneDigits, -6) : '000000';
+    $emailBase = $base . $suffix;
+    $email = $emailBase . '@mediacare.local';
+    $counter = 1;
+
+    while (emailExists($conn, $email)) {
+        $email = $emailBase . $counter . '@mediacare.local';
+        $counter++;
+    }
+
+    return $email;
+}
+
+  function dateOfBirthFromAge(int $age): ?string
+  {
+    if ($age <= 0) {
+      return null;
+    }
+
+    $today = new DateTime('today');
+    $today->modify('-' . $age . ' years');
+    return $today->format('Y-m-d');
+  }
+
+function fetchPatients(mysqli $conn): array
+{
+    $patients = [];
+    $sql = "SELECT
+                u.UserID,
+                p.PatientID,
+                u.FirstName,
+                u.LastName,
+                u.Email,
+                u.Sex,
+                u.ContactNumber,
+                u.DateOfBirth,
+                u.Status,
+                p.BloodType,
+                p.Allergies,
+                COUNT(a.AppointmentID) AS Visits
+            FROM patients p
+            INNER JOIN users u ON u.UserID = p.UserID
+            LEFT JOIN appointments a ON a.PatientID = p.PatientID
+            WHERE u.RoleID = 3
+            GROUP BY p.PatientID, u.UserID, u.FirstName, u.LastName, u.Email, u.Sex, u.ContactNumber, u.DateOfBirth, u.Status, p.BloodType, p.Allergies
+            ORDER BY u.LastName, u.FirstName";
+
+    $result = mysqli_query($conn, $sql);
+    if (!$result) {
+        return $patients;
+    }
+
+    while ($row = mysqli_fetch_assoc($result)) {
+        $fullName = trim(($row['FirstName'] ?? '') . ' ' . ($row['LastName'] ?? ''));
+        $dob = $row['DateOfBirth'] ?? null;
+        $age = 0;
+
+        if (!empty($dob) && $dob !== '0000-00-00') {
+            $dobDate = new DateTime($dob);
+            $today = new DateTime('today');
+            $age = (int) $dobDate->diff($today)->y;
+        }
+
+        $patients[] = [
+            'userId' => (int) ($row['UserID'] ?? 0),
+            'patientId' => (int) ($row['PatientID'] ?? 0),
+            'name' => $fullName,
+            'age' => $age,
+            'gender' => (string) ($row['Sex'] ?? 'Male'),
+            'phone' => (string) ($row['ContactNumber'] ?? 'N/A'),
+            'blood' => (string) ($row['BloodType'] ?? 'A+'),
+            'allergies' => (string) ($row['Allergies'] ?? 'None'),
+            'visits' => (int) ($row['Visits'] ?? 0),
+            'status' => (string) ($row['Status'] ?? 'Active'),
+            'email' => (string) ($row['Email'] ?? '')
+        ];
+    }
+
+    return $patients;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    $name = trim($_POST['patient-name'] ?? '');
+    $age = (int) ($_POST['patient-age'] ?? 0);
+    $gender = trim($_POST['patient-gender'] ?? 'Male');
+    $phone = trim($_POST['patient-phone'] ?? '');
+    $blood = trim($_POST['patient-blood'] ?? 'A+');
+    $allergies = trim($_POST['patient-allergies'] ?? '');
+    $userId = (int) ($_POST['user_id'] ?? 0);
+
+    if ($action === 'add' || $action === 'update') {
+        if ($name === '') {
+            $flashMessage = 'Please enter the patient\'s full name.';
+            $flashType = 'error';
+        } else {
+            $parts = preg_split('/\s+/', $name, 2);
+            $firstName = $parts[0] ?? '';
+            $lastName = $parts[1] ?? '';
+
+            if ($firstName === '' || $lastName === '') {
+                $firstName = $name;
+                $lastName = '';
+            }
+
+            $email = generatePatientEmail($conn, $firstName, $lastName, $phone);
+            $tempPassword = bin2hex(random_bytes(6));
+            $hashedPassword = password_hash($tempPassword, PASSWORD_DEFAULT);
+            $roleId = 3;
+            $status = 'Active';
+            $sex = $gender !== '' ? $gender : 'Male';
+            $dateOfBirth = dateOfBirthFromAge($age);
+            $phoneValue = $phone !== '' ? $phone : null;
+            $bloodValue = $blood !== '' ? $blood : 'A+';
+            $allergyValue = $allergies !== '' ? $allergies : 'None';
+
+            mysqli_begin_transaction($conn);
+
+            if ($action === 'add') {
+                $userStmt = mysqli_prepare(
+                    $conn,
+                  'INSERT INTO users (RoleID, FirstName, LastName, Email, Password, Sex, DateOfBirth, ContactNumber, Status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+
+                mysqli_stmt_bind_param(
+                    $userStmt,
+                    'issssssss',
+                    $roleId,
+                    $firstName,
+                    $lastName,
+                    $email,
+                    $hashedPassword,
+                    $sex,
+                    $dateOfBirth,
+                    $phoneValue,
+                    $status
+                );
+
+                if (!mysqli_stmt_execute($userStmt)) {
+                    mysqli_rollback($conn);
+                    $flashMessage = 'Unable to create patient account.';
+                    $flashType = 'error';
+                } else {
+                    $newUserId = (int) mysqli_insert_id($conn);
+                    $patientStmt = mysqli_prepare(
+                        $conn,
+                        'INSERT INTO patients (UserID, BloodType, Allergies) VALUES (?, ?, ?)'
+                    );
+                    mysqli_stmt_bind_param($patientStmt, 'iss', $newUserId, $bloodValue, $allergyValue);
+
+                    if (!mysqli_stmt_execute($patientStmt)) {
+                        mysqli_rollback($conn);
+                        $flashMessage = 'Unable to create patient record.';
+                        $flashType = 'error';
+                    } else {
+                        mysqli_commit($conn);
+                        $flashMessage = 'Patient added successfully.';
+                    }
+                }
+            } else {
+                if ($userId <= 0) {
+                    $flashMessage = 'Patient record not found for update.';
+                    $flashType = 'error';
+                } else {
+                    if ($dateOfBirth !== null) {
+                      $userStmt = mysqli_prepare(
+                        $conn,
+                        'UPDATE users SET FirstName = ?, LastName = ?, Sex = ?, DateOfBirth = ?, ContactNumber = ?, Status = ? WHERE UserID = ?'
+                      );
+                      mysqli_stmt_bind_param(
+                        $userStmt,
+                        'ssssssi',
+                        $firstName,
+                        $lastName,
+                        $sex,
+                        $dateOfBirth,
+                        $phoneValue,
+                        $status,
+                        $userId
+                      );
+                    } else {
+                      $userStmt = mysqli_prepare(
+                        $conn,
+                        'UPDATE users SET FirstName = ?, LastName = ?, Sex = ?, ContactNumber = ?, Status = ? WHERE UserID = ?'
+                      );
+                      mysqli_stmt_bind_param(
+                        $userStmt,
+                        'sssssi',
+                        $firstName,
+                        $lastName,
+                        $sex,
+                        $phoneValue,
+                        $status,
+                        $userId
+                      );
+                    }
+
+                    if (!mysqli_stmt_execute($userStmt)) {
+                        mysqli_rollback($conn);
+                        $flashMessage = 'Unable to update patient profile.';
+                        $flashType = 'error';
+                    } else {
+                        $patientStmt = mysqli_prepare(
+                            $conn,
+                            'UPDATE patients SET BloodType = ?, Allergies = ? WHERE UserID = ?'
+                        );
+                        mysqli_stmt_bind_param($patientStmt, 'ssi', $bloodValue, $allergyValue, $userId);
+
+                        if (!mysqli_stmt_execute($patientStmt)) {
+                            mysqli_rollback($conn);
+                            $flashMessage = 'Unable to update patient details.';
+                            $flashType = 'error';
+                        } else {
+                            mysqli_commit($conn);
+                            $flashMessage = 'Patient updated successfully.';
+                        }
+                    }
+                }
+            }
+        }
+    } elseif ($action === 'delete') {
+        if ($userId <= 0) {
+            $flashMessage = 'Invalid patient selection.';
+            $flashType = 'error';
+        } else {
+            mysqli_begin_transaction($conn);
+            $patientStmt = mysqli_prepare($conn, 'DELETE FROM patients WHERE UserID = ?');
+            mysqli_stmt_bind_param($patientStmt, 'i', $userId);
+
+            if (!mysqli_stmt_execute($patientStmt)) {
+                mysqli_rollback($conn);
+                $flashMessage = 'Unable to delete patient record.';
+                $flashType = 'error';
+            } else {
+                $userStmt = mysqli_prepare($conn, 'DELETE FROM users WHERE UserID = ?');
+                mysqli_stmt_bind_param($userStmt, 'i', $userId);
+
+                if (!mysqli_stmt_execute($userStmt)) {
+                    mysqli_rollback($conn);
+                    $flashMessage = 'Unable to delete patient account.';
+                    $flashType = 'error';
+                } else {
+                    mysqli_commit($conn);
+                    $flashMessage = 'Patient removed successfully.';
+                }
+            }
+        }
+    }
+}
+
+$patients = fetchPatients($conn);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -12,6 +289,8 @@ requireRole('Admin');
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Patient Management — MediCare Admin Portal</title>
 <link rel="stylesheet" href="../assets/css/admin/admin_patient_management.css">
+<link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
+<script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
 </head>
 <body>
 <div class="app">
@@ -96,13 +375,17 @@ requireRole('Admin');
         <h1>Patient Management</h1>
         <p id="patient-count">10 registered patients</p>
       </div>
-      <button class="notif-bell" aria-label="Notifications">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-        <span class="notif-badge">2</span>
-      </button>
+      <?php include __DIR__ . '/../includes/admin_notification_widget.php'; ?>
     </div>
 
     <div class="panel">
+      <?php if ($flashMessage !== ''): ?>
+        <div class="flash-message" style="padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:14px;font-weight:500;border:1px solid;
+          <?php echo $flashType === 'error' ? 'background:#fee2e2;color:#991b1b;border-color:#fecaca;' : 'background:#dcfce7;color:#065f46;border-color:#bbf7d0;'; ?>">
+          <?php echo htmlspecialchars($flashMessage); ?>
+        </div>
+      <?php endif; ?>
+
       <div class="panel-head">
         <div>
           <div class="panel-head-title" style="font-size:1.15rem;">Patients</div>
@@ -157,8 +440,10 @@ requireRole('Admin');
       <button class="modal-close" id="modal-close-btn" aria-label="Close">&times;</button>
     </div>
 
-    <form id="patient-form" onsubmit="return false;">
+    <form id="patient-form" method="POST">
       <input type="hidden" id="edit-index" value="-1" />
+      <input type="hidden" id="patient-action" name="action" value="add" />
+      <input type="hidden" id="patient-user-id" name="user_id" value="" />
 
       <div class="form-group">
         <label for="patient-name">Full Name</label>
@@ -218,18 +503,7 @@ requireRole('Admin');
 
 <script>
   // ================= PATIENT DATA =================
-  let patients = [
-    { name: "Robert Chen", age: 45, gender: "Male", phone: "+1-555-0101", blood: "A+", allergies: "Penicillin", visits: 4 },
-    { name: "Maria Garcia", age: 32, gender: "Female", phone: "+1-555-0102", blood: "O-", allergies: "None", visits: 4 },
-    { name: "David Kim", age: 67, gender: "Male", phone: "+1-555-0103", blood: "B+", allergies: "Sulfa drugs, Shellfish", visits: 0 },
-    { name: "Jennifer Adams", age: 28, gender: "Female", phone: "+1-555-0104", blood: "AB+", allergies: "Latex", visits: 1 },
-    { name: "Michael Brown", age: 52, gender: "Male", phone: "+1-555-0105", blood: "O+", allergies: "Aspirin", visits: 0 },
-    { name: "Lisa Wang", age: 39, gender: "Female", phone: "+1-555-0106", blood: "A-", allergies: "None", visits: 0 },
-    { name: "Thomas Anderson", age: 55, gender: "Male", phone: "+1-555-0107", blood: "B-", allergies: "Codeine", visits: 2 },
-    { name: "Amanda Foster", age: 24, gender: "Female", phone: "+1-555-0108", blood: "O+", allergies: "None", visits: 2 },
-    { name: "Carlos Rivera", age: 61, gender: "Male", phone: "+1-555-0109", blood: "A+", allergies: "Ibuprofen", visits: 1 },
-    { name: "Priya Patel", age: 47, gender: "Female", phone: "+1-555-0110", blood: "B+", allergies: "None", visits: 1 }
-  ];
+  let patients = <?php echo json_encode($patients, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 
   // ================= DOM REFS =================
   const tbody = document.getElementById('patient-rows');
@@ -259,6 +533,8 @@ requireRole('Admin');
     patientBlood.value = 'A+';
     patientAllergies.value = '';
     editIndex.value = '-1';
+    document.getElementById('patient-action').value = 'add';
+    document.getElementById('patient-user-id').value = '';
     modalTitle.textContent = 'Add New Patient';
     modalSub.textContent = 'Fill in the patient\'s details';
     saveBtn.innerHTML = `
@@ -276,6 +552,8 @@ requireRole('Admin');
       patientBlood.value = patientData.blood || 'A+';
       patientAllergies.value = patientData.allergies || '';
       editIndex.value = index;
+      document.getElementById('patient-action').value = 'update';
+      document.getElementById('patient-user-id').value = patientData.userId || '';
       modalTitle.textContent = `Edit ${patientData.name}`;
       modalSub.textContent = 'Update patient information';
       saveBtn.innerHTML = `
@@ -355,9 +633,27 @@ requireRole('Admin');
     document.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = +btn.dataset.index;
-        if (confirm(`Are you sure you want to remove ${patients[idx].name}?`)) {
-          patients.splice(idx, 1);
-          renderPatients(searchInput.value);
+        const patient = patients[idx];
+        if (!patient) return;
+
+        if (confirm(`Are you sure you want to remove ${patient.name}?`)) {
+          const params = new URLSearchParams();
+          params.set('action', 'delete');
+          params.set('user_id', patient.userId || '');
+
+          fetch(window.location.pathname, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: params.toString()
+          })
+          .then(() => {
+            window.location.reload();
+          })
+          .catch(() => {
+            window.location.reload();
+          });
         }
       });
     });
@@ -368,25 +664,29 @@ requireRole('Admin');
     const name = patientName.value.trim();
     if (!name) { alert('Please enter the patient\'s full name.'); return; }
 
-    const newPatient = {
-      name: name,
-      age: parseInt(patientAge.value, 10) || 0,
-      gender: patientGender.value,
-      phone: patientPhone.value.trim() || 'N/A',
-      blood: patientBlood.value,
-      allergies: patientAllergies.value.trim() || 'None',
-      visits: 0
-    };
+    const params = new URLSearchParams();
+    params.set('action', document.getElementById('patient-action').value || 'add');
+    params.set('user_id', document.getElementById('patient-user-id').value || '');
+    params.set('patient-name', patientName.value.trim());
+    params.set('patient-age', patientAge.value || '0');
+    params.set('patient-gender', patientGender.value);
+    params.set('patient-phone', patientPhone.value.trim());
+    params.set('patient-blood', patientBlood.value);
+    params.set('patient-allergies', patientAllergies.value.trim());
 
-    const idx = parseInt(editIndex.value, 10);
-    if (idx >= 0 && idx < patients.length) {
-      newPatient.visits = patients[idx].visits;
-      patients[idx] = newPatient;
-    } else {
-      patients.push(newPatient);
-    }
-    renderPatients(searchInput.value);
-    closeModal();
+    fetch(window.location.pathname, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+      },
+      body: params.toString()
+    })
+    .then(() => {
+      window.location.reload();
+    })
+    .catch(() => {
+      window.location.reload();
+    });
   }
 
   // ================= EVENT BINDING =================
