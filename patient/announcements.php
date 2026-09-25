@@ -1,7 +1,7 @@
 <?php
 /**
  * announcements.php
- * CarePath - Patient Announcements
+ * Curora - Patient Announcements
  */
 
 session_start();
@@ -145,7 +145,7 @@ function esc(string $value): string
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Announcements — CarePath Patient Portal</title>
+<title>Announcements — Curora Patient Portal</title>
 <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="stylesheet" href="../assets/css/patient/patient_dashboard.css">
 <style>
@@ -169,10 +169,10 @@ function esc(string $value): string
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <img src="../assets/images/carepath-icon.png" alt="CarePath">
+        <img src="../assets/images/curora-icon.png" alt="Curora">
       </div>
       <div class="brand-text">
-        <div class="brand-title">Care<strong>Path</strong></div>
+        <div class="brand-title">Curora</div>
         <div class="brand-sub">Patient Portal</div>
       </div>
     </div>

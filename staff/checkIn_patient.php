@@ -378,7 +378,7 @@ if (
                 '_' .
                 sanitizeNameForEmail($firstName) .
                 sanitizeNameForEmail($lastName) .
-                '@carepath.local';
+                '@curora.local';
 
             $randomPassword = bin2hex(random_bytes(8));
             $placeholderPassword = password_hash($randomPassword, PASSWORD_DEFAULT);
@@ -736,7 +736,7 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Patient Check-in — CarePath Staff Portal</title>
+<title>Patient Check-in — Curora Staff Portal</title>
     <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -777,12 +777,12 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
         <div class="brand-icon">
 
-            <img src="../assets/images/carepath-icon.png" alt="CarePath">
+            <img src="../assets/images/curora-icon.png" alt="Curora">
 
         </div>
 
         <div class="brand-text">
-            <div class="brand-title">Care<strong>Path</strong></div>
+            <div class="brand-title">Curora</div>
             <div class="brand-sub">Staff Portal</div>
         </div>
 

@@ -81,7 +81,7 @@ $pageSubtitle = $action === 'register'
     >
 
     <title>
-        <?php echo escapeHtml($pageTitle); ?> — CarePath
+        <?php echo escapeHtml($pageTitle); ?> — Curora
     </title>
     <link rel="icon" type="image/png" href="assets/images/favicon.png">
 
@@ -108,7 +108,7 @@ $pageSubtitle = $action === 'register'
             </a>
 
             <div class="logo">
-                <img src="assets/images/carepath-logo-full.png" alt="CarePath Logo">
+                <img src="assets/images/curora-logo-full.png" alt="Curora Logo">
             </div>
 
             <h1>

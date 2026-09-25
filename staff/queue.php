@@ -1039,14 +1039,14 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
         <div class="brand-icon">
 
-            <img src="../assets/images/carepath-icon.png" alt="CarePath">
+            <img src="../assets/images/curora-icon.png" alt="Curora">
 
         </div>
 
         <div class="brand-text">
 
             <div class="brand-title">
-                Care<strong>Path</strong>
+                Curora
             </div>
 
             <div class="brand-sub">

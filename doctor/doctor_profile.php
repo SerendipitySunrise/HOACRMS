@@ -278,7 +278,7 @@ if (isset($_GET['updated'])) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Profile — CarePath Doctor Portal</title>
+<title>My Profile — Curora Doctor Portal</title>
     <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -603,10 +603,10 @@ if (isset($_GET['updated'])) {
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <img src="../assets/images/carepath-icon.png" alt="CarePath">
+        <img src="../assets/images/curora-icon.png" alt="Curora">
       </div>
       <div class="brand-text">
-        <div class="brand-title">Care<strong>Path</strong></div>
+        <div class="brand-title">Curora</div>
         <div class="brand-sub">Doctor Portal</div>
       </div>
     </div>

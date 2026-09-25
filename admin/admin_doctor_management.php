@@ -216,16 +216,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $flashMessage = 'Doctor account created for ' . $name . '. Temporary password: ' . $tempPassword;
 
                     // Best-effort email of the new credentials
-                    if (is_file(__DIR__ . '/../includes/mailer.php') && !function_exists('sendCarePathEmail')) {
+                    if (is_file(__DIR__ . '/../includes/mailer.php') && !function_exists('sendCuroraEmail')) {
                         require_once __DIR__ . '/../includes/mailer.php';
                     }
-                    if (function_exists('sendCarePathEmail')) {
-                        sendCarePathEmail(
+                    if (function_exists('sendCuroraEmail')) {
+                        sendCuroraEmail(
                             $email,
-                            'Your CarePath doctor account has been created',
+                            'Your Curora doctor account has been created',
                             '<p>Hello ' . htmlspecialchars($firstName) . ',</p>'
                             . '<p>An administrator has created your doctor account for the Hospital Outpatient '
-                            . 'Appointment and Consultation Record Management System (CarePath).</p>'
+                            . 'Appointment and Consultation Record Management System (Curora).</p>'
                             . '<p><strong>Email:</strong> ' . htmlspecialchars($email) . '<br>'
                             . '<strong>Temporary password:</strong> ' . htmlspecialchars($tempPassword) . '</p>'
                             . '<p>Please sign in and change your password as soon as possible.</p>'
@@ -328,7 +328,7 @@ $doctors = fetchDoctors($conn);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Doctor Management — CarePath Admin Portal</title>
+<title>Doctor Management — Curora Admin Portal</title>
     <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="stylesheet" href="../assets/css/admin/admin_doctor_management.css">
 </head>
@@ -339,10 +339,10 @@ $doctors = fetchDoctors($conn);
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <img src="../assets/images/carepath-icon.png" alt="CarePath">
+        <img src="../assets/images/curora-icon.png" alt="Curora">
       </div>
       <div class="brand-text">
-        <div class="brand-title">Care<strong>Path</strong></div>
+        <div class="brand-title">Curora</div>
         <div class="brand-sub">Admin Portal</div>
       </div>
     </div>

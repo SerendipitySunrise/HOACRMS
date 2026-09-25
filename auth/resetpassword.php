@@ -84,7 +84,7 @@ if (!isset($_GET['token'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Password - CarePath</title>
+    <title>Reset Password - Curora</title>
     <link rel="icon" type="image/png" href="../assets/images/favicon.png">
     <link rel="stylesheet" href="../assets/css/auth/resetpassword.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -94,7 +94,7 @@ if (!isset($_GET['token'])) {
 <div class="main-container">
     <div class="brand-header">
         <div class="logo">
-            <img src="../assets/images/logo.png" alt="CarePath Logo" class="logo-img">
+            <img src="../assets/images/curora-logo-full.png" alt="Curora Logo" class="logo-img">
         </div>
         <h1><?php echo $validToken ? 'Create New Password' : 'Invalid Link'; ?></h1>
         <p class="subtitle">

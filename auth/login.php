@@ -227,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$loginTitle = 'Sign in to CarePath';
+$loginTitle = 'Sign in to Curora';
 $registerPath = '../portal-select.php?action=register';
 $registerLabel = 'Create an account';
 
@@ -244,9 +244,9 @@ $registerLabel = 'Create an account';
     >
 
     <title>
-        <?php echo htmlspecialchars($loginTitle); ?> — CarePath
+        <?php echo htmlspecialchars($loginTitle); ?> — Curora
     </title>
-    <link rel="icon" type="image/png" href="../assets/images/carepath-logo-full.png">
+    <link rel="icon" type="image/png" href="../assets/images/curora-logo-full.png">
 
     <link
         rel="stylesheet"
@@ -276,8 +276,8 @@ $registerLabel = 'Create an account';
 
             <div class="logo">
                 <img
-                    src="../assets/images/carepath-logo-full.png"
-                    alt="CarePath Logo"
+                    src="../assets/images/curora-logo-full.png"
+                    alt="Curora Logo"
                     class="logo-img"
                 >
             </div>
@@ -287,7 +287,7 @@ $registerLabel = 'Create an account';
             </h1>
 
             <p class="subtitle">
-                Sign in using your CarePath email and password.
+                Sign in using your Curora email and password.
             </p>
 
         </div>

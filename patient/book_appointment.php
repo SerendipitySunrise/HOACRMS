@@ -254,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>Book Appointment — CarePath Patient Portal</title>
+<title>Book Appointment — Curora Patient Portal</title>
     <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 
 <link rel="preconnect"
@@ -282,14 +282,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
         <div class="brand-icon">
 
-            <img src="../assets/images/carepath-icon.png" alt="CarePath">
+            <img src="../assets/images/curora-icon.png" alt="Curora">
 
         </div>
 
         <div class="brand-text">
 
             <div class="brand-title">
-                Care<strong>Path</strong>
+                Curora
             </div>
 
             <div class="brand-sub">

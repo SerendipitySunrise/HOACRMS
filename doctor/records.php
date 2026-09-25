@@ -601,8 +601,8 @@ if (
     }
 
     $reportData = [
-        'clinic_name'           => 'CarePath Clinic',
-        'clinic_info'           => 'CarePath Outpatient Portal | Tel: (02) 1234-5678',
+        'clinic_name'           => 'Curora Clinic',
+        'clinic_info'           => 'Curora Outpatient Portal | Tel: (02) 1234-5678',
         'doctor_name'           => $doctorDisplayName,
         'doctor_specialization' => (string) ($report['Specialization'] ?? ''),
         'doctor_license'        => '',
@@ -1443,14 +1443,14 @@ $totalRecords = count($records);
 
         <div class="brand-icon">
 
-            <img src="../assets/images/carepath-icon.png" alt="CarePath">
+            <img src="../assets/images/curora-icon.png" alt="Curora">
 
         </div>
 
         <div class="brand-text">
 
             <div class="brand-title">
-                Care<strong>Path</strong>
+                Curora
             </div>
 
             <div class="brand-sub">

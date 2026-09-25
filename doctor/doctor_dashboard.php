@@ -1,7 +1,7 @@
 <?php
 /**
  * doctor_dashboard.php
- * CarePath - Doctor Dashboard
+ * Curora - Doctor Dashboard
  *
  * REAL DATABASE DATA
  *
@@ -752,7 +752,7 @@ function formatNotificationTime($dateTime)
     content="width=device-width, initial-scale=1.0"
 >
 
-<title>Doctor Dashboard — CarePath</title>
+<title>Doctor Dashboard — Curora</title>
     <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 
 <link
@@ -787,14 +787,14 @@ function formatNotificationTime($dateTime)
 
         <div class="brand-icon">
 
-            <img src="../assets/images/carepath-icon.png" alt="CarePath">
+            <img src="../assets/images/curora-icon.png" alt="Curora">
 
         </div>
 
         <div class="brand-text">
 
             <div class="brand-title">
-                Care<strong>Path</strong>
+                Curora
             </div>
 
             <div class="brand-sub">

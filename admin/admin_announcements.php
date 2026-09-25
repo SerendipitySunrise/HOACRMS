@@ -41,7 +41,7 @@ $priorityMap = [
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Announcements — CarePath Admin Portal</title>
+<title>Announcements — Curora Admin Portal</title>
     <link rel="icon" type="image/png" href="../assets/images/favicon.png">
 <link rel="stylesheet" href="../assets/css/admin/admin_announcements.css">
 </head>
@@ -52,10 +52,10 @@ $priorityMap = [
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <img src="../assets/images/carepath-icon.png" alt="CarePath">
+        <img src="../assets/images/curora-icon.png" alt="Curora">
       </div>
       <div class="brand-text">
-        <div class="brand-title">Care<strong>Path</strong></div>
+        <div class="brand-title">Curora</div>
         <div class="brand-sub">Admin Portal</div>
       </div>
     </div>
