@@ -189,6 +189,38 @@ width: 38px;
 .btn-primary:hover { background: var(--color-primary-hover); }
 .btn-primary svg { width: 18px; height: 18px; }
 
+.btn-disruption {
+  background: #fff4ea;
+  color: #b5560a;
+  border: 1px solid #e2a15c;
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-family: var(--font-family);
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-disruption:hover {
+  background: #e2a15c;
+  color: #fff;
+}
+
+.btn-disruption svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-disruption { background: #2a2016; }
+}
+
 /* ---------- ANNOUNCEMENTS GRID ---------- */
 .announcements-grid {
   display: grid;

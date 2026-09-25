@@ -130,7 +130,14 @@ $priorityMap = [
 
     <!-- New Announcement Button -->
     <div class="top-actions">
-      <a class="btn-outline" href="../schedule_disruptions.php">Schedule disruption</a>
+      <a class="btn-disruption" href="../schedule_disruptions.php">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="17" rx="2"></rect>
+          <path d="M16 2v4M8 2v4M3 10h18"></path>
+          <path d="m12 14 .01 0M12 17v.01"></path>
+        </svg>
+        Schedule disruption
+      </a>
       <button class="btn-primary" id="add-announcement-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         New Announcement
