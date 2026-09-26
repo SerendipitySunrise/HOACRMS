@@ -42,16 +42,16 @@ function generatePatientEmail(mysqli $conn, string $firstName, string $lastName,
     return $email;
 }
 
-  function dateOfBirthFromAge(int $age): ?string
-  {
+function dateOfBirthFromAge(int $age): ?string
+{
     if ($age <= 0) {
-      return null;
+        return null;
     }
 
     $today = new DateTime('today');
     $today->modify('-' . $age . ' years');
     return $today->format('Y-m-d');
-  }
+}
 
 function fetchPatients(mysqli $conn): array
 {
@@ -73,6 +73,7 @@ function fetchPatients(mysqli $conn): array
             INNER JOIN users u ON u.UserID = p.UserID
             LEFT JOIN appointments a ON a.PatientID = p.PatientID
             WHERE u.RoleID = 3
+              AND u.Status = 'Active'
             GROUP BY p.PatientID, u.UserID, u.FirstName, u.LastName, u.Email, u.Sex, u.ContactNumber, u.DateOfBirth, u.Status, p.BloodType, p.Allergies
             ORDER BY u.LastName, u.FirstName";
 
@@ -150,8 +151,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($action === 'add') {
                 $userStmt = mysqli_prepare(
                     $conn,
-                  'INSERT INTO users (RoleID, FirstName, LastName, Email, Password, Sex, DateOfBirth, ContactNumber, Status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO users (RoleID, FirstName, LastName, Email, Password, Sex, DateOfBirth, ContactNumber, Status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
 
                 mysqli_stmt_bind_param(
@@ -195,36 +196,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $flashType = 'error';
                 } else {
                     if ($dateOfBirth !== null) {
-                      $userStmt = mysqli_prepare(
-                        $conn,
-                        'UPDATE users SET FirstName = ?, LastName = ?, Sex = ?, DateOfBirth = ?, ContactNumber = ?, Status = ? WHERE UserID = ?'
-                      );
-                      mysqli_stmt_bind_param(
-                        $userStmt,
-                        'ssssssi',
-                        $firstName,
-                        $lastName,
-                        $sex,
-                        $dateOfBirth,
-                        $phoneValue,
-                        $status,
-                        $userId
-                      );
+                        $userStmt = mysqli_prepare(
+                            $conn,
+                            'UPDATE users SET FirstName = ?, LastName = ?, Sex = ?, DateOfBirth = ?, ContactNumber = ?, Status = ? WHERE UserID = ?'
+                        );
+                        mysqli_stmt_bind_param(
+                            $userStmt,
+                            'ssssssi',
+                            $firstName,
+                            $lastName,
+                            $sex,
+                            $dateOfBirth,
+                            $phoneValue,
+                            $status,
+                            $userId
+                        );
                     } else {
-                      $userStmt = mysqli_prepare(
-                        $conn,
-                        'UPDATE users SET FirstName = ?, LastName = ?, Sex = ?, ContactNumber = ?, Status = ? WHERE UserID = ?'
-                      );
-                      mysqli_stmt_bind_param(
-                        $userStmt,
-                        'sssssi',
-                        $firstName,
-                        $lastName,
-                        $sex,
-                        $phoneValue,
-                        $status,
-                        $userId
-                      );
+                        $userStmt = mysqli_prepare(
+                            $conn,
+                            'UPDATE users SET FirstName = ?, LastName = ?, Sex = ?, ContactNumber = ?, Status = ? WHERE UserID = ?'
+                        );
+                        mysqli_stmt_bind_param(
+                            $userStmt,
+                            'sssssi',
+                            $firstName,
+                            $lastName,
+                            $sex,
+                            $phoneValue,
+                            $status,
+                            $userId
+                        );
                     }
 
                     if (!mysqli_stmt_execute($userStmt)) {
@@ -255,26 +256,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flashMessage = 'Invalid patient selection.';
             $flashType = 'error';
         } else {
-            mysqli_begin_transaction($conn);
-            $patientStmt = mysqli_prepare($conn, 'DELETE FROM patients WHERE UserID = ?');
-            mysqli_stmt_bind_param($patientStmt, 'i', $userId);
+            $newStatus = 'Inactive';
+            $stmt = mysqli_prepare(
+                $conn,
+                'UPDATE users SET Status = ? WHERE UserID = ? AND RoleID = 3'
+            );
 
-            if (!mysqli_stmt_execute($patientStmt)) {
-                mysqli_rollback($conn);
-                $flashMessage = 'Unable to delete patient record.';
+            if (!$stmt) {
+                $flashMessage = 'Unable to prepare patient removal.';
                 $flashType = 'error';
             } else {
-                $userStmt = mysqli_prepare($conn, 'DELETE FROM users WHERE UserID = ?');
-                mysqli_stmt_bind_param($userStmt, 'i', $userId);
+                mysqli_stmt_bind_param($stmt, 'si', $newStatus, $userId);
 
-                if (!mysqli_stmt_execute($userStmt)) {
-                    mysqli_rollback($conn);
-                    $flashMessage = 'Unable to delete patient account.';
-                    $flashType = 'error';
+                if (mysqli_stmt_execute($stmt)) {
+                    $flashMessage = 'Patient deactivated successfully.';
+                    $flashType = 'success';
                 } else {
-                    mysqli_commit($conn);
-                    $flashMessage = 'Patient removed successfully.';
+                    $flashMessage = 'Unable to deactivate patient: ' . mysqli_error($conn);
+                    $flashType = 'error';
                 }
+                mysqli_stmt_close($stmt);
             }
         }
     }
@@ -575,10 +576,10 @@ $patients = fetchPatients($conn);
   function renderPatients(filter = '') {
     const searchTerm = filter.toLowerCase().trim();
     let filtered = patients;
-    
+
     if (searchTerm) {
-      filtered = patients.filter(p => 
-        p.name.toLowerCase().includes(searchTerm) || 
+      filtered = patients.filter(p =>
+        p.name.toLowerCase().includes(searchTerm) ||
         p.phone.includes(searchTerm)
       );
     }
@@ -591,10 +592,10 @@ $patients = fetchPatients($conn);
     }
 
     let html = '';
-    filtered.forEach((p, i) => {
+    filtered.forEach((p) => {
       const originalIndex = patients.indexOf(p);
-      const allergyDisplay = p.allergies && p.allergies !== 'None' 
-        ? `<div class="patient-allergy">Allergies: ${p.allergies}</div>` 
+      const allergyDisplay = p.allergies && p.allergies !== 'None'
+        ? `<div class="patient-allergy">Allergies: ${p.allergies}</div>`
         : '';
 
       html += `
@@ -637,10 +638,15 @@ $patients = fetchPatients($conn);
         const patient = patients[idx];
         if (!patient) return;
 
-        if (confirm(`Are you sure you want to remove ${patient.name}?`)) {
+        if (!patient.userId || patient.userId <= 0) {
+          alert('Cannot delete: invalid patient ID.');
+          return;
+        }
+
+        if (confirm(`Are you sure you want to deactivate ${patient.name}?`)) {
           const params = new URLSearchParams();
           params.set('action', 'delete');
-          params.set('user_id', patient.userId || '');
+          params.set('user_id', String(patient.userId));
 
           fetch(window.location.pathname, {
             method: 'POST',
@@ -649,11 +655,14 @@ $patients = fetchPatients($conn);
             },
             body: params.toString()
           })
-          .then(() => {
+          .then(response => response.text())
+          .then(data => {
+            console.log('Server response:', data);
             window.location.reload();
           })
-          .catch(() => {
-            window.location.reload();
+          .catch(error => {
+            console.error('Delete error:', error);
+            alert('Delete failed: ' + error.message);
           });
         }
       });
@@ -695,7 +704,9 @@ $patients = fetchPatients($conn);
   closeBtn.addEventListener('click', closeModal);
   cancelBtn.addEventListener('click', closeModal);
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-  saveBtn.addEventListener('click', savePatient);
+
+  // Only bind form submit — the button is type="submit" and will trigger this.
+  // Do NOT also bind saveBtn's click, or savePatient() runs twice.
   document.getElementById('patient-form').addEventListener('submit', (e) => {
     e.preventDefault();
     savePatient();

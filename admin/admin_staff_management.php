@@ -46,6 +46,7 @@ function fetchStaff(mysqli $conn): array
          INNER JOIN users u ON u.UserID = s.UserID
          LEFT JOIN departments d ON d.DepartmentID = s.DepartmentID
          WHERE u.RoleID = 2
+           AND s.StaffRole NOT IN ("Doctor", "Administrator")
          ORDER BY u.LastName, u.FirstName'
     );
 
@@ -111,17 +112,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = mysqli_prepare($conn, 'UPDATE users SET Status = ? WHERE UserID = ?');
             mysqli_stmt_bind_param($stmt, 'si', $newStatus, $toggleUserId);
             if (mysqli_stmt_execute($stmt)) {
-              if (mysqli_stmt_affected_rows($stmt) > 0) {
-                adminNotificationCreateForActiveAdmins(
-                  $conn,
-                  'Staff Status Changed',
-                  'A staff account was changed to ' . $newStatus . '.',
-                  'Staff',
-                  $toggleUserId,
-                  'users',
-                  'Medium'
-                );
-              }
+                if (mysqli_stmt_affected_rows($stmt) > 0) {
+                    adminNotificationCreateForActiveAdmins(
+                        $conn,
+                        'Staff Status Changed',
+                        'A staff account was changed to ' . $newStatus . '.',
+                        'Staff',
+                        $toggleUserId,
+                        'users',
+                        'Medium'
+                    );
+                }
                 $flashMessage = 'Staff status updated.';
             } else {
                 $flashMessage = 'Could not update staff status.';
@@ -137,6 +138,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flashType = 'error';
         } elseif ($role === '') {
             $flashMessage = 'Please select a staff role.';
+            $flashType = 'error';
+        } elseif (in_array($role, ['Doctor', 'Administrator'], true)) {
+            // Guard: never allow staff to be created with doctor/admin role
+            $flashMessage = 'That role cannot be created from Staff Management.';
             $flashType = 'error';
         } elseif ($departmentId <= 0) {
             $flashMessage = 'Please select a department.';
@@ -211,15 +216,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         } else {
                             mysqli_commit($conn);
                             $flashMessage = 'Staff member added successfully.';
-                          adminNotificationCreateForActiveAdmins(
-                            $conn,
-                            'Staff Created',
-                            'Staff member ' . $name . ' was added to the Admin Portal.',
-                            'Staff',
-                            $newUserId,
-                            'users',
-                            'Medium'
-                          );
+                            adminNotificationCreateForActiveAdmins(
+                                $conn,
+                                'Staff Created',
+                                'Staff member ' . $name . ' was added to the Admin Portal.',
+                                'Staff',
+                                $newUserId,
+                                'users',
+                                'Medium'
+                            );
                         }
                     }
                 }
@@ -276,21 +281,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $flashMessage = 'Unable to update staff profile.';
                             $flashType = 'error';
                         } else {
-                          $staffChanged = mysqli_stmt_affected_rows($userStmt) > 0
-                            || mysqli_stmt_affected_rows($staffStmt) > 0;
+                            $staffChanged = mysqli_stmt_affected_rows($userStmt) > 0
+                                || mysqli_stmt_affected_rows($staffStmt) > 0;
                             mysqli_commit($conn);
                             $flashMessage = 'Staff member updated successfully.';
-                          if ($staffChanged) {
-                            adminNotificationCreateForActiveAdmins(
-                              $conn,
-                              'Staff Updated',
-                              'Staff member ' . $name . ' was updated.',
-                              'Staff',
-                              $userId,
-                              'users',
-                              'Low'
-                            );
-                          }
+                            if ($staffChanged) {
+                                adminNotificationCreateForActiveAdmins(
+                                    $conn,
+                                    'Staff Updated',
+                                    'Staff member ' . $name . ' was updated.',
+                                    'Staff',
+                                    $userId,
+                                    'users',
+                                    'Low'
+                                );
+                            }
                         }
                     }
                 }
@@ -306,14 +311,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_stmt_bind_param($staffStmt, 'i', $userId);
             if (!mysqli_stmt_execute($staffStmt)) {
                 mysqli_rollback($conn);
-                $flashMessage = 'Unable to delete staff record.';
+                $flashMessage = 'Unable to delete staff record: ' . mysqli_error($conn);
                 $flashType = 'error';
             } else {
-                $userStmt = mysqli_prepare($conn, 'DELETE FROM users WHERE UserID = ?');
+                $userStmt = mysqli_prepare($conn, 'DELETE FROM users WHERE UserID = ? AND RoleID = 2');
                 mysqli_stmt_bind_param($userStmt, 'i', $userId);
                 if (!mysqli_stmt_execute($userStmt)) {
                     mysqli_rollback($conn);
-                    $flashMessage = 'Unable to delete staff account.';
+                    $flashMessage = 'Unable to delete staff account: ' . mysqli_error($conn);
                     $flashType = 'error';
                 } else {
                     mysqli_commit($conn);
@@ -506,7 +511,6 @@ $staffMembers = fetchStaff($conn);
             <option value="Nurse">Nurse</option>
             <option value="Receptionist">Receptionist</option>
             <option value="Technician">Technician</option>
-            <option value="Administrator">Administrator</option>
             <option value="Pharmacist">Pharmacist</option>
             <option value="Therapist">Therapist</option>
             <option value="Lab Assistant">Lab Assistant</option>
@@ -583,6 +587,12 @@ $staffMembers = fetchStaff($conn);
 <script>
   // ================= STAFF DATA =================
   let staffMembers = <?php echo json_encode($staffMembers, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+
+  // Defensive: strip any doctors/admins that may have leaked in
+  staffMembers = staffMembers.filter(s => {
+    const r = (s.role || '').toLowerCase();
+    return r !== 'doctor' && r !== 'administrator';
+  });
 
   // ================= DOM REFS =================
   const tbody = document.getElementById('staff-rows');
@@ -747,7 +757,16 @@ $staffMembers = fetchStaff($conn);
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
           body: params.toString()
-        }).then(() => { window.location.reload(); }).catch(() => { window.location.reload(); });
+        })
+        .then(r => r.text())
+        .then(data => {
+          console.log('Toggle response:', data);
+          window.location.reload();
+        })
+        .catch(err => {
+          console.error('Toggle error:', err);
+          window.location.reload();
+        });
       });
     });
 
@@ -757,16 +776,30 @@ $staffMembers = fetchStaff($conn);
         const staff = staffMembers[idx];
         if (!staff) return;
 
+        if (!staff.userId || staff.userId <= 0) {
+          alert('Cannot delete: invalid staff ID.');
+          return;
+        }
+
         if (confirm(`Are you sure you want to remove ${staff.name}?`)) {
           const params = new URLSearchParams();
           params.set('action', 'delete');
-          params.set('user_id', staff.userId || '');
+          params.set('user_id', String(staff.userId));
 
           fetch(window.location.pathname, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
             body: params.toString()
-          }).then(() => { window.location.reload(); }).catch(() => { window.location.reload(); });
+          })
+          .then(r => r.text())
+          .then(data => {
+            console.log('Delete response:', data);
+            window.location.reload();
+          })
+          .catch(err => {
+            console.error('Delete error:', err);
+            window.location.reload();
+          });
         }
       });
     });

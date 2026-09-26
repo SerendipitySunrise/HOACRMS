@@ -413,6 +413,12 @@ foreach ($appointments as $appt) {
         <?php endif; ?>
 
       </div>
+
+      <div class="appt-pagination" id="apptPagination">
+        <button type="button" class="appt-page-btn" id="prevPageBtn">Previous</button>
+        <span class="appt-page-info" id="pageInfo">Page 1 of 1</span>
+        <button type="button" class="appt-page-btn" id="nextPageBtn">Next</button>
+      </div>
     </div>
 
   </main>
@@ -500,6 +506,12 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
     const clearBtn = document.getElementById('clearFilters');
     const apptList = document.getElementById('apptList');
     const listTitle = document.getElementById('listTitle');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    const pageInfo = document.getElementById('pageInfo');
+
+    const PAGE_SIZE = 5;
+    let currentPage = 1;
 
     const tabTitles = {
         all: 'All Appointments',
@@ -541,11 +553,13 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
         }
     }
 
+    // Marks which rows match the current filters, but does not set
+    // display directly — renderPage() decides what's actually shown
+    // so filtering and pagination never fight over row.style.display.
     function applyFilters() {
         const range = getDateRange();
         const deptFilter = deptSelect.value.toLowerCase();
         const docFilter = docSelect.value.toLowerCase();
-        let visible = 0;
 
         tabs.forEach(t => {
             t.classList.toggle('active', t.dataset.tab === activeTab);
@@ -553,7 +567,7 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
 
         listTitle.textContent = tabTitles[activeTab];
 
-        apptList.querySelectorAll('.appt-row').forEach(row => {
+        apptList.querySelectorAll('.appt-row:not(.empty-filter-row)').forEach(row => {
             const date = row.dataset.date;
             const status = row.dataset.status;
             const rowDept = (row.dataset.dep || '').toLowerCase();
@@ -573,16 +587,44 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
                 show = rowDoc === docFilter;
             }
 
-            row.style.display = show ? '' : 'none';
+            row.classList.toggle('filter-hidden', !show);
+        });
 
-            if (show) {
-                visible++;
+        renderPage(1);
+    }
+
+    function getMatchingRows() {
+        return Array.from(apptList.querySelectorAll('.appt-row:not(.empty-filter-row)'))
+            .filter(row => !row.classList.contains('filter-hidden'));
+    }
+
+    function renderPage(page) {
+        const matches = getMatchingRows();
+        const totalPages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
+
+        currentPage = Math.min(Math.max(1, page), totalPages);
+
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const end = start + PAGE_SIZE;
+
+        matches.forEach((row, index) => {
+            row.style.display = (index >= start && index < end) ? '' : 'none';
+        });
+
+        // Hide every non-matching row too (pagination only iterates matches).
+        apptList.querySelectorAll('.appt-row:not(.empty-filter-row)').forEach(row => {
+            if (row.classList.contains('filter-hidden')) {
+                row.style.display = 'none';
             }
         });
 
+        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        prevPageBtn.disabled = currentPage <= 1;
+        nextPageBtn.disabled = currentPage >= totalPages;
+
         let emptyRow = apptList.querySelector('.empty-filter-row');
 
-        if (visible === 0) {
+        if (matches.length === 0) {
             if (!emptyRow) {
                 emptyRow = document.createElement('div');
                 emptyRow.className = 'appt-row empty-filter-row';
@@ -597,6 +639,9 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
             emptyRow.remove();
         }
     }
+
+    prevPageBtn.addEventListener('click', () => renderPage(currentPage - 1));
+    nextPageBtn.addEventListener('click', () => renderPage(currentPage + 1));
 
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {

@@ -122,8 +122,7 @@ if (!empty($patient['CurrentMedication'])) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Profile — Curora Patient Portal</title>
-    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
+<title>My Profile — MediCare Patient Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/patient/patient_dashboard.css">
@@ -135,10 +134,10 @@ if (!empty($patient['CurrentMedication'])) {
   <aside class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <img src="../assets/images/curora-icon.png" alt="Curora">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </div>
       <div class="brand-text">
-        <div class="brand-title">Curora</div>
+        <div class="brand-title">MediCare</div>
         <div class="brand-sub">Patient Portal</div>
       </div>
     </div>
@@ -405,25 +404,27 @@ if (!empty($patient['CurrentMedication'])) {
           <div class="info-field" style="grid-column: 1 / -1;">
             <div class="pref-toggle-row">
               <label class="pref-switch">
-                <input type="checkbox" id="ReceiveReminders" <?php echo ((int)$patient['ReceiveReminders'] === 1) ? 'checked' : ''; ?>>
+                <input type="checkbox" id="MethodEmail"
+                  <?php echo (in_array($patient['ReminderPreference'], ['all', 'email'], true)) ? 'checked' : ''; ?>>
                 <span class="slider"></span>
               </label>
               <div>
-                <div class="pref-label">Receive appointment reminders</div>
-                <div class="pref-hint">Get notified before your scheduled appointments.</div>
+                <div class="pref-label">Email notifications</div>
+                <div class="pref-hint"><?php echo field($patient['Email']); ?> will be used for email reminders.</div>
               </div>
             </div>
           </div>
 
           <div class="info-field" style="grid-column: 1 / -1;">
-            <div class="pref-field">
-              <label class="pref-label" for="ReminderPreference">Preferred reminder method</label>
-              <select id="ReminderPreference" class="pref-select">
-                <option value="email" <?php echo ($patient['ReminderPreference'] === 'email') ? 'selected' : ''; ?>>Email</option>
-                <option value="push" <?php echo ($patient['ReminderPreference'] === 'push') ? 'selected' : ''; ?>>In-App Notification</option>
-              </select>
-              <div class="pref-hint">
-                <?php echo field($patient['Email']); ?> will be used for email reminders.
+            <div class="pref-toggle-row">
+              <label class="pref-switch">
+                <input type="checkbox" id="MethodPush"
+                  <?php echo (in_array($patient['ReminderPreference'], ['all', 'push'], true)) ? 'checked' : ''; ?>>
+                <span class="slider"></span>
+              </label>
+              <div>
+                <div class="pref-label">In-app notifications</div>
+                <div class="pref-hint">Get reminders inside your patient portal notifications.</div>
               </div>
             </div>
           </div>
@@ -700,23 +701,37 @@ avatarInput.addEventListener('change', function() {
 });
 
 // Notification preferences
-const receiveCheckbox = document.getElementById('ReceiveReminders');
-const prefSelect = document.getElementById('ReminderPreference');
+const methodEmail = document.getElementById('MethodEmail');
+const methodPush = document.getElementById('MethodPush');
 const savePrefsBtn = document.getElementById('savePrefsBtn');
 const prefMessage = document.getElementById('prefMessage');
 
-function syncPrefMethod() {
-  prefSelect.disabled = !receiveCheckbox.checked;
-  prefSelect.style.opacity = receiveCheckbox.checked ? '1' : '0.5';
+// Keep at least one method enabled so there is always a valid preference to save.
+function enforceAtLeastOneMethod(justChanged) {
+  if (!methodEmail.checked && !methodPush.checked) {
+    justChanged.checked = true;
+
+    prefMessage.textContent = 'At least one notification method must stay enabled.';
+    prefMessage.className = 'form-message error';
+    prefMessage.style.display = 'block';
+  }
 }
 
-receiveCheckbox.addEventListener('change', syncPrefMethod);
-syncPrefMethod();
+function getReminderPreferenceValue() {
+  if (methodEmail.checked && methodPush.checked) return 'all';
+  if (methodEmail.checked) return 'email';
+  if (methodPush.checked) return 'push';
+  return 'all';
+}
+
+methodEmail.addEventListener('change', () => enforceAtLeastOneMethod(methodEmail));
+methodPush.addEventListener('change', () => enforceAtLeastOneMethod(methodPush));
 
 savePrefsBtn.addEventListener('click', function() {
   const body = new URLSearchParams();
-  if (receiveCheckbox.checked) body.append('ReceiveReminders', '1');
-  body.append('ReminderPreference', prefSelect.value);
+  // Reminders are always on now; only the delivery method is user-configurable.
+  body.append('ReceiveReminders', '1');
+  body.append('ReminderPreference', getReminderPreferenceValue());
 
   savePrefsBtn.disabled = true;
 

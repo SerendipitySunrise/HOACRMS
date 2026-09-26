@@ -1753,6 +1753,48 @@ body.landing-page {
   gap: 12px;
 }
 
+/* ---------- APPOINTMENT PAGINATION ---------- */
+.appt-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.appt-page-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #d7dbdf;
+  font-family: var(--font-family);
+  font-weight: 600;
+  font-size: 0.85rem;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.appt-page-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.appt-page-btn:disabled {
+  color: #b0b6bc;
+  border-color: #b0b6bc;
+  cursor: not-allowed;
+  background: #fff;
+}
+
+.appt-page-info {
+  margin: 0 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+}
+
 .appt-row {
   background: #f6f8fa;
   border-radius: 12px;
@@ -3401,4 +3443,3 @@ body.landing-page {
 }
 
 .brand-text .brand-title strong { font-weight: 800; }
-

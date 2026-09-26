@@ -254,8 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>Book Appointment — Curora Patient Portal</title>
-    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
+<title>Book Appointment — MediCare Patient Portal</title>
 
 <link rel="preconnect"
       href="https://fonts.googleapis.com">
@@ -282,14 +281,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
         <div class="brand-icon">
 
-            <img src="../assets/images/curora-icon.png" alt="Curora">
+            <svg viewBox="0 0 24 24"
+                 fill="none"
+                 stroke="currentColor"
+                 stroke-width="2"
+                 stroke-linecap="round"
+                 stroke-linejoin="round">
+
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+
+            </svg>
 
         </div>
 
         <div class="brand-text">
 
             <div class="brand-title">
-                Curora
+                MediCare
             </div>
 
             <div class="brand-sub">
@@ -330,6 +338,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
     <a href="consultation_history.php" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       Consultation History
+    </a>
+  </li>
+  <li>
+    <a href="announcements.php" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      Announcements
     </a>
   </li>
   <li>
@@ -702,6 +716,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
             Select Appointment Date
         </div>
 
+        <div class="calendar-nav">
+            <button type="button"
+                    class="month-nav-btn"
+                    id="prevMonthBtn"
+                    aria-label="Previous month">
+                &#8249;
+            </button>
+
+            <span class="month-nav-label" id="monthLabel"></span>
+
+            <button type="button"
+                    class="month-nav-btn"
+                    id="nextMonthBtn"
+                    aria-label="Next month">
+                &#8250;
+            </button>
+        </div>
+
         <div class="date-grid" id="dateGrid"></div>
 
     </div>
@@ -952,6 +984,10 @@ let selectedSlot = '';
 let departmentSchedules = [];
 let scheduleLoading = false;
 
+// How many months ahead patients are allowed to browse and book.
+const MAX_MONTH_OFFSET = 11;
+let monthOffset = 0;
+
 console.log(
     'Booking script loaded. Department cards:',
     document.querySelectorAll('.dept-card').length
@@ -979,6 +1015,7 @@ function loadDepartmentSchedule() {
     departmentSchedules = [];
     selectedDate = '';
     selectedSlot = '';
+    monthOffset = 0;
 
     dateGrid.innerHTML = '';
     slotGrid.innerHTML = '';
@@ -1042,6 +1079,9 @@ function renderAvailableDates() {
     const dateGrid = document.getElementById('dateGrid');
     const slotGrid = document.getElementById('slotGrid');
     const timeslotSub = document.getElementById('timeslotSub');
+    const monthLabel = document.getElementById('monthLabel');
+    const prevMonthBtn = document.getElementById('prevMonthBtn');
+    const nextMonthBtn = document.getElementById('nextMonthBtn');
 
     dateGrid.innerHTML = '';
     slotGrid.innerHTML = '';
@@ -1054,11 +1094,28 @@ function renderAvailableDates() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // The month currently being displayed, based on monthOffset (0 = this month).
+    const viewedMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+
+    monthLabel.textContent = viewedMonth.toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric'
+    });
+
+    prevMonthBtn.disabled = monthOffset <= 0;
+    nextMonthBtn.disabled = monthOffset >= MAX_MONTH_OFFSET;
+
+    const daysInMonth = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1, 0).getDate();
+
     let datesAdded = 0;
 
-    for (let offset = 1; offset <= 60 && datesAdded < 7; offset++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + offset);
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth(), day);
+
+        // Never show days that have already passed.
+        if (date < today) {
+            continue;
+        }
 
         const hasSchedule = departmentSchedules.some(schedule => {
             return Number(schedule.DayOfWeek) === date.getDay();
@@ -1101,9 +1158,23 @@ function renderAvailableDates() {
     }
 
     if (datesAdded === 0) {
-        dateGrid.innerHTML = '<p>No future appointment dates are available.</p>';
+        dateGrid.innerHTML = '<p>No appointment dates are available in this month. Try another month.</p>';
     }
 }
+
+document.getElementById('prevMonthBtn').addEventListener('click', () => {
+    if (monthOffset > 0) {
+        monthOffset--;
+        renderAvailableDates();
+    }
+});
+
+document.getElementById('nextMonthBtn').addEventListener('click', () => {
+    if (monthOffset < MAX_MONTH_OFFSET) {
+        monthOffset++;
+        renderAvailableDates();
+    }
+});
 
 function loadAvailableSlots() {
     const slotGrid = document.getElementById('slotGrid');
