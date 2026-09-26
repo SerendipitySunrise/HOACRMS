@@ -330,11 +330,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_all_read'])) {
       <?php endif; ?>
     </div>
 
+    <?php if (!empty($notifications)): ?>
+    <nav class="notification-pagination" id="notificationPagination" aria-label="Notification pages">
+      <button type="button" class="notification-page-btn" id="previousPage" disabled>Previous</button>
+      <span class="notification-page-status" id="notificationPageStatus" aria-live="polite">Page 1 of 1</span>
+      <button type="button" class="notification-page-btn" id="nextPage">Next</button>
+    </nav>
+    <?php endif; ?>
+
   </main>
 
 </div>
 
 <script>
+const notificationPageSize = 5;
+let notificationFilter = 'all';
+let notificationPage = 1;
+
+function visibleNotificationCards() {
+  return [...document.querySelectorAll('.notif-card')]
+    .filter(card => notificationFilter === 'all' || card.dataset.read === '0');
+}
+
+function renderNotificationPage(shouldScroll = false) {
+  const cards = visibleNotificationCards();
+  const totalPages = Math.max(1, Math.ceil(cards.length / notificationPageSize));
+  notificationPage = Math.min(notificationPage, totalPages);
+  const firstCard = (notificationPage - 1) * notificationPageSize;
+  const lastCard = firstCard + notificationPageSize;
+
+  document.querySelectorAll('.notif-card').forEach(card => {
+    card.style.display = 'none';
+    if (card.classList.contains('open')) {
+      card.classList.remove('open');
+      const body = card.querySelector('.notif-card-body');
+      const chevron = card.querySelector('.notif-card-chevron');
+      if (body) body.style.maxHeight = '0';
+      if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+  });
+
+  cards.slice(firstCard, lastCard).forEach(card => { card.style.display = ''; });
+
+  const pagination = document.getElementById('notificationPagination');
+  if (!pagination) return;
+  document.getElementById('notificationPageStatus').textContent = `Page ${notificationPage} of ${totalPages}`;
+  document.getElementById('previousPage').disabled = notificationPage === 1;
+  document.getElementById('nextPage').disabled = notificationPage === totalPages;
+
+  if (shouldScroll) {
+    document.getElementById('notifList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
 function filterNotifs(filter) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
@@ -345,14 +393,25 @@ function filterNotifs(filter) {
     btns[1].classList.add('active');
   }
 
-  document.querySelectorAll('.notif-card').forEach(card => {
-    if (filter === 'unread') {
-      card.style.display = card.dataset.read === '0' ? '' : 'none';
-    } else {
-      card.style.display = '';
-    }
-  });
+  notificationFilter = filter;
+  notificationPage = 1;
+  renderNotificationPage();
 }
+
+document.getElementById('previousPage')?.addEventListener('click', () => {
+  if (notificationPage > 1) {
+    notificationPage--;
+    renderNotificationPage(true);
+  }
+});
+
+document.getElementById('nextPage')?.addEventListener('click', () => {
+  const totalPages = Math.max(1, Math.ceil(visibleNotificationCards().length / notificationPageSize));
+  if (notificationPage < totalPages) {
+    notificationPage++;
+    renderNotificationPage(true);
+  }
+});
 
 function toggleNotifCard(card) {
   const body = card.querySelector('.notif-card-body');
@@ -369,6 +428,8 @@ function toggleNotifCard(card) {
     chevron.style.transform = 'rotate(180deg)';
   }
 }
+
+renderNotificationPage();
 </script>
 
 </body>

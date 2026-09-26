@@ -2840,6 +2840,50 @@ body.landing-page {
   margin-top: 20px;
 }
 
+.notification-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-top: 20px;
+}
+
+.notification-page-btn {
+  min-width: 88px;
+  padding: 8px 16px;
+  border: 1px solid #d7dbdf;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font: 600 0.82rem var(--font-family);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.notification-page-btn:first-child { margin-right: 12px; }
+.notification-page-btn:last-child { margin-left: 12px; }
+
+.notification-page-btn:hover:not(:disabled) {
+  border-color: #d7dbdf;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.notification-page-btn:disabled {
+  border-color: #b0b6bc;
+  color: #b0b6bc;
+  cursor: not-allowed;
+  background: #fff;
+}
+
+.notification-page-status {
+  min-width: 78px;
+  color: var(--color-ink-soft);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .notif-card {
   background: #fff;
   border: 1px solid var(--color-border);
