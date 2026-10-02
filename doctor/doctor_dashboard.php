@@ -769,6 +769,8 @@ function formatNotificationTime($dateTime)
     rel="stylesheet"
     href="../assets/css/doctor/doctor_dashboard.css"
 >
+<link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
+<script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
 
 </head>
 
@@ -1020,35 +1022,7 @@ function formatNotificationTime($dateTime)
         </div>
 
 
-        <div class="notif-bell" title="<?= $notificationCount > 0 ? $notificationCount . ' unread notification' . ($notificationCount > 1 ? 's' : '') : 'No new notifications' ?>">
-
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-            >
-
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-
-            </svg>
-
-
-            <?php if ($notificationCount > 0): ?>
-
-                <span class="notif-badge">
-
-                    <?= $notificationCount ?>
-
-                </span>
-
-            <?php endif; ?>
-
-        </div>
+        <?php include __DIR__ . '/../includes/admin_notification_widget.php'; ?>
 
     </div>
 

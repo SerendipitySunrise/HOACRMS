@@ -165,6 +165,20 @@
   color: #777777;
 }
 
+.admin-notification-wrapper .admin-notification-empty > strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #333333;
+}
+
+.admin-notification-wrapper .admin-notification-empty > span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #777777;
+}
+
 .admin-notification-item time {
   display: block;
   margin-top: 8px;
