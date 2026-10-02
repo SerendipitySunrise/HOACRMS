@@ -331,6 +331,8 @@ function getNotifDotColor($type) {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/patient/patient_dashboard.css">
+<link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
+<script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
 </head>
 <body>
 <div class="app">
@@ -414,8 +416,15 @@ function getNotifDotColor($type) {
   <!-- MAIN -->
   <main class="main">
     <div class="page-header">
-      <h1>Welcome, <?php echo htmlspecialchars($patient['FirstName'] . ' ' . $patient['LastName']); ?>!</h1>
-      <p>Here's your health overview for today</p>
+      <div class="page-header-row">
+        <div>
+          <h1>Welcome, <?php echo htmlspecialchars($patient['FirstName'] . ' ' . $patient['LastName']); ?>!</h1>
+          <p>Here's your health overview for today</p>
+        </div>
+        <div class="page-header-actions">
+          <?php include __DIR__ . '/../includes/admin_notification_widget.php'; ?>
+        </div>
+      </div>
     </div>
 
     <!-- Quick actions -->

@@ -166,6 +166,20 @@ function esc(string $value): string
     background: #eff6ff;
     border-color: #bfdbfe;
   }
+  /* Header: title left, "Mark all as read" button right (matches doctor) */
+  .page-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 </style>
 </head>
 <body>
@@ -239,17 +253,22 @@ function esc(string $value): string
   <main class="main">
 
     <div class="page-header">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div class="page-header-row">
         <div>
           <h1>Announcements</h1>
           <p>Stay up to date with hospital announcements</p>
         </div>
-        <?php if ($unreadCount > 0): ?>
-          <form method="POST" style="display:inline;">
-            <input type="hidden" name="action" value="mark_all">
-            <button type="submit" class="mark-all-read-btn">Mark all as read</button>
-          </form>
-        <?php endif; ?>
+        <div class="page-header-actions">
+          <?php if ($unreadCount > 0): ?>
+            <form method="POST" class="mark-all-form">
+              <input type="hidden" name="action" value="mark_all">
+              <button type="submit" class="btn-quick teal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Mark all as read
+              </button>
+            </form>
+          <?php endif; ?>
+        </div>
       </div>
     </div>
 

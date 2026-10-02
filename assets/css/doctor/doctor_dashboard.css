@@ -2710,7 +2710,7 @@ body {
 /* Announcements page header: title left, actions grouped right */
 .page-header-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
