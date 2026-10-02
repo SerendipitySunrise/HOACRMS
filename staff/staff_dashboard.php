@@ -253,11 +253,11 @@ mysqli_stmt_execute($stmt);
 $queueResult = mysqli_stmt_get_result($stmt);
 $activeQueue = mysqli_fetch_all($queueResult, MYSQLI_ASSOC);
 
-// Notification badge: patients currently waiting to be called
-$notifCount = 0;
+// Keep waiting queue patients separate from unread notifications.
+$waitingCount = 0;
 foreach ($activeQueue as $row) {
     if (strtolower($row['QueueStatus']) === 'waiting') {
-        $notifCount++;
+    $waitingCount++;
     }
 }
 
@@ -316,6 +316,8 @@ function statDelta(int $todayCount, int $yesterdayCount): string
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/staff/staff_dashboard.css">
+<link rel="stylesheet" href="../assets/css/admin/admin_notifications.css">
+<script src="../assets/js/admin_notifications.js?v=20260924-clear-all" defer></script>
 </head>
 <body>
 <div class="app">
@@ -419,12 +421,7 @@ function statDelta(int $todayCount, int $yesterdayCount): string
         <h1>Staff Dashboard</h1>
         <p><?php echo date('l, F j, Y'); ?> — <?php echo htmlspecialchars($departmentName); ?></p>
       </div>
-      <div class="notif-bell">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <?php if ($notifCount > 0): ?>
-          <span class="notif-badge"><?php echo $notifCount; ?></span>
-        <?php endif; ?>
-      </div>
+      <?php include __DIR__ . '/../includes/admin_notification_widget.php'; ?>
     </div>
 
     <!-- VITALS PENDING ALERT -->
@@ -589,7 +586,7 @@ function statDelta(int $todayCount, int $yesterdayCount): string
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
             Active Queue
           </div>
-          <div class="panel-head-meta"><?php echo count($activeQueue); ?> active</div>
+          <div class="panel-head-meta"><?php echo count($activeQueue); ?> active · <?php echo $waitingCount; ?> waiting</div>
         </div>
 
         <div class="panel-body">
