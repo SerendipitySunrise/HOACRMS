@@ -409,7 +409,7 @@ $patients = fetchPatients($conn);
 
       <!-- Patient Table -->
       <div class="table-wrap">
-        <table class="patient-table">
+        <table class="patient-table" data-responsive>
           <thead>
             <tr>
               <th>NAME</th>
@@ -600,16 +600,16 @@ $patients = fetchPatients($conn);
 
       html += `
         <tr>
-          <td>
+          <td data-label="Name">
             <div class="patient-name">${p.name}</div>
             ${allergyDisplay}
           </td>
-          <td>${p.age}</td>
-          <td>${p.gender}</td>
-          <td>${p.phone}</td>
-          <td><span class="blood-type">${p.blood}</span></td>
-          <td>${p.visits}</td>
-          <td>
+          <td data-label="Age">${p.age}</td>
+          <td data-label="Gender">${p.gender}</td>
+          <td data-label="Phone">${p.phone}</td>
+          <td data-label="Blood Type"><span class="blood-type">${p.blood}</span></td>
+          <td data-label="Visits">${p.visits}</td>
+          <td data-label="Actions">
             <button class="action-btn edit-btn" data-index="${originalIndex}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
             </button>
@@ -719,5 +719,7 @@ $patients = fetchPatients($conn);
   // ================= INIT =================
   renderPatients();
 </script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

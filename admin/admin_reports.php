@@ -181,9 +181,15 @@ if (($_GET['export'] ?? '') === 'csv') {
 }
 
 $navItems = [
-    ['admin_dashboard.php', 'Dashboard'], ['admin_department.php', 'Departments'], ['admin_doctor_management.php', 'Doctors'],
-    ['admin_patient_management.php', 'Patients'], ['admin_staff_management.php', 'Staff'], ['admin_reports.php', 'Reports'],
-    ['admin_announcements.php', 'Announcement'], ['admin_profile.php', 'Profile'], ['admin_system_settings.php', 'System Settings']
+    ['admin_dashboard.php', 'Dashboard', '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>'],
+    ['admin_department.php', 'Departments', '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 21v-6h6v6"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01"/>'],
+    ['admin_doctor_management.php', 'Doctors', '<path d="M4 21v-1a6 6 0 0 1 6-6h1a6 6 0 0 1 6 6v1"/><circle cx="9.5" cy="7" r="4"/><path d="M19 8v4M21 10h-4"/>'],
+    ['admin_patient_management.php', 'Patients', '<path d="M20 21v-1a7 7 0 0 0-7-7h-2a7 7 0 0 0-7 7v1"/><circle cx="12" cy="7" r="4"/>'],
+    ['admin_staff_management.php', 'Staff', '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'],
+    ['admin_reports.php', 'Reports', '<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/>'],
+    ['admin_announcements.php', 'Announcement', '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>'],
+    ['admin_profile.php', 'Profile', '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'],
+    ['admin_system_settings.php', 'System Settings', '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>'],
 ];
 ?>
 <!DOCTYPE html>
@@ -201,7 +207,14 @@ $navItems = [
   <aside class="sidebar">
     <div class="sidebar-brand"><div class="brand-icon"><img src="../assets/images/curora-icon.png" alt="Curora"></div><div class="brand-text"><div class="brand-title">Curora</div><div class="brand-sub">Admin Portal</div></div></div>
     <ul class="nav-list">
-      <?php foreach ($navItems as [$href, $label]): ?><li class="nav-item<?= $label === 'Reports' ? ' active' : '' ?>"><a href="<?= e($href) ?>"><?= e($label) ?></a></li><?php endforeach; ?>
+      <?php foreach ($navItems as [$href, $label, $icon]): ?>
+      <li class="nav-item<?= $label === 'Reports' ? ' active' : '' ?>">
+        <a href="<?= e($href) ?>">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><?= $icon ?></svg>
+          <?= e($label) ?>
+        </a>
+      </li>
+      <?php endforeach; ?>
     </ul>
     <?php include __DIR__ . '/../includes/admin_sidebar_footer.php'; ?>
   </aside>
@@ -235,5 +248,7 @@ const rangeSelect = document.getElementById('range');
 function toggleCustomDates(){document.querySelectorAll('.custom-date').forEach((field)=>field.classList.toggle('is-hidden',rangeSelect.value!=='custom'));}
 rangeSelect.addEventListener('change',toggleCustomDates); toggleCustomDates();
 </script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

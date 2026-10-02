@@ -313,5 +313,7 @@ function esc(string $value): string
 
   </main>
 </div>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

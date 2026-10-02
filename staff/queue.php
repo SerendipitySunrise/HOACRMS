@@ -1014,11 +1014,6 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
     href="../assets/css/staff/staff_dashboard.css"
 >
 
-<link
-    rel="stylesheet"
-    href="../assets/css/staff/queue.css"
->
-
 </head>
 
 <body>
@@ -1713,6 +1708,21 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
         </div>
 
+        <!-- PAGINATION -->
+        <div class="pagination-bar" data-queue="waiting" data-pagination>
+
+            <div class="pagination-row">
+
+                <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+
+                <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+
+                <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+
+            </div>
+
+        </div>
+
     <?php endif; ?>
 
 </div>
@@ -1866,6 +1876,21 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
         </div>
 
+        <!-- PAGINATION -->
+        <div class="pagination-bar" data-queue="called" data-pagination>
+
+            <div class="pagination-row">
+
+                <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+
+                <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+
+                <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+
+            </div>
+
+        </div>
+
     <?php endif; ?>
 
 </div>
@@ -1993,6 +2018,21 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
         </div>
 
+        <!-- PAGINATION -->
+        <div class="pagination-bar" data-queue="inprogress" data-pagination>
+
+            <div class="pagination-row">
+
+                <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+
+                <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+
+                <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+
+            </div>
+
+        </div>
+
     <?php endif; ?>
 
 </div>
@@ -2081,6 +2121,21 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
             </div>
 
         <?php endforeach; ?>
+
+        </div>
+
+        <!-- PAGINATION -->
+        <div class="pagination-bar" data-queue="completed" data-pagination>
+
+            <div class="pagination-row">
+
+                <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+
+                <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+
+                <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+
+            </div>
 
         </div>
 
@@ -2262,6 +2317,8 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
 </div>
 
+<script src="../assets/js/pagination.js"></script>
+
 <script>
   function noShowConfirm(form) {
     var reason = prompt('Reason for no-show (optional):');
@@ -2274,8 +2331,32 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
     }
     return true;
   }
+
+  /* =============================================
+     Queue panel pagination (Waiting / Called /
+     In Consultation / Completed)
+  ============================================= */
+  function initQueuePager(queueTag, itemSelector, perPage) {
+    var bar = document.querySelector('[data-queue="' + queueTag + '"]');
+    if (!bar) return;
+
+    window['queuePager_' + queueTag] = attachPagination({
+      bar: bar,
+      items: function () {
+        return bar.closest('.panel').querySelectorAll(itemSelector);
+      },
+      perPage: perPage
+    });
+  }
+
+  initQueuePager('waiting', '.queue-list .queue-list-row', 5);
+  initQueuePager('called', '.queue-list .queue-list-row', 5);
+  initQueuePager('inprogress', '.queue-list .queue-list-row', 5);
+  initQueuePager('completed', '.queue-list .completed-row', 5);
 </script>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 
 </html>

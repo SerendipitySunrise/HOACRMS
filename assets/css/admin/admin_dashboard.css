@@ -507,3 +507,348 @@ width: 38px;
 
 .brand-text .brand-title strong { font-weight: 800; }
 
+
+/* ============================================================
+   RESPONSIVE / MOBILE LAYER
+   (Appended shared section - do not edit the rules above; the
+    desktop layout is untouched. All rules below are gated by
+    the 1100px / 800px / 480px breakpoints or are additive
+    global safety rules. Mobile navigation is driven by
+    assets/js/responsive_nav.js, which reuses the existing
+    <aside class="sidebar"> as an off-canvas drawer on
+    screens 800px and narrower.)
+   ============================================================ */
+
+/* ---- 0. Global safety rules (no visual change on desktop) ---- */
+html { -webkit-text-size-adjust: 100%; }
+body { overflow-x: hidden; }
+img, svg, canvas, video, embed, iframe { max-width: 100%; height: auto; }
+.main, .app { min-width: 0; }
+.staff-grid > *, .two-column > *, .chart-grid > *, .doctor-grid > *,
+.consult-grid > *, .record-grid > *, .admin-grid > *, .form-row > *,
+.form-grid > *, [class*="-stats"] > *, [class*="stat-"] > *,
+.kpi-grid > *, .queue-list-row { min-width: 0; }
+
+/* ---- 1. Mobile navigation: top bar, drawer, overlay ---- */
+.mobile-topbar { display: none; }
+#nav-overlay { display: none; }
+.nav-close { display: none; }
+
+@media (max-width: 800px) {
+  .mobile-topbar {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    box-sizing: border-box;
+    padding: env(safe-area-inset-top, 0px) 14px 0;
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .mobile-topbar .nav-burger {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #111827;
+    cursor: pointer;
+    font: inherit;
+  }
+  .mobile-topbar .nav-burger:hover { background: #f9fafb; }
+  .mobile-topbar .nav-burger span {
+    display: block;
+    width: 16px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+    margin: 2px 0;
+  }
+  .mobile-topbar-logo {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+  }
+  .mobile-topbar-logo img { width: 30px; height: 30px; object-fit: contain; }
+  .mobile-topbar-logo .mobile-topbar-mark {
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: var(--color-primary, #149385);
+    color: #ffffff;
+    font-family: var(--font-family, 'Inter', sans-serif);
+    font-size: 1rem; font-weight: 700;
+  }
+  .mobile-topbar-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-family, 'Inter', sans-serif);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-ink, #1f2937);
+  }
+
+  #nav-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1190;
+    background: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+  }
+  #nav-overlay.open { opacity: 1; visibility: visible; }
+
+  /* Existing sidebar becomes the off-canvas drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 1300;
+    width: min(86vw, 320px);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: 0 0 48px rgba(15, 23, 42, 0.25);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .nav-close {
+    display: inline-flex;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 5;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-ink-soft, #6b7280);
+    font-size: 30px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .nav-close:hover { background: #f1f5f9; color: var(--color-ink, #1f2937); }
+  .nav-close:focus-visible { outline: 2px solid var(--color-primary, #149385); outline-offset: 2px; }
+
+  .sidebar .nav-list { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .sidebar-footer { flex: 0 0 auto; margin-top: auto; }
+  .sidebar .nav-list a { min-height: 44px; display: flex; align-items: center; }
+  .sidebar-brand { padding-right: 48px; } /* keep brand clear of close button */
+
+  html.nav-lock, html.nav-lock body { overflow: hidden; }
+
+  /* Single column layout, top bar above */
+  .app { grid-template-columns: 1fr; }
+  .main { padding: 20px; }
+  .main { padding-top: calc(64px + env(safe-area-inset-top, 0px)); }
+
+  /* Page headers stack */
+  .page-header { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .page-header-actions, .profile-actions, .footer-actions { flex-wrap: wrap; }
+
+  /* Notification / dropdown panels never overflow the screen */
+  .notification-dropdown, .admin-notification-dropdown, .notif-dropdown {
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    right: 0;
+    left: auto;
+  }
+}
+
+/* ---- 2. Grids: stat/KPI counts + collapsing two-column grids ---- */
+@media (max-width: 1100px) {
+  .two-column, .chart-grid, .doctor-grid, .consult-grid, .staff-grid,
+  .record-grid, .admin-grid, .profile-columns { grid-template-columns: 1fr; }
+  .staff-stats, .staff-stats-context, .doctor-stats, .admin-stats, .kpi-grid,
+  .stat-grid, .stats-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 800px) {
+  .staff-stats, .staff-stats-context, .doctor-stats, .admin-stats, .kpi-grid,
+  .stat-grid, .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .staff-stats, .staff-stats-context, .doctor-stats, .admin-stats, .kpi-grid,
+  .stat-grid, .stats-grid { grid-template-columns: 1fr; }
+  .main { padding: 16px; }
+  .main { padding-top: calc(64px + env(safe-area-inset-top, 0px)); }
+  .page-header, .page-header-row { flex-wrap: wrap; }
+  .page-header-actions, .profile-actions, .footer-actions, .top-actions, .action-bar { flex-direction: column; width: 100%; align-items: stretch; }
+  .page-header-actions a, .page-header-actions button, .profile-actions a, .profile-actions button, .footer-actions a, .footer-actions button, .top-actions a, .top-actions button, .action-bar a, .action-bar button { width: 100%; min-height: 44px; }
+}
+
+/* ---- 3. Tables & lists ---- */
+.table-wrap, .staff-table-wrap, .queue-table-wrap,
+[class*="table-wrap"], [class*="table-scroll"] { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+[class*="table-wrap"] table, [class*="table-scroll"] table { min-width: 640px; }
+
+/* Queue cards on staff pages */
+.queue-list-row { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.queue-list-row .queue-actions { flex: 1 0 auto; flex-wrap: wrap; margin-left: auto; }
+
+/* Stacked card mode for tables whose cells carry data-label */
+@media (max-width: 480px) {
+  table[data-responsive] { min-width: 0 !important; width: 100% !important; }
+  table[data-responsive] thead { display: none; }
+  table[data-responsive] tbody tr {
+    display: block;
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin: 0 0 12px;
+    background: #ffffff;
+  }
+  table[data-responsive] tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 34px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right;
+    white-space: normal;
+  }
+  table[data-responsive] tbody td:last-child { border-bottom: none; }
+  table[data-responsive] tbody td::before {
+    content: attr(data-label);
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft, #6b7280);
+    flex: 1 1 auto;
+  }
+  table[data-responsive] tbody td > * { flex: 0 0 auto; }
+  table[data-responsive] tbody tr.empty-row td,
+  table[data-responsive] tbody td[colspan] { display: block; text-align: center; }
+  table[data-responsive] .queue-actions-cell { text-align: right; white-space: nowrap; }
+  table[data-responsive] .queue-actions-cell::before { white-space: normal; }
+}
+
+/* ---- 4. Forms ---- */
+@media (max-width: 800px) {
+  .form-row, .form-grid, .prescription-row, .vitals-grid, .lab-row,
+  .filter-row, .profile-form .form-row, .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .filter-bar, .queue-filter-bar, .audit-filters, .filter-toolbar,
+  .toolbar, .search-bar { flex-wrap: wrap; }
+  .filter-bar > *, .queue-filter-bar > *, .audit-filters > * { flex: 1 1 auto; }
+  input[type="text"], input[type="email"], input[type="number"],
+  input[type="date"], input[type="tel"], input[type="url"],
+  input[type="password"], input[type="search"], select, textarea {
+    font-size: 16px; /* prevents iOS zoom on focus */
+  }
+}
+@media (max-width: 480px) {
+  input[type="text"], input[type="email"], input[type="number"],
+  input[type="date"], input[type="tel"], input[type="url"],
+  input[type="password"], input[type="search"], select, textarea { width: 100%; }
+  .btn, .btn-quick, .btn-primary, .btn-secondary, .btn-ghost,
+  .btn-search, .btn-print-consult { min-height: 44px; }
+}
+
+/* ---- 5. Consultation page (doctor) ---- */
+@media (max-width: 800px) {
+  .consult-save-actions { flex-wrap: wrap; gap: 10px; }
+  .doc-menu { flex: 1 1 auto; }
+  .doc-menu-list {
+    left: auto;
+    right: 0;
+    min-width: max-content;
+    max-width: calc(100vw - 32px);
+  }
+}
+@media (max-width: 480px) {
+  .consult-save-actions { display: flex; flex-direction: column; }
+  .consult-save-actions .doc-menu { width: 100%; }
+  .consult-save-actions .btn-save-consult { width: 100%; }
+  .consult-panel, .consult-panel-head { min-width: 0; }
+}
+
+/* ---- 6. Modals & popups ---- */
+@media (max-width: 800px) {
+  .modal-overlay { padding: 16px; align-items: center; justify-content: center; }
+  .modal-card {
+    width: min(560px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fu-modal-backdrop { padding: 16px; }
+  .fu-modal-dialog {
+    width: calc(100% - 24px);
+    max-width: 560px;
+    max-height: 90vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: auto;
+  }
+  .modal-close, .fu-modal-close { width: 44px; height: 44px; flex: 0 0 44px; }
+}
+
+/* ---- 7. Touch targets & focus visibility ---- */
+@media (max-width: 800px) {
+  .queue-filter-btn, .pagination-btn, .page-link { min-height: 40px; }
+  .fu-btn, .modal-list-item { min-height: 44px; }
+  a, button, input, select, textarea { -webkit-tap-highlight-color: rgba(20, 147, 133, 0.15); }
+  .nav-list a:focus-visible, .queue-filter-btn:focus-visible,
+  .btn:focus-visible, .fu-btn:focus-visible, .modal-close:focus-visible,
+  .fu-modal-close:focus-visible, .pagination-btn:focus-visible,
+  .nav-burger:focus-visible {
+    outline: 2px solid var(--color-primary, #149385);
+    outline-offset: 2px;
+  }
+}
+
+/* ---- 8. Pagination: stays centered, padding shrinks ---- */
+@media (max-width: 800px) {
+  .pagination-bar { padding: 12px 0; gap: 10px; }
+  .pagination-btn, .pagination-page { padding: 6px 12px; font-size: 13px; }
+}
+@media (max-width: 480px) {
+  .pagination-bar { padding: 10px 0; flex-wrap: wrap; }
+}
+
+/* ---- 9. Print: hide the mobile chrome, restore layout ---- */
+@media print {
+  .mobile-topbar, #nav-overlay, .nav-close { display: none !important; }
+  html.nav-lock, html.nav-lock body { overflow: visible !important; }
+  .sidebar { overflow: visible !important; }
+}
+@media print and (max-width: 800px) {
+  .app { grid-template-columns: 220px 1fr; }
+  .sidebar {
+    position: static;
+    transform: none;
+    width: auto;
+    display: block;
+    box-shadow: none;
+  }
+  .sidebar .nav-list { overflow: visible; }
+  .main { padding: 0; }
+}

@@ -325,6 +325,10 @@ if (
     $patientID = (int)($_POST['patient_id'] ?? 0);
 
     $diagnosis = trim($_POST['diagnosis'] ?? '');
+    /* The dedicated "Treatment Plan" input was removed from the form --
+       plans (treatment, medications, referrals, instructions, follow-up)
+       now live in the SOAP "Plan" field below. This variable is only
+       kept so the legacy Treatment column can be preserved on re-saves. */
     $treatmentPlan = trim($_POST['treatment_plan'] ?? '');
 
     /* SOAP-format clinical notes */
@@ -370,10 +374,14 @@ if (
 
 
     /* ------------------------------------------------------------
-       TREATMENT PLAN
-       (Prescriptions are stored separately in the prescriptions /
-       prescription_items tables, so only the treatment plan text
-       is written to the Treatment column here.)
+       TREATMENT PLAN (legacy column)
+       The separate "Treatment Plan" box was removed -- treatment,
+       medications, tests, referrals, instructions and follow-up now
+       live in the SOAP "Plan" field (stored in Notes). Prescriptions
+       are stored separately in prescriptions / prescription_items.
+       The Treatment column is kept for historical records only; its
+       value is preserved on re-save when nothing new is submitted
+       (see the guard after the existing-consultation check below).
     ------------------------------------------------------------ */
 
     $finalTreatment = $treatmentPlan;
@@ -505,7 +513,7 @@ if (
     ------------------------------------------------------------ */
 
     $checkConsultSql = "
-        SELECT ConsultationID
+        SELECT ConsultationID, Treatment
         FROM consultations
         WHERE AppointmentID = ?
         LIMIT 1
@@ -529,6 +537,16 @@ if (
         mysqli_fetch_assoc($checkConsultResult);
 
     mysqli_stmt_close($checkConsultStmt);
+
+
+    /* Since the dedicated "Treatment Plan" box is gone, the submitted
+       value will always be empty here. Preserve the previously saved
+       Treatment text instead of wiping it whenever a consultation is
+       re-saved (new consultations simply start with an empty value). */
+    if ($treatmentPlan === '' && $existingConsultation) {
+        $finalTreatment =
+            (string)($existingConsultation['Treatment'] ?? '');
+    }
 
 
     /* ============================================================
@@ -919,6 +937,30 @@ if (
         exit;
     }
 
+    /* The "Treatment Plan" box was removed from the form -- plans live
+       in the SOAP "Plan" field. For printouts (which can happen before
+       saving), fall back to the last saved Treatment value when the
+       form did not submit one. */
+    $savedTreatment = '';
+    $txStmt = mysqli_prepare(
+        $conn,
+        "SELECT Treatment
+         FROM consultations
+         WHERE AppointmentID = ?
+         LIMIT 1"
+    );
+
+    if ($txStmt) {
+        mysqli_stmt_bind_param($txStmt, 'i', $apptID);
+        mysqli_stmt_execute($txStmt);
+        $txRow = mysqli_fetch_assoc(
+            mysqli_stmt_get_result($txStmt)
+        );
+        $savedTreatment =
+            (string)($txRow['Treatment'] ?? '');
+        mysqli_stmt_close($txStmt);
+    }
+
     /* Patient demographics. */
     $patientName = trim(
         ($appt['FirstName'] ?? '') . ' ' .
@@ -1024,7 +1066,7 @@ if (
         'appointment_date' => (string)($appt['AppointmentDate'] ?? ''),
         'chief_complaint' => trim($_POST['chief_complaint'] ?? ($appt['Purpose'] ?? '')),
         'diagnosis' => $diagnosis,
-        'treatment' => $treatmentPlan,
+        'treatment' => $treatmentPlan !== '' ? $treatmentPlan : $savedTreatment,
         'notes' => $notes,
         'vitals' => $vitals,
         'follow_up_date' => $followUp,
@@ -2705,25 +2747,6 @@ if (isset($_GET['consult'])) {
 
     <div class="form-field">
 
-        <label for="treatment-plan">
-
-            Treatment Plan
-
-        </label>
-
-        <textarea
-            id="treatment-plan"
-            name="treatment_plan"
-            placeholder="Recommended treatment, follow-up, instructions..."
-        ><?= htmlspecialchars(
-            $consultPatient['treatment'] ?? ''
-        ) ?></textarea>
-
-    </div>
-
-
-    <div class="form-field">
-
         <label for="follow-up-date">
 
             Follow-up Date
@@ -3595,49 +3618,41 @@ if (isset($_GET['consult'])) {
 
 <div class="consult-save-actions">
 
-    <button
-        type="submit"
-        class="btn-print-consult"
-        name="print_action"
-        value="prescription"
-    >
+    <div class="doc-menu" id="docMenu">
 
-        Generate Prescription
+        <button
+            type="button"
+            class="btn-print-consult doc-menu-trigger"
+            id="docMenuTrigger"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="docMenuList"
+        >
+            Documents
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>
+        </button>
 
-    </button>
+        <div class="doc-menu-list" id="docMenuList" role="menu" hidden>
 
-    <button
-        type="submit"
-        class="btn-print-consult"
-        name="print_action"
-        value="medical_certificate"
-    >
+            <button type="submit" class="doc-menu-item" role="menuitem" name="print_action" value="prescription">
+                Generate Prescription
+            </button>
 
-        Medical Certificate
+            <button type="submit" class="doc-menu-item" role="menuitem" name="print_action" value="medical_certificate">
+                Medical Certificate
+            </button>
 
-    </button>
+            <button type="submit" class="doc-menu-item" role="menuitem" name="print_action" value="lab_request">
+                Lab Request
+            </button>
 
-    <button
-        type="submit"
-        class="btn-print-consult"
-        name="print_action"
-        value="lab_request"
-    >
+            <button type="submit" class="doc-menu-item" role="menuitem" name="print_action" value="consultation_report">
+                Print Consultation Report
+            </button>
 
-        Lab Request
+        </div>
 
-    </button>
-
-    <button
-        type="submit"
-        class="btn-print-consult btn-print-report"
-        name="print_action"
-        value="consultation_report"
-    >
-
-        Print Consultation Report
-
-    </button>
+    </div>
 
     <button
         type="submit"
@@ -3650,6 +3665,36 @@ if (isset($_GET['consult'])) {
     </button>
 
 </div>
+
+<script>
+(function () {
+    var wrap    = document.getElementById('docMenu');
+    var trigger = document.getElementById('docMenuTrigger');
+    var list    = document.getElementById('docMenuList');
+    if (!wrap || !trigger || !list) return;
+
+    function setOpen(open) {
+        list.hidden = !open;
+        trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    trigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setOpen(list.hidden);
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!wrap.contains(e.target)) setOpen(false);
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !list.hidden) {
+            setOpen(false);
+            trigger.focus();
+        }
+    });
+})();
+</script>
 
 
 </div>
@@ -4259,7 +4304,7 @@ function toggleConsultDetails(btn)
 
 <div class="queue-table-wrap">
 
-<table class="queue-table">
+<table class="queue-table" data-responsive>
 
 <thead>
 
@@ -4365,7 +4410,7 @@ $statusLabel =
 >
 
 
-<td>
+<td data-label="Queue #">
 
     <span
         class="queue-num-badge <?= htmlspecialchars(
@@ -4382,7 +4427,7 @@ $statusLabel =
 </td>
 
 
-<td>
+<td data-label="Patient">
 
     <div class="queue-patient-name">
 
@@ -4442,7 +4487,7 @@ $statusLabel =
 </td>
 
 
-<td>
+<td data-label="Appointment">
 
     <?= htmlspecialchars(
         date(
@@ -4456,7 +4501,7 @@ $statusLabel =
 </td>
 
 
-<td>
+<td data-label="Status">
 
     <span
         class="queue-status-text <?= htmlspecialchars(
@@ -4473,7 +4518,7 @@ $statusLabel =
 </td>
 
 
-<td>
+<td data-label="Est. Wait">
 
 <?php if ($p['status'] === 'waiting'): ?>
 
@@ -4505,7 +4550,7 @@ $statusLabel =
 </td>
 
 
-<td class="queue-actions-cell">
+<td class="queue-actions-cell" data-label="Actions">
 
 
 <?php if (
@@ -4579,8 +4624,29 @@ $statusLabel =
 
 </div>
 
+<?php if (!empty($queue)): ?>
+
+<!-- PAGINATION -->
+<div class="pagination-bar" data-pagination>
+
+    <div class="pagination-row">
+
+        <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+
+        <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+
+        <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+
+    </div>
+
 </div>
 
+<?php endif; ?>
+
+</div>
+
+
+<script src="../assets/js/pagination.js"></script>
 
 <script>
 
@@ -4603,6 +4669,14 @@ function filterQueue(status, btn)
     btn.classList.add(
         'active'
     );
+
+
+    /* When pagination is active, delegate the status filter to the
+       pager so filtering and page slicing stay in sync. */
+    if (window.doctorQueuePager) {
+        window.doctorQueuePager.refresh();
+        return;
+    }
 
 
     document
@@ -4851,6 +4925,33 @@ function updateVitalsAlert() {
     });
 })();
 
+/* =============================================
+   QUEUE TABLE PAGINATION
+============================================= */
+window.doctorQueuePager = attachPagination({
+    bar: document.querySelector('[data-pagination]'),
+    items: function () {
+        return document.querySelectorAll('#queue-tbody tr[data-status]');
+    },
+    perPage: 8,
+    isItemVisible: function (row) {
+        var activeBtn = document.querySelector('.queue-filter-btn.active');
+        var status = activeBtn
+            ? activeBtn.textContent.trim().toLowerCase()
+            : 'all';
+
+        if (status === 'all') {
+            return true;
+        }
+
+        var statusKey = status === 'in consultation'
+            ? 'in_progress'
+            : status;
+
+        return row.dataset.status === statusKey;
+    }
+});
+
 </script>
 
 
@@ -4861,6 +4962,8 @@ function updateVitalsAlert() {
 
 </div>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 
 </html>

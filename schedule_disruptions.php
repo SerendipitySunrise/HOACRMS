@@ -224,5 +224,7 @@ $('confirm-btn').addEventListener('click', async () => {
   $('confirm-btn').disabled = true;
 });
 </script>
+
+<script src="assets/js/responsive_nav.js"></script>
 </body>
 </html>

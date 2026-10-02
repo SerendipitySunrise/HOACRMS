@@ -300,9 +300,31 @@ function esc(string $value): string
           </div>
         <?php endforeach; ?>
       </div>
+
+      <!-- PAGINATION -->
+      <div class="pagination-bar" data-pagination>
+        <div class="pagination-row">
+          <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+          <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+          <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+        </div>
+      </div>
     <?php endif; ?>
 
   </main>
 </div>
+
+<script src="../assets/js/pagination.js"></script>
+<script>
+  window.announcementsPager = attachPagination({
+    bar: document.querySelector('[data-pagination]'),
+    items: function () {
+      return document.querySelectorAll('.announcement-list .announcement-card');
+    },
+    perPage: 5
+  });
+</script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

@@ -543,5 +543,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
     </script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

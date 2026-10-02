@@ -147,7 +147,7 @@ function esc(string $value): string
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Announcements — Curora Doctor Portal</title>
 <link rel="icon" type="image/png" href="../assets/images/favicon.png">
-<link rel="stylesheet" href="../assets/css/doctor/doctor_dashboard.css?v=3">
+<link rel="stylesheet" href="../assets/css/doctor/doctor_dashboard.css?v=5">
 <style>
   .ann-label-new {
     display: inline-flex;
@@ -236,18 +236,26 @@ function esc(string $value): string
   <main class="main">
 
     <div class="page-header">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div class="page-header-row">
         <div>
           <h1>Announcements</h1>
           <p>Stay up to date with hospital announcements</p>
         </div>
-        <a class="mark-all-read-btn" href="../schedule_disruptions.php">Mark unavailable</a>
-        <?php if ($unreadCount > 0): ?>
-          <form method="POST" class="mark-all-form">
-            <input type="hidden" name="action" value="mark_all">
-            <button type="submit" class="mark-all-read-btn">Mark all as read</button>
-          </form>
-        <?php endif; ?>
+        <div class="page-header-actions">
+          <a class="btn-quick blue" href="../schedule_disruptions.php">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/></svg>
+            Mark unavailable
+          </a>
+          <?php if ($unreadCount > 0): ?>
+            <form method="POST" class="mark-all-form">
+              <input type="hidden" name="action" value="mark_all">
+              <button type="submit" class="btn-quick teal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Mark all as read
+              </button>
+            </form>
+          <?php endif; ?>
+        </div>
       </div>
     </div>
 
@@ -298,9 +306,31 @@ function esc(string $value): string
           </div>
         <?php endforeach; ?>
       </div>
+
+      <!-- PAGINATION -->
+      <div class="pagination-bar" data-pagination>
+        <div class="pagination-row">
+          <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+          <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+          <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+        </div>
+      </div>
     <?php endif; ?>
 
   </main>
 </div>
+
+<script src="../assets/js/pagination.js"></script>
+<script>
+  window.doctorAnnouncementsPager = attachPagination({
+    bar: document.querySelector('[data-pagination]'),
+    items: function () {
+      return document.querySelectorAll('.announcement-list .announcement-card');
+    },
+    perPage: 5
+  });
+</script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

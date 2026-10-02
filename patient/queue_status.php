@@ -967,5 +967,7 @@ if ($hasQueue && $queueStatus === 'In Consultation') {
 </script>
 
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

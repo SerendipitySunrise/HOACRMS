@@ -52,5 +52,7 @@ $_SESSION['LAST_ACTIVITY'] = time();
     <p>Welcome to your dashboard!</p>
 
     <a href="auth/logout.php">Logout</a>
+
+<script src="assets/js/responsive_nav.js"></script>
 </body>
 </html>

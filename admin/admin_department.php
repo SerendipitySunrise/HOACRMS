@@ -248,7 +248,7 @@ if ($result) {
     </div>
 
     <div class="staff-table-wrap" style="margin-top:0;">
-      <table class="staff-table">
+      <table class="staff-table" data-responsive>
         <thead>
           <tr>
             <th>Department</th>
@@ -546,16 +546,16 @@ databaseDepartments.forEach(dbDept => {
       const afternoonStr = `${d.afternoon} – ${d.afternoonEnd}`;
       html += `
         <tr>
-          <td>
+          <td data-label="Department">
             <div class="dept-name">${d.name}</div>
             <div class="dept-desc">${d.desc || ''}</div>
           </td>
-          <td><div class="day-pills">${dayPills}</div></td>
-          <td><span class="time-range">${morningStr}</span></td>
-          <td><span class="time-range">${afternoonStr}</span></td>
-          <td><span class="slots-value">${d.slots}</span> <span class="slots-unit">total</span></td>
-          <td><span class="status-pill ${statusClass}">${statusText}</span></td>
-          <td class="actions-cell">
+          <td data-label="Operating Days"><div class="day-pills">${dayPills}</div></td>
+          <td data-label="Morning"><span class="time-range">${morningStr}</span></td>
+          <td data-label="Afternoon"><span class="time-range">${afternoonStr}</span></td>
+          <td data-label="Slots"><span class="slots-value">${d.slots}</span> <span class="slots-unit">total</span></td>
+          <td data-label="Status"><span class="status-pill ${statusClass}">${statusText}</span></td>
+          <td class="actions-cell" data-label="Actions">
             <button class="action-icon-btn" data-index="${i}" aria-label="Edit ${d.name}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
             </button>
@@ -738,5 +738,7 @@ function selectWeekends() {
 }
 </script>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

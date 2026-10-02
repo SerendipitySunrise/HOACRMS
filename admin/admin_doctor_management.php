@@ -478,7 +478,7 @@ $doctors = fetchDoctors($conn);
 
       <!-- Doctor Table -->
       <div class="table-wrap">
-        <table class="staff-table">
+        <table class="staff-table" data-responsive>
           <thead>
             <tr>
               <th>Doctor</th>
@@ -735,19 +735,19 @@ $doctors = fetchDoctors($conn);
 
     html += `
       <tr>
-        <td>
+        <td data-label="Doctor">
           <div class="doctor-name">${d.name}</div>
           <div class="doctor-email">${d.email || ''}</div>
         </td>
-        <td>${d.department || '—'}</td>
-        <td>${d.specialization || '—'}</td>
-        <td><span class="schedule-time">${schedule}</span></td>
-        <td>
+        <td data-label="Department">${d.department || '—'}</td>
+        <td data-label="Specialization">${d.specialization || '—'}</td>
+        <td data-label="Schedule"><span class="schedule-time">${schedule}</span></td>
+        <td data-label="Status">
           <span class="status-badge ${statusClass}">${d.status}</span>
           <span class="active-badge ${activeClass}">${activeBadge}</span>
         </td>
 
-        <td>
+        <td data-label="Actions">
           <div class="action-group">
             <button class="action-btn edit-btn" data-index="${i}">
               <svg viewBox="0 0 24 24" ...><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
@@ -817,5 +817,7 @@ $doctors = fetchDoctors($conn);
 
 
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

@@ -667,5 +667,7 @@ document.querySelectorAll('.btn-cancel').forEach(button => {
     applyFilters();
 })();
 </script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

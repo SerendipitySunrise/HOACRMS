@@ -197,5 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <?php renderTermsModal(); ?>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

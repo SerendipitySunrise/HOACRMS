@@ -1425,6 +1425,8 @@ $totalRecords = count($records);
     href="../assets/css/doctor/doctor_dashboard.css"
 >
 
+<script src="../assets/js/pagination.js"></script>
+
 </head>
 
 
@@ -1465,138 +1467,60 @@ $totalRecords = count($records);
     <!-- NAVIGATION -->
 
     <ul class="nav-list">
-
-        <li class="nav-item">
-
-            <a href="doctor_dashboard.php">
-
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                    <path d="M9 22V12h6v10"/>
-                </svg>
-
-                Dashboard
-
-            </a>
-
-        </li>
-
-
-        <li class="nav-item">
-
-            <a href="doctor_queue.php">
-
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <path d="M8 6h13"/>
-                    <path d="M8 12h13"/>
-                    <path d="M8 18h13"/>
-                    <path d="M3 6h.01"/>
-                    <path d="M3 12h.01"/>
-                    <path d="M3 18h.01"/>
-                </svg>
-
-                Queue
-
-            </a>
-
-        </li>
-
-
-        <li class="nav-item active">
-
-            <a href="records.php">
-
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/>
-                    <line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-
-                Records
-
-            </a>
-
-        </li>
-
-
-        <li class="nav-item">
-
-            <a href="search_patient.php">
-
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <circle cx="11" cy="11" r="8"/>
-                    <line
-                        x1="21"
-                        y1="21"
-                        x2="16.65"
-                        y2="16.65"
-                    />
-                </svg>
-
-                Search Patient
-
-            </a>
-
-        </li>
-
-        <li class="nav-item">
-          <a href="announcements.php">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-            Announcements
-          </a>
-        </li>
-
-        <li class="nav-item">
-
-            <a href="doctor_profile.php">
-
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                </svg>
-
-                Profile
-
-            </a>
-
-        </li>
-
+      <li class="nav-item active">
+        <a href="admin_dashboard.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="admin_department.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 21v-6h6v6"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01"/></svg>
+          Departments
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="admin_doctor_management.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-1a6 6 0 0 1 6-6h1a6 6 0 0 1 6 6v1"/><circle cx="9.5" cy="7" r="4"/><path d="M19 8v4M21 10h-4"/></svg>
+          Doctors
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="admin_patient_management.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-1a7 7 0 0 0-7-7h-2a7 7 0 0 0-7 7v1"/><circle cx="12" cy="7" r="4"/></svg>
+          Patients
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="admin_staff_management.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Staff
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="admin_reports.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/></svg>
+          Reports
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="admin_announcements.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          Announcement
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="admin_profile.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Profile
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="admin_system_settings.php" style="display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+          System Settings
+        </a>
+      </li>
     </ul>
 
 
@@ -1988,7 +1912,7 @@ $totalRecords = count($records);
 
                             <div class="vh-table-wrap">
 
-                                <table class="vh-table">
+                                <table class="vh-table" data-responsive>
 
                                     <thead>
 
@@ -2025,7 +1949,7 @@ $totalRecords = count($records);
 
                                         <tr <?= $vhIdx >= 5 ? 'class="vh-more-row" hidden' : '' ?>>
 
-                                            <td class="vh-cell-date">
+                                            <td class="vh-cell-date" data-label="Date/Time">
                                                 <?= htmlspecialchars(
                                                     date(
                                                         'M d, Y g:i A',
@@ -2034,11 +1958,11 @@ $totalRecords = count($records);
                                                 ) ?>
                                             </td>
 
-                                            <td><?= renderVitalsCell($vhByKey, 'blood_pressure') ?></td>
-                                            <td><?= renderVitalsCell($vhByKey, 'temperature') ?></td>
-                                            <td><?= renderVitalsCell($vhByKey, 'pulse_rate') ?></td>
-                                            <td><?= renderVitalsCell($vhByKey, 'weight') ?></td>
-                                            <td><?= renderVitalsCell($vhByKey, 'height') ?></td>
+                                            <td data-label="BP"><?= renderVitalsCell($vhByKey, 'blood_pressure') ?></td>
+                                            <td data-label="Temp"><?= renderVitalsCell($vhByKey, 'temperature') ?></td>
+                                            <td data-label="Pulse"><?= renderVitalsCell($vhByKey, 'pulse_rate') ?></td>
+                                            <td data-label="Weight"><?= renderVitalsCell($vhByKey, 'weight') ?></td>
+                                            <td data-label="Height"><?= renderVitalsCell($vhByKey, 'height') ?></td>
 
                                         </tr>
 
@@ -2416,6 +2340,25 @@ $totalRecords = count($records);
 
         </div>
 
+        <?php if (!empty($patients)): ?>
+
+        <!-- PAGINATION -->
+        <div class="pagination-bar" data-pagination>
+
+            <div class="pagination-row">
+
+                <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+
+                <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+
+                <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+
+            </div>
+
+        </div>
+
+        <?php endif; ?>
+
 
         <!-- FILTER EMPTY MESSAGE -->
 
@@ -2469,11 +2412,11 @@ const emptyEl =
 
 /*
 |--------------------------------------------------------------------------
-| APPLY FILTERS
+| RECORDS FILTER MATCHER
 |--------------------------------------------------------------------------
 */
 
-function applyFilters()
+function recordMatches(item)
 {
 
     const q =
@@ -2494,83 +2437,82 @@ function applyFilters()
         : null;
 
 
+    const name =
+        item.dataset.name || '';
+
+
+    const diagnosis =
+        item.dataset.diagnosis || '';
+
+
+    const rawDate =
+        item.dataset.date || '';
+
+
+    const recordDate =
+        rawDate
+        ? new Date(rawDate + 'T00:00:00')
+        : null;
+
+
+    if (
+        q &&
+        !name.includes(q) &&
+        !diagnosis.includes(q)
+    ) {
+        return false;
+    }
+
+
+    if (
+        from &&
+        recordDate &&
+        recordDate < from
+    ) {
+        return false;
+    }
+
+
+    if (
+        to &&
+        recordDate &&
+        recordDate > to
+    ) {
+        return false;
+    }
+
+
+    return true;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| APPLY FILTERS
+|--------------------------------------------------------------------------
+*/
+
+function applyFilters()
+{
+
+    /* When pagination is active, delegate filtering to the pager so
+       the filters and page slicing stay in sync. The pager's
+       onPageChange keeps the count + empty message up to date. */
+    if (window.recordsPager) {
+        window.recordsPager.refresh();
+        return;
+    }
+
+
     let visible = 0;
 
 
     items.forEach(item =>
     {
 
-        const name =
-            item.dataset.name || '';
+        const match = recordMatches(item);
 
-
-        const diagnosis =
-            item.dataset.diagnosis || '';
-
-
-        const rawDate =
-            item.dataset.date || '';
-
-
-        const recordDate =
-            rawDate
-            ? new Date(rawDate + 'T00:00:00')
-            : null;
-
-
-        let match = true;
-
-
-        /*
-        | Search
-        */
-
-        if (
-            q &&
-            !name.includes(q) &&
-            !diagnosis.includes(q)
-        ) {
-
-            match = false;
-
-        }
-
-
-        /*
-        | From date
-        */
-
-        if (
-            match &&
-            from &&
-            recordDate &&
-            recordDate < from
-        ) {
-
-            match = false;
-
-        }
-
-
-        /*
-        | To date
-        */
-
-        if (
-            match &&
-            to &&
-            recordDate &&
-            recordDate > to
-        ) {
-
-            match = false;
-
-        }
-
-
-        /*
-        | Display
-        */
 
         item.style.display =
             match ? '' : 'none';
@@ -2583,17 +2525,9 @@ function applyFilters()
     });
 
 
-    /*
-    | Update count
-    */
-
     countEl.textContent =
         `(${visible} patient${visible === 1 ? '' : 's'})`;
 
-
-    /*
-    | Show empty message
-    */
 
     emptyEl.style.display =
         visible === 0 ? 'block' : 'none';
@@ -2713,8 +2647,36 @@ function toggleVitalsHistory(btn) {
         : 'View All Vitals History';
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| RECORDS PAGINATION
+|--------------------------------------------------------------------------
+*/
+
+window.recordsPager = attachPagination({
+    bar: document.querySelector('[data-pagination]'),
+    items: function () {
+        return items;
+    },
+    perPage: 5,
+    isItemVisible: recordMatches,
+    onPageChange: function (page, totalPages, visibleCount) {
+
+        countEl.textContent =
+            `(${visibleCount} patient${visibleCount === 1 ? '' : 's'})`;
+
+
+        emptyEl.style.display =
+            visibleCount === 0 ? 'block' : 'none';
+
+    }
+});
+
 </script>
 
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

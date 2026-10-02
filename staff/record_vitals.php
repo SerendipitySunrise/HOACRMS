@@ -517,7 +517,7 @@ foreach ($latestVitals as $k => $v) {
 
         <?php if (!empty($vitalsHistory)): ?>
           <div class="hist-title">Vitals History</div>
-          <table class="hist-table">
+          <table class="hist-table" data-responsive>
             <thead>
               <tr>
                 <th>Recorded</th>
@@ -538,12 +538,12 @@ foreach ($latestVitals as $k => $v) {
                     'height'            => $h['Height'] ?? '',
                 ]); ?>
                 <tr>
-                  <td><?= htmlspecialchars(date('M d, g:i A', strtotime($h['RecordedAt']))) ?></td>
-                  <td><?= htmlspecialchars($h['BloodPressure'] ?? '') ?><?php if (($hItems[0]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[0]); } ?></td>
-                  <td><?= htmlspecialchars($h['Temperature'] ?? '') ?><?php if (($hItems[1]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[1]); } ?></td>
-                  <td><?= htmlspecialchars($h['PulseRate'] ?? '') ?><?php if (($hItems[2]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[2]); } ?></td>
-                  <td><?= htmlspecialchars($h['Weight'] ?? '') ?></td>
-                  <td><?= htmlspecialchars($h['Height'] ?? '') ?></td>
+                  <td data-label="Recorded"><?= htmlspecialchars(date('M d, g:i A', strtotime($h['RecordedAt']))) ?></td>
+                  <td data-label="BP"><?= htmlspecialchars($h['BloodPressure'] ?? '') ?><?php if (($hItems[0]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[0]); } ?></td>
+                  <td data-label="Temp"><?= htmlspecialchars($h['Temperature'] ?? '') ?><?php if (($hItems[1]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[1]); } ?></td>
+                  <td data-label="Pulse"><?= htmlspecialchars($h['PulseRate'] ?? '') ?><?php if (($hItems[2]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[2]); } ?></td>
+                  <td data-label="Wt (kg)"><?= htmlspecialchars($h['Weight'] ?? '') ?></td>
+                  <td data-label="Ht (cm)"><?= htmlspecialchars($h['Height'] ?? '') ?></td>
                 </tr>
               <?php endforeach; ?>
             </tbody>
@@ -558,6 +558,8 @@ foreach ($latestVitals as $k => $v) {
 
 </div>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 
 </html>

@@ -630,5 +630,7 @@ document.getElementById('accountForm').addEventListener('submit', function(e) {
   }
 });
 </script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

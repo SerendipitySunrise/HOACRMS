@@ -183,5 +183,7 @@ $pageSubtitle = $action === 'register'
 
     </main>
 
+
+<script src="assets/js/responsive_nav.js"></script>
 </body>
 </html>

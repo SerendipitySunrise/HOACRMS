@@ -279,5 +279,7 @@ if (!isset($_GET['token'])) {
     });
 </script>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

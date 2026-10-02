@@ -506,21 +506,23 @@ function filterQuery(array $base): string
             <?php endforeach; ?>
           </div>
 
-          <?php if ($auditPageCount > 1): ?>
-            <div class="pagination">
+          <div class="pagination-bar">
+            <div class="pagination-row">
               <?php if ($page > 1): ?>
-                <a class="page-btn" href="admin_system_settings.php?tab=audit-logs&page=<?= $page - 1 ?>&<?= e(filterQuery($baseFilter)) ?>">&larr; Prev</a>
+                <a class="pagination-btn" href="admin_system_settings.php?tab=audit-logs&page=<?= $page - 1 ?>&<?= e(filterQuery($baseFilter)) ?>">Previous</a>
               <?php else: ?>
-                <span class="page-btn disabled">&larr; Prev</span>
+                <button type="button" class="pagination-btn" disabled>Previous</button>
               <?php endif; ?>
-              <span class="page-info">Page <?= $page ?> of <?= $auditPageCount ?></span>
+
+              <span class="pagination-label">Page <?= $page ?> of <?= $auditPageCount ?></span>
+
               <?php if ($page < $auditPageCount): ?>
-                <a class="page-btn" href="admin_system_settings.php?tab=audit-logs&page=<?= $page + 1 ?>&<?= e(filterQuery($baseFilter)) ?>">Next &rarr;</a>
+                <a class="pagination-btn" href="admin_system_settings.php?tab=audit-logs&page=<?= $page + 1 ?>&<?= e(filterQuery($baseFilter)) ?>">Next</a>
               <?php else: ?>
-                <span class="page-btn disabled">Next &rarr;</span>
+                <button type="button" class="pagination-btn" disabled>Next</button>
               <?php endif; ?>
             </div>
-          <?php endif; ?>
+          </div>
 
         <?php else: ?>
           <div class="empty-state">No audit logs found matching your criteria.</div>
@@ -561,5 +563,7 @@ function filterQuery(array $base): string
     btn.addEventListener('click', () => activateTab(btn.dataset.tab));
   });
 </script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

@@ -375,6 +375,8 @@ if (!empty($patients) && isset($_GET['patient_id'])) {
     href="../assets/css/doctor/doctor_dashboard.css"
 >
 
+<script src="../assets/js/pagination.js"></script>
+
 </head>
 
 <body>
@@ -715,6 +717,25 @@ if (!empty($patients) && isset($_GET['patient_id'])) {
             <?php endif; ?>
 
         </div>
+
+        <?php if (!empty($patients)): ?>
+
+        <!-- PAGINATION -->
+        <div class="pagination-bar" data-pagination>
+
+            <div class="pagination-row">
+
+                <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+
+                <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+
+                <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+
+            </div>
+
+        </div>
+
+        <?php endif; ?>
 
 
         <div
@@ -1089,14 +1110,54 @@ const resultsEmpty =
     document.getElementById('results-empty');
 
 
+/*
+|--------------------------------------------------------------------------
+| Search Matcher
+|--------------------------------------------------------------------------
+*/
+
+function searchMatches(item)
+{
+
+    const q =
+        searchInput.value
+            .trim()
+            .toLowerCase();
+
+
+    const name =
+        item.dataset.name || '';
+
+
+    const id =
+        (item.dataset.id || '')
+            .toLowerCase();
+
+
+    const phone =
+        item.dataset.phone || '';
+
+
+    return (
+        !q ||
+        name.includes(q) ||
+        id.includes(q) ||
+        phone.includes(q)
+    );
+
+}
+
+
 searchInput.addEventListener(
     'input',
     function() {
 
-        const q =
-            searchInput.value
-                .trim()
-                .toLowerCase();
+        /* When pagination is active, delegate the search to the pager
+           so filtering and page slicing stay in sync. */
+        if (window.searchPatientPager) {
+            window.searchPatientPager.refresh();
+            return;
+        }
 
         let visible = 0;
 
@@ -1104,22 +1165,7 @@ searchInput.addEventListener(
         resultItems.forEach(
             function(item) {
 
-                const name =
-                    item.dataset.name || '';
-
-                const id =
-                    item.dataset.id
-                        .toLowerCase();
-
-                const phone =
-                    item.dataset.phone || '';
-
-
-                const match =
-                    !q ||
-                    name.includes(q) ||
-                    id.includes(q) ||
-                    phone.includes(q);
+                const match = searchMatches(item);
 
 
                 item.style.display =
@@ -1144,7 +1190,35 @@ searchInput.addEventListener(
     }
 );
 
+
+/*
+|--------------------------------------------------------------------------
+| Search Results Pagination
+|--------------------------------------------------------------------------
+*/
+
+window.searchPatientPager = attachPagination({
+    bar: document.querySelector('[data-pagination]'),
+    items: function () {
+        return resultItems;
+    },
+    perPage: 8,
+    isItemVisible: searchMatches,
+    onPageChange: function (page, totalPages, visibleCount) {
+
+        resultsCount.textContent =
+            '(' + visibleCount + ')';
+
+
+        resultsEmpty.style.display =
+            visibleCount === 0 ? 'block' : 'none';
+
+    }
+});
+
 </script>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

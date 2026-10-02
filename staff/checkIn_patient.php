@@ -952,7 +952,7 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
     <div class="staff-table-wrap">
 
-        <table class="staff-table">
+        <table class="staff-table" data-responsive>
 
             <thead>
                 <tr>
@@ -1001,7 +1001,7 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
                         ?>"
                     >
 
-                        <td>
+                        <td data-label="Queue #">
                             <?php if (!empty($appointment['QueueID'])): ?>
                                 <span class="modal-tag-checked">
                                     Q<?php echo str_pad($appointment['QueueNumber'], 3, '0', STR_PAD_LEFT); ?>
@@ -1011,15 +1011,15 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
                             <?php endif; ?>
                         </td>
 
-                        <td><?php echo htmlspecialchars($fullName); ?></td>
+                        <td data-label="Patient"><?php echo htmlspecialchars($fullName); ?></td>
 
-                        <td><?php echo htmlspecialchars($appointment['DepartmentName']); ?></td>
+                        <td data-label="Department"><?php echo htmlspecialchars($appointment['DepartmentName']); ?></td>
 
-                        <td><?php echo $formattedTime; ?></td>
+                        <td data-label="Time"><?php echo $formattedTime; ?></td>
 
-                        <td><?php echo htmlspecialchars($appointment['Purpose'] ?: '—'); ?></td>
+                        <td data-label="Notes"><?php echo htmlspecialchars($appointment['Purpose'] ?: '—'); ?></td>
 
-                        <td>
+                        <td data-label="Action">
                             <?php if (!empty($appointment['QueueNumber'])): ?>
                                 <span class="modal-tag-checked">Checked In</span>
                             <?php else: ?>
@@ -1044,6 +1044,26 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
         </table>
 
     </div>
+
+    <!-- PAGINATION -->
+
+    <?php if (!empty($appointments)): ?>
+
+    <div class="pagination-bar" data-pagination>
+
+        <div class="pagination-row">
+
+            <button type="button" class="pagination-btn" data-pagination-prev>Previous</button>
+
+            <span class="pagination-label" data-pagination-label>Page 1 of 1</span>
+
+            <button type="button" class="pagination-btn" data-pagination-next>Next</button>
+
+        </div>
+
+    </div>
+
+    <?php endif; ?>
 
 </main>
 
@@ -1451,6 +1471,8 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
 </div>
 
+<script src="../assets/js/pagination.js"></script>
+
 <script>
 
 // ======================================================
@@ -1525,6 +1547,14 @@ document.getElementById('checkinModal').addEventListener('click', function(e) {
 
 function filterMainTable() {
 
+    // When pagination is active, delegate the search to the pager so
+    // filtering and page slicing never fight over row visibility.
+    if (window.checkinPager) {
+        window.checkinPager.refresh();
+        return;
+    }
+
+    // Fallback (pagination.js not loaded): plain show/hide.
     const query = document.getElementById('mainSearchInput').value.trim().toLowerCase();
 
     document.querySelectorAll('#appointmentsTableBody tr[data-search]').forEach(function(row) {
@@ -1697,8 +1727,27 @@ document.getElementById('walkinModal').addEventListener('click', function(e) {
     if (e.target === this) closeWalkinModal();
 });
 
+// ======================================================
+// PAGINATION (appointments table)
+// ======================================================
+
+window.checkinPager = attachPagination({
+    bar: document.querySelector('[data-pagination]'),
+    items: function () {
+        return document.querySelectorAll('#appointmentsTableBody tr[data-search]');
+    },
+    perPage: 8,
+    isItemVisible: function (row) {
+        const query = document.getElementById('mainSearchInput').value.trim().toLowerCase();
+        const searchableText = row.getAttribute('data-search') || '';
+        return searchableText.includes(query);
+    }
+});
+
 </script>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 
 </html>

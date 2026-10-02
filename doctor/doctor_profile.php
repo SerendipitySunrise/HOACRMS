@@ -858,7 +858,7 @@ if (isset($_GET['updated'])) {
         </div>
 
         <?php if (!empty($schedules)): ?>
-        <table class="schedule-table" style="margin-top:16px;">
+        <table class="schedule-table" data-responsive style="margin-top:16px;">
           <thead>
             <tr>
               <th>Day</th>
@@ -870,14 +870,14 @@ if (isset($_GET['updated'])) {
           <tbody>
             <?php foreach ($schedules as $sch): ?>
             <tr>
-              <td><?php echo htmlspecialchars($dayNames[$sch['DayOfWeek']] ?? 'Unknown'); ?></td>
-              <td>
+              <td data-label="Day"><?php echo htmlspecialchars($dayNames[$sch['DayOfWeek']] ?? 'Unknown'); ?></td>
+              <td data-label="Session">
                 <span class="session-badge <?php echo strtolower($sch['SessionName']); ?>">
                   <?php echo htmlspecialchars($sch['SessionName']); ?>
                 </span>
               </td>
-              <td><?php echo date('g:i A', strtotime($sch['StartTime'])) . ' – ' . date('g:i A', strtotime($sch['EndTime'])); ?></td>
-              <td><?php echo htmlspecialchars($sch['PatientSlots']); ?> patients/session</td>
+              <td data-label="Hours"><?php echo date('g:i A', strtotime($sch['StartTime'])) . ' – ' . date('g:i A', strtotime($sch['EndTime'])); ?></td>
+              <td data-label="Slots"><?php echo htmlspecialchars($sch['PatientSlots']); ?> patients/session</td>
             </tr>
             <?php endforeach; ?>
           </tbody>
@@ -1063,5 +1063,7 @@ document.getElementById('accountForm').addEventListener('submit', function(e) {
   }
 });
 </script>
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>

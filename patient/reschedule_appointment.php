@@ -1210,5 +1210,7 @@ if (document.getElementById('step-1')) {
 }
 </script>
 
+
+<script src="../assets/js/responsive_nav.js"></script>
 </body>
 </html>
