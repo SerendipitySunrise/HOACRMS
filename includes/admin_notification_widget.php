@@ -2,9 +2,9 @@
 
 require_once __DIR__ . '/admin_notifications.php';
 
-$adminNotificationUserId = adminNotificationCurrentUserId();
-$adminNotificationCount = adminNotificationUnreadCount($conn, $adminNotificationUserId);
-$adminNotificationItems = adminNotificationRecent($conn, $adminNotificationUserId);
+$notificationUserId = (int) ($_SESSION['UserID'] ?? 0);
+$adminNotificationCount = adminNotificationUnreadCount($conn, $notificationUserId);
+$adminNotificationItems = adminNotificationRecent($conn, $notificationUserId);
 
 function adminNotificationDisplayTime(?string $timestamp): string
 {
@@ -17,7 +17,7 @@ function adminNotificationDisplayTime(?string $timestamp): string
 }
 ?>
 
-<div class="notification-wrapper admin-notification-wrapper" data-admin-notification-endpoint="../api/admin/notifications.php">
+<div class="notification-wrapper admin-notification-wrapper" data-admin-notification-endpoint="../api/notifications.php">
   <button
     class="notif-bell admin-notification-bell"
     type="button"
