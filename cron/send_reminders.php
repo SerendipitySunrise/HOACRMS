@@ -69,6 +69,19 @@ function logReminder(
     string $via,
     string $status = 'sent'
 ): void {
+    /*
+    | Guard the Status column at the application level. The column stays
+    | VARCHAR, so without this an unexpected caller-supplied value would be
+    | stored verbatim. 'failed' is a legitimate value: it is written when
+    | sendCuroraEmail() returns false, and the dedup check in
+    | reminderSent() filters on Status = "sent" so a failed reminder
+    | remains eligible for a retry. Coercing anything else to 'sent' would
+    | mark a failed send as delivered and permanently suppress the retry.
+    */
+    if (!in_array($status, ['sent', 'failed'], true)) {
+        $status = 'sent';
+    }
+
     $stmt = mysqli_prepare(
         $conn,
         'INSERT INTO appointment_reminders

@@ -162,19 +162,20 @@ if (
                     $queueStmt = mysqli_prepare(
                         $conn,
                         "INSERT INTO queue
-                        (AppointmentID, QueueNumber, PriorityLevel, QueueDate, QueueTime, Status)
-                        VALUES (?, ?, ?, ?, ?, ?)"
+                        (AppointmentID, QueueNumber, PriorityLevel, QueueDate, QueueTime, Status, DepartmentID)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)"
                     );
 
                     mysqli_stmt_bind_param(
                         $queueStmt,
-                        'iissss',
+                        'iissssi',
                         $appointmentID,
                         $nextQueueNumber,
                         $priorityLevel,
                         $today,
                         $queueTime,
-                        $queueStatus
+                        $queueStatus,
+                        $departmentId
                     );
 
                     if (!mysqli_stmt_execute($queueStmt)) {
@@ -507,19 +508,20 @@ if (
             $queueInsertStmt = mysqli_prepare(
                 $conn,
                 'INSERT INTO queue
-                (AppointmentID, QueueNumber, PriorityLevel, QueueDate, QueueTime, Status)
-                VALUES (?, ?, "Normal", ?, ?, "' . QUEUE_STATUS_WAITING . '")'
+                (AppointmentID, QueueNumber, PriorityLevel, QueueDate, QueueTime, Status, DepartmentID)
+                VALUES (?, ?, "Normal", ?, ?, "' . QUEUE_STATUS_WAITING . '", ?)'
             );
 
             $queueTime = date('H:i:s');
 
             mysqli_stmt_bind_param(
                 $queueInsertStmt,
-                'iiss',
+                'iissi',
                 $newAppointmentId,
                 $newQueueNumber,
                 $today,
-                $queueTime
+                $queueTime,
+                $departmentId
             );
 
             if (!mysqli_stmt_execute($queueInsertStmt)) {

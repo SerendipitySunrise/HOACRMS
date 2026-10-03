@@ -922,7 +922,7 @@ if (isset($_GET['updated'])) {
                 </span>
               </td>
               <td data-label="Hours"><?php echo date('g:i A', strtotime($sch['StartTime'])) . ' – ' . date('g:i A', strtotime($sch['EndTime'])); ?></td>
-              <td data-label="Slots"><?php echo htmlspecialchars($sch['PatientSlots']); ?> patients/session</td>
+              <td data-label="Slots"><?php echo htmlspecialchars($sch['PatientSlots']); ?> max patients/session</td>
             </tr>
             <?php endforeach; ?>
           </tbody>

@@ -117,7 +117,7 @@ if ($queue) {
         $conn,
         'SELECT QueueNumber
          FROM queue
-         WHERE Status IN ("Serving", "In Consultation")
+         WHERE Status IN ("In Consultation")
            AND QueueDate = ?
          ORDER BY QueueNumber ASC
          LIMIT 1'

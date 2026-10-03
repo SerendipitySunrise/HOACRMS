@@ -880,10 +880,6 @@ foreach ($queue as $patient) {
             $inProgress[] = $patient;
             break;
 
-        case 'in progress':
-            $inProgress[] = $patient;
-            break;
-
         case strtolower(QUEUE_STATUS_COMPLETED):
             $completed[] = $patient;
             break;

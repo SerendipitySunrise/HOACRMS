@@ -171,7 +171,7 @@ $nowServingStmt = mysqli_prepare(
 
      WHERE q.QueueDate = ?
 
-       AND q.Status IN ("Serving", "In Consultation")
+       AND q.Status IN ("In Consultation")
 
      ORDER BY q.QueueNumber ASC
 
@@ -223,10 +223,7 @@ if ($hasQueue && $queueNumber !== null) {
 
         $estimatedWait = 0;
 
-    } elseif (
-        $queueStatus === 'Serving' ||
-        $queueStatus === 'In Consultation'
-    ) {
+    } elseif ($queueStatus === 'In Consultation') {
 
         $estimatedWait = 0;
 
@@ -258,7 +255,6 @@ if ($hasQueue) {
             $step = 2;
             break;
 
-        case 'Serving':
         case 'In Consultation':
             $step = 3;
             break;
@@ -307,7 +303,6 @@ if ($hasQueue) {
 
     switch ($queueStatus) {
 
-        case 'Serving':
         case 'In Consultation':
             $displayStatus = 'Now Serving';
             break;
@@ -734,7 +729,6 @@ if ($hasQueue && $queueStatus === 'In Consultation') {
                                 echo 'Done';
 
                             } elseif (
-                                $queueStatus === 'Serving' ||
                                 $queueStatus === 'In Consultation'
                             ) {
 
