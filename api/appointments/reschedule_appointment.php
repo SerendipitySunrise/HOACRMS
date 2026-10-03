@@ -362,6 +362,13 @@ try {
                AND s.DepartmentID = ?
                AND s.AvailabilityStatus = "Available"
                AND s.StaffRole = "Doctor"
+               AND EXISTS (
+                   SELECT 1 FROM department_schedules ds
+                   WHERE ds.DepartmentID = s.DepartmentID
+                     AND ds.DayOfWeek = ?
+                     AND ds.StartTime <= ?
+                     AND ds.EndTime > ?
+               )
                AND NOT EXISTS (
                    SELECT 1
                    FROM appointments a
@@ -376,9 +383,12 @@ try {
 
         mysqli_stmt_bind_param(
             $keepStmt,
-            'iissi',
+            'iiissssi',
             $oldStaffID,
             $departmentID,
+            $dayOfWeek,
+            $appointmentTime,
+            $appointmentTime,
             $appointmentDate,
             $appointmentTime,
             $appointmentID
@@ -404,6 +414,13 @@ try {
              WHERE s.DepartmentID = ?
                AND s.AvailabilityStatus = "Available"
                AND s.StaffRole = "Doctor"
+               AND EXISTS (
+                   SELECT 1 FROM department_schedules ds
+                   WHERE ds.DepartmentID = s.DepartmentID
+                     AND ds.DayOfWeek = ?
+                     AND ds.StartTime <= ?
+                     AND ds.EndTime > ?
+               )
                AND NOT EXISTS (
                    SELECT 1
                    FROM appointments a
@@ -419,8 +436,11 @@ try {
 
         mysqli_stmt_bind_param(
             $assignStmt,
-            'issi',
+            'iissssi',
             $departmentID,
+            $dayOfWeek,
+            $appointmentTime,
+            $appointmentTime,
             $appointmentDate,
             $appointmentTime,
             $appointmentID

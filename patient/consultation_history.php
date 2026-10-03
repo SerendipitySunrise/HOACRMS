@@ -228,6 +228,7 @@ function parseLabRequests($labRequest) {
         <p>Your past consultations will appear here once you complete a visit with a doctor.</p>
       </div>
     <?php else: ?>
+      <div class="history-list" id="history-list">
       <?php foreach ($consultations as $consult): ?>
         <?php
           $prescriptions = $prescriptionsByConsult[$consult['ConsultationID']] ?? [];
@@ -331,6 +332,13 @@ function parseLabRequests($labRequest) {
           </div>
         </div>
       <?php endforeach; ?>
+      </div>
+
+      <div class="appt-pagination" id="history-pagination" hidden>
+  <button type="button" class="appt-page-btn" data-prev>Previous</button>
+  <span class="appt-page-info" aria-live="polite">Page 1 of 1</span>
+  <button type="button" class="appt-page-btn" data-next>Next</button>
+</div>
     <?php endif; ?>
 
   </main>
@@ -353,6 +361,44 @@ function toggleHistoryCard(card) {
     chevron.style.transform = 'rotate(180deg)';
   }
 }
+
+function initPaginator(container, itemSelector, pager, perPage) {
+  if (!container || !pager) { return; }
+
+  var items = Array.prototype.slice.call(container.querySelectorAll(itemSelector));
+  var pages = Math.ceil(items.length / perPage);
+  if (pages <= 1) { pager.hidden = true; return; }
+
+  var page = 1;
+  var prev = pager.querySelector('[data-prev]');
+  var next = pager.querySelector('[data-next]');
+  var info = pager.querySelector('.appt-page-info');
+  pager.hidden = false;
+
+  function render(scrollToTop) {
+    items.forEach(function (item, i) {
+      item.hidden = Math.floor(i / perPage) + 1 !== page;
+    });
+    info.textContent = 'Page ' + page + ' of ' + pages;
+    prev.disabled = page <= 1;
+    next.disabled = page >= pages;
+    if (scrollToTop) {
+      container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  prev.addEventListener('click', function () { if (page > 1) { page--; render(true); } });
+  next.addEventListener('click', function () { if (page < pages) { page++; render(true); } });
+
+  render(false);
+}
+
+initPaginator(
+  document.getElementById('history-list'),
+  '.history-card',
+  document.getElementById('history-pagination'),
+  5
+);
 </script>
 
 

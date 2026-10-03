@@ -440,6 +440,37 @@ width: 38px;
   box-shadow: 0 0 0 3px rgba(20,147,133,0.1);
 }
 
+/* Password field with show/hide toggle */
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.password-wrapper input {
+  width: 100%;
+  padding-right: 42px; /* Make room for the eye icon */
+}
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8; /* Muted icon color */
+  transition: color 0.15s;
+}
+.password-toggle:hover {
+  color: var(--color-primary);
+}
+.password-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* Alert message */
 .alert-msg {
   padding: 12px 18px;

@@ -211,12 +211,13 @@ if (
             c.Notes,
             c.FollowUpDate,
             c.Status,
-            c.BloodPressure,
-            c.Temperature,
-            c.PulseRate,
-            c.Weight,
-            c.Height
+            COALESCE(v.BloodPressure, c.BloodPressure) AS BloodPressure,
+            COALESCE(v.Temperature, c.Temperature) AS Temperature,
+            COALESCE(v.PulseRate, c.PulseRate) AS PulseRate,
+            COALESCE(v.Weight, c.Weight) AS Weight,
+            COALESCE(v.Height, c.Height) AS Height
         FROM consultations c
+        LEFT JOIN vitals v ON v.VitalID = c.VitalID
         WHERE c.ConsultationID = ?
           AND c.StaffID = ?
         LIMIT 1
@@ -485,15 +486,26 @@ if (
             LabRequest = ?,
             Notes = ?,
             FollowUpDate = ?,
-            Status = ?,
-            BloodPressure = ?,
-            Temperature = ?,
-            PulseRate = ?,
-            Weight = NULLIF(?, ''),
-            Height = NULLIF(?, '')
+            Status = ?
         WHERE ConsultationID = ?
           AND StaffID = ?
     ");
+
+    /*
+    | If this consultation already has a linked vitals row, update it.
+    | Otherwise insert a new one and link it. This keeps vitals the
+    | canonical store; consultations.BloodPressure etc. are left as
+    | the legacy fallback that decision B preserves for NULL-linked rows.
+    */
+    $existingVitals = $conn->prepare(
+        "SELECT v.VitalID FROM vitals v
+         JOIN consultations c ON c.VitalID = v.VitalID
+         WHERE c.ConsultationID = ? AND c.StaffID = ? LIMIT 1"
+    );
+    $existingVitals->bind_param("ii", $editCid, $staffID);
+    $existingVitals->execute();
+    $existingVitalsRow = $existingVitals->get_result()->fetch_assoc();
+    $existingVitals->close();
 
     $uChief   = $newValues['ChiefComplaint'];
     $uDiag    = $newValues['Diagnosis'];
@@ -508,8 +520,53 @@ if (
     $uWeight  = $newValues['Weight'];
     $uHeight  = $newValues['Height'];
 
+    if ($existingVitalsRow) {
+        $vitalsUpdate = $conn->prepare("
+            UPDATE vitals SET
+                BloodPressure = ?,
+                Temperature = NULLIF(?, ''),
+                PulseRate = NULLIF(?, ''),
+                Weight = NULLIF(?, ''),
+                Height = NULLIF(?, '')
+            WHERE VitalID = ?
+        ");
+        $vitalsUpdate->bind_param(
+            "sssssi",
+            $uBP, $uTemp, $uPulse, $uWeight, $uHeight,
+            $existingVitalsRow['VitalID']
+        );
+        $vitalsUpdate->execute();
+        $vitalsUpdate->close();
+    } else {
+        $vitalsInsert = $conn->prepare("
+            INSERT INTO vitals
+                (AppointmentID, PatientID, StaffID, BloodPressure,
+                 Temperature, PulseRate, Weight, Height, Source)
+            SELECT c.AppointmentID, c.PatientID, c.StaffID, ?,
+                   NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''),
+                   'Consultation'
+            FROM consultations c
+            WHERE c.ConsultationID = ? AND c.StaffID = ?
+        ");
+        $vitalsInsert->bind_param(
+            "sssii",
+            $uBP, $uTemp, $uPulse, $uWeight, $uHeight,
+            $editCid, $staffID
+        );
+        $vitalsInsert->execute();
+        $newVitalID = $conn->insert_id;
+        $vitalsInsert->close();
+
+        $linkVital = $conn->prepare(
+            "UPDATE consultations SET VitalID = ? WHERE ConsultationID = ? AND StaffID = ?"
+        );
+        $linkVital->bind_param("iii", $newVitalID, $editCid, $staffID);
+        $linkVital->execute();
+        $linkVital->close();
+    }
+
     $updateStmt->bind_param(
-        "sssssssssssiii",
+        "sssssssii",
         $uChief,
         $uDiag,
         $uTreat,
@@ -517,11 +574,6 @@ if (
         $uNotes,
         $uFollow,
         $uStatus,
-        $uBP,
-        $uTemp,
-        $uPulse,
-        $uWeight,
-        $uHeight,
         $editCid,
         $staffID
     );
@@ -683,9 +735,11 @@ if (
             c.Notes,
             c.FollowUpDate,
             c.Status,
-            c.BloodPressure,
-            c.Temperature,
-            c.PulseRate,
+            COALESCE(v.BloodPressure, c.BloodPressure) AS BloodPressure,
+            COALESCE(v.Temperature, c.Temperature) AS Temperature,
+            COALESCE(v.PulseRate, c.PulseRate) AS PulseRate,
+            COALESCE(v.Weight, c.Weight) AS Weight,
+            COALESCE(v.Height, c.Height) AS Height,
 
             p.BloodType,
             p.Allergies,
@@ -703,6 +757,7 @@ if (
 
             d.DepartmentName
         FROM consultations c
+        LEFT JOIN vitals v   ON v.VitalID = c.VitalID
         INNER JOIN patients p ON c.PatientID = p.PatientID
         INNER JOIN users u   ON p.UserID = u.UserID
         INNER JOIN staff s   ON c.StaffID = s.StaffID
@@ -991,11 +1046,11 @@ $recordsStmt = $conn->prepare("
         c.FollowUpDate,
         c.Status,
 
-        c.BloodPressure,
-        c.Temperature,
-        c.PulseRate,
-        c.Weight,
-        c.Height,
+        COALESCE(v.BloodPressure, c.BloodPressure) AS BloodPressure,
+        COALESCE(v.Temperature, c.Temperature) AS Temperature,
+        COALESCE(v.PulseRate, c.PulseRate) AS PulseRate,
+        COALESCE(v.Weight, c.Weight) AS Weight,
+        COALESCE(v.Height, c.Height) AS Height,
 
         p.BloodType,
         p.Allergies,
@@ -1015,6 +1070,9 @@ $recordsStmt = $conn->prepare("
         d.DepartmentName
 
     FROM consultations c
+
+    LEFT JOIN vitals v
+        ON v.VitalID = c.VitalID
 
     INNER JOIN patients p
         ON c.PatientID = p.PatientID

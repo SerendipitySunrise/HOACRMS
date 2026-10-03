@@ -3869,3 +3869,13 @@ img, svg, canvas, video, embed, iframe { max-width: 100%; height: auto; }
     right: 0;
   }
 }
+
+/* ---------- PAGINATION (5 per page) + FIRST-CARD SPACING ---------- */
+.appt-pagination[hidden],
+.history-card[hidden],
+.result-card[hidden] { display: none; }
+
+/* give the first card breathing room under the page title */
+.page-header + .history-list,
+.page-header + .empty-state { margin-top: 24px; }
+.result-tab-content { margin-top: 24px; }

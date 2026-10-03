@@ -131,7 +131,7 @@ $candidateStmt = mysqli_prepare(
      INNER JOIN patients p ON a.PatientID = p.PatientID
      INNER JOIN users u ON p.UserID = u.UserID
      INNER JOIN departments d ON a.DepartmentID = d.DepartmentID
-     WHERE a.Status IN ("Pending", "Scheduled", "Confirmed")
+     WHERE a.Status IN ("Pending")
        AND a.AppointmentDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 1 DAY)'
 );
 

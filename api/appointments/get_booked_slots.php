@@ -108,10 +108,15 @@ $doctorStmt = mysqli_prepare(
      FROM staff
      WHERE DepartmentID = ?
        AND AvailabilityStatus = "Available"
-       AND StaffRole = "Doctor"'
+       AND StaffRole = "Doctor"
+       AND EXISTS (
+           SELECT 1 FROM department_schedules ds
+           WHERE ds.DepartmentID = staff.DepartmentID
+             AND ds.DayOfWeek = ?
+       )'
 );
 
-mysqli_stmt_bind_param($doctorStmt, 'i', $departmentID);
+mysqli_stmt_bind_param($doctorStmt, 'ii', $departmentID, $dayOfWeek);
 mysqli_stmt_execute($doctorStmt);
 
 $doctorResult = mysqli_stmt_get_result($doctorStmt);

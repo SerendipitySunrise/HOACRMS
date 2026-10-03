@@ -305,6 +305,7 @@ width: 38px;
 .progress-fill {
   height: 100%;
   border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
   transition: width 0.3s ease;
 }
 

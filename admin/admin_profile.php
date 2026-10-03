@@ -76,6 +76,7 @@ $updateSuccess = false;
 
 $personalEditOpen = false;
 $accountEditOpen = false;
+$emailEditOpen = false;
 
 $personalFormData = [
     'FirstName'     => $admin['FirstName'],
@@ -142,25 +143,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 
-    if ($_POST['action'] === 'update_account') {
-        $email = trim($_POST['Email'] ?? '');
+    /*
+     * Password change lives in its own action (mirroring the staff and doctor
+     * profile pages) so the password can be changed on its own, without having
+     * to resubmit - and re-validate - the login email.
+     */
+    if ($_POST['action'] === 'update_password') {
         $newPassword = trim($_POST['NewPassword'] ?? '');
         $confirmPassword = trim($_POST['ConfirmPassword'] ?? '');
 
+        if ($newPassword === '') {
+            $updateMessage = 'Please enter a new password.';
+            $accountEditOpen = true;
+        } elseif ($newPassword !== $confirmPassword) {
+            $updateMessage = 'Passwords do not match.';
+            $accountEditOpen = true;
+        } elseif (strlen($newPassword) < 8) {
+            $updateMessage = 'Password must be at least 8 characters.';
+            $accountEditOpen = true;
+        } else {
+            $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
+            $pStmt = mysqli_prepare($conn, 'UPDATE users SET Password=? WHERE UserID=?');
+            mysqli_stmt_bind_param($pStmt, 'si', $hashed, $userId);
+            mysqli_stmt_execute($pStmt);
+            mysqli_stmt_close($pStmt);
+
+            header('Location: admin_profile.php?updated=1');
+            exit();
+        }
+    }
+
+    // Login email change, kept separate from the password form.
+    if ($_POST['action'] === 'update_account') {
+        $email = trim($_POST['Email'] ?? '');
         $accountFormData['Email'] = $email;
 
         if (empty($email)) {
             $updateMessage = 'Email is required.';
-            $accountEditOpen = true;
+            $emailEditOpen = true;
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $updateMessage = 'Please enter a valid email address.';
-            $accountEditOpen = true;
-        } elseif ($newPassword !== '' && $newPassword !== $confirmPassword) {
-            $updateMessage = 'Passwords do not match.';
-            $accountEditOpen = true;
-        } elseif ($newPassword !== '' && strlen($newPassword) < 8) {
-            $updateMessage = 'Password must be at least 8 characters.';
-            $accountEditOpen = true;
+            $emailEditOpen = true;
         } else {
             $dupStmt = mysqli_prepare($conn, 'SELECT UserID FROM users WHERE Email = ? AND UserID != ? LIMIT 1');
             mysqli_stmt_bind_param($dupStmt, 'si', $email, $userId);
@@ -171,20 +194,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             if ($duplicate) {
                 $updateMessage = 'That email address is already in use by another account.';
-                $accountEditOpen = true;
+                $emailEditOpen = true;
             } else {
                 $uStmt = mysqli_prepare($conn, 'UPDATE users SET Email=? WHERE UserID=?');
                 mysqli_stmt_bind_param($uStmt, 'si', $email, $userId);
                 mysqli_stmt_execute($uStmt);
                 mysqli_stmt_close($uStmt);
-
-                if ($newPassword !== '') {
-                    $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
-                    $pStmt = mysqli_prepare($conn, 'UPDATE users SET Password=? WHERE UserID=?');
-                    mysqli_stmt_bind_param($pStmt, 'si', $hashed, $userId);
-                    mysqli_stmt_execute($pStmt);
-                    mysqli_stmt_close($pStmt);
-                }
 
                 header('Location: admin_profile.php?updated=1');
                 exit();
@@ -398,7 +413,7 @@ if (isset($_GET['updated'])) {
           </div>
         </div>
         <p class="pinfo-hint" style="margin-top:auto;padding-top:16px;">
-          For security, your password isn't displayed here. Use the "Edit account" card below to change it.
+          For security, your password isn't displayed here. Use the "Account Settings" card below to change it.
         </p>
       </div>
     </div>
@@ -463,7 +478,7 @@ if (isset($_GET['updated'])) {
 
       <!-- Account Settings -->
       <div>
-        <div class="profile-card" id="account-readonly" style="display:<?php echo $accountEditOpen ? 'none' : 'block'; ?>;">
+        <div class="profile-card" id="account-readonly" style="display:<?php echo ($accountEditOpen || $emailEditOpen) ? 'none' : 'block'; ?>;">
           <div class="pcard-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             Account Settings
@@ -474,17 +489,50 @@ if (isset($_GET['updated'])) {
               <div class="pinfo-value"><?php echo htmlspecialchars($admin['Email']); ?></div>
             </div>
           </div>
+          <p class="pinfo-hint">For security, your password isn't displayed here. Use the button below to change it.</p>
           <div class="action-bar">
+            <button class="btn-save" type="button" onclick="toggleEmailEdit(true)">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+              Change Email
+            </button>
             <button class="btn-save" type="button" onclick="toggleAccountEdit(true)">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-              Change Email / Password
+              Change Password
             </button>
           </div>
         </div>
 
+        <!-- Change email (hidden unless open) -->
+        <div id="email-edit" style="display:<?php echo $emailEditOpen ? 'block' : 'none'; ?>;margin-top:20px;">
+          <form method="POST" id="emailForm">
+            <input type="hidden" name="action" value="update_account">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+            <div class="profile-card">
+              <div class="pcard-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+                Change Login Email
+              </div>
+              <div class="form-grid">
+                <div class="form-group full-width">
+                  <label for="Email">Login Email *</label>
+                  <input type="email" id="Email" name="Email" value="<?php echo htmlspecialchars($accountFormData['Email']); ?>" required>
+                </div>
+              </div>
+              <div class="action-bar">
+                <button class="btn-cancel" type="button" onclick="toggleEmailEdit(false)">Cancel</button>
+                <button class="btn-save" type="submit">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Change password (hidden unless open) -->
         <div id="account-edit" style="display:<?php echo $accountEditOpen ? 'block' : 'none'; ?>;margin-top:20px;">
           <form method="POST" id="accountForm">
-            <input type="hidden" name="action" value="update_account">
+            <input type="hidden" name="action" value="update_password">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
             <div class="profile-card">
               <div class="pcard-title">
@@ -493,17 +541,22 @@ if (isset($_GET['updated'])) {
               </div>
               <div class="form-grid">
                 <div class="form-group full-width">
-                  <label for="Email">Login Email *</label>
-                  <input type="email" id="Email" name="Email" value="<?php echo htmlspecialchars($accountFormData['Email']); ?>" required>
+                  <label for="NewPassword">New Password *</label>
+                  <div class="password-wrapper">
+                    <input type="password" id="NewPassword" name="NewPassword" placeholder="Min. 8 characters" minlength="8">
+                    <button type="button" class="password-toggle" onclick="togglePassword('NewPassword', this)" aria-label="Show password">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
                 </div>
-                <hr class="pinfo-divider" style="grid-column:1/-1;">
                 <div class="form-group full-width">
-                  <label for="NewPassword">New Password <small>(leave blank to keep current)</small></label>
-                  <input type="password" id="NewPassword" name="NewPassword" placeholder="Min. 8 characters" minlength="8">
-                </div>
-                <div class="form-group full-width">
-                  <label for="ConfirmPassword">Confirm New Password</label>
-                  <input type="password" id="ConfirmPassword" name="ConfirmPassword" placeholder="Re-enter new password">
+                  <label for="ConfirmPassword">Confirm New Password *</label>
+                  <div class="password-wrapper">
+                    <input type="password" id="ConfirmPassword" name="ConfirmPassword" placeholder="Re-enter new password">
+                    <button type="button" class="password-toggle" onclick="togglePassword('ConfirmPassword', this)" aria-label="Show password">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="action-bar">
@@ -546,12 +599,23 @@ function togglePersonalEdit(editing) {
   }
 }
 
-// Toggle account edit
+// Toggle account edit (change password)
 function toggleAccountEdit(editing) {
   document.getElementById('account-readonly').style.display = editing ? 'none' : 'block';
   document.getElementById('account-edit').style.display = editing ? 'block' : 'none';
+  document.getElementById('email-edit').style.display = 'none';
   if (editing) {
     document.getElementById('account-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+// Toggle email edit
+function toggleEmailEdit(editing) {
+  document.getElementById('account-readonly').style.display = editing ? 'none' : 'block';
+  document.getElementById('email-edit').style.display = editing ? 'block' : 'none';
+  document.getElementById('account-edit').style.display = 'none';
+  if (editing) {
+    document.getElementById('email-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
 
@@ -563,6 +627,11 @@ document.addEventListener('DOMContentLoaded', function () {
 <?php if ($accountEditOpen): ?>
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('account-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+<?php endif; ?>
+<?php if ($emailEditOpen): ?>
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('email-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 <?php endif; ?>
 
@@ -624,11 +693,35 @@ document.getElementById('accountForm').addEventListener('submit', function(e) {
   const pw = document.getElementById('NewPassword').value;
   const confirm = document.getElementById('ConfirmPassword').value;
 
-  if (pw !== '' && pw !== confirm) {
+  if (pw === '') {
+    e.preventDefault();
+    alert('Please enter a new password.');
+    return;
+  }
+
+  if (pw !== confirm) {
     e.preventDefault();
     alert('Passwords do not match.');
   }
 });
+
+// Password visibility toggle
+function togglePassword(inputId, button) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  const isPassword = input.type === 'password';
+  input.type = isPassword ? 'text' : 'password';
+
+  // Update the icon (change to eye-off when visible)
+  if (isPassword) {
+    button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    button.setAttribute('aria-label', 'Hide password');
+  } else {
+    button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    button.setAttribute('aria-label', 'Show password');
+  }
+}
 </script>
 
 <script src="../assets/js/responsive_nav.js"></script>

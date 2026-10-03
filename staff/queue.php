@@ -2252,60 +2252,6 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
                 </div>
 
-
-                <div class="queue-actions">
-
-                    <form method="POST">
-
-                        <input
-                            type="hidden"
-                            name="action"
-                            value="update_followup"
-                        >
-
-                        <input
-                            type="hidden"
-                            name="no_show_id"
-                            value="<?= (int)$ns['NoShowID'] ?>"
-                        >
-
-                        <select
-                            name="followup_status"
-                            class="followup-select"
-                        >
-
-                            <?php foreach (
-                                ['Pending', 'Contacted', 'Rescheduled', 'Resolved']
-                                as $fs
-                            ): ?>
-
-                                <option
-                                    value="<?= $fs ?>"
-                                    <?= ($ns['FollowUpStatus'] === $fs)
-                                        ? 'selected'
-                                        : '' ?>
-                                >
-
-                                    <?= $fs ?>
-
-                                </option>
-
-                            <?php endforeach; ?>
-
-                        </select>
-
-
-                        <button
-                            class="btn-followup"
-                            type="submit"
-                        >
-                            Update
-                        </button>
-
-                    </form>
-
-                </div>
-
             </div>
 
         <?php endforeach; ?>

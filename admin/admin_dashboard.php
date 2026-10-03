@@ -124,7 +124,7 @@ if ($hasAppointments) {
         "SELECT COUNT(*) AS total
            FROM appointments
           WHERE AppointmentDate = CURDATE()
-            AND Status = '" . APPT_STATUS_SCHEDULED . "'",
+            AND Status = '" . APPT_STATUS_PENDING . "'",
         'total'
     );
 

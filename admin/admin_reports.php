@@ -108,7 +108,7 @@ $doctorRows = reportQuery(
     $conn,
     "SELECT s.StaffID, CONCAT('Dr. ', u.FirstName, ' ', u.LastName) AS DoctorName,
             SUM(CASE WHEN a.Status = 'Completed' THEN 1 ELSE 0 END) AS CompletedCount,
-            SUM(CASE WHEN a.Status IN ('Pending', 'Scheduled', 'Checked In', 'Called', 'In Consultation') THEN 1 ELSE 0 END) AS ActiveCount
+            SUM(CASE WHEN a.Status IN ('Pending', 'Checked In', 'Called', 'In Consultation') THEN 1 ELSE 0 END) AS ActiveCount
        FROM staff s
        INNER JOIN users u ON u.UserID = s.UserID
        LEFT JOIN appointments a ON a.StaffID = s.StaffID AND a.AppointmentDate BETWEEN ? AND ?

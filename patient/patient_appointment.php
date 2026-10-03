@@ -364,7 +364,7 @@ foreach ($appointments as $appt) {
               <?php
               $reschedulableStatus = in_array(
                   $apptStatus,
-                  ['Pending', 'Scheduled', 'Confirmed'],
+                  ['Pending'],
                   true
               );
 

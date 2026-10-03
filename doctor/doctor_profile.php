@@ -129,6 +129,7 @@ $updateSuccess = false;
 // Controls whether each edit panel should render open (e.g. after a failed submit)
 $personalEditOpen = false;
 $accountEditOpen = false;
+$emailEditOpen = false;
 
 // Values used to populate the personal-info form. Default to DB values;
 // overridden with submitted values below if validation fails, so the user
@@ -249,10 +250,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if (empty($email)) {
             $updateMessage = 'Email is required.';
-            $accountEditOpen = true;
+            $emailEditOpen = true;
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $updateMessage = 'Please enter a valid email address.';
-            $accountEditOpen = true;
+            $emailEditOpen = true;
         } else {
             $dupStmt = mysqli_prepare($conn, 'SELECT UserID FROM users WHERE Email = ? AND UserID != ? LIMIT 1');
             mysqli_stmt_bind_param($dupStmt, 'si', $email, $userID);
@@ -263,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             if ($duplicate) {
                 $updateMessage = 'That email address is already in use by another account.';
-                $accountEditOpen = true;
+                $emailEditOpen = true;
             } else {
                 $uStmt = mysqli_prepare($conn, 'UPDATE users SET Email=? WHERE UserID=?');
                 mysqli_stmt_bind_param($uStmt, 'si', $email, $userID);
@@ -933,7 +934,7 @@ if (isset($_GET['updated'])) {
 
       <!-- Section 4: Account Information -->
       <div>
-        <div class="profile-card" id="account-readonly" style="display:<?php echo $accountEditOpen ? 'none' : 'block'; ?>;">
+        <div class="profile-card" id="account-readonly" style="display:<?php echo ($accountEditOpen || $emailEditOpen) ? 'none' : 'block'; ?>;">
           <div class="pcard-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             Account Information
@@ -968,11 +969,42 @@ if (isset($_GET['updated'])) {
           </div>
           <p class="pinfo-hint">For security, your password isn't displayed here. Use the button below to change it.</p>
           <div class="action-bar">
+            <button class="btn-edit" type="button" onclick="toggleEmailEdit(true)" style="background:var(--color-primary);color:#fff;border:none;padding:10px 20px;border-radius:9px;font-family:var(--font-family);font-size:0.85rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+              Change Email
+            </button>
             <button class="btn-edit" type="button" onclick="toggleAccountEdit(true)" style="background:var(--color-primary);color:#fff;border:none;padding:10px 20px;border-radius:9px;font-family:var(--font-family);font-size:0.85rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
               Change Password
             </button>
           </div>
+        </div>
+
+        <!-- Change email (hidden unless open) -->
+        <div id="email-edit" style="display:<?php echo $emailEditOpen ? 'block' : 'none'; ?>;margin-top:20px;">
+          <form method="POST" id="emailForm">
+            <input type="hidden" name="action" value="update_account">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+            <div class="profile-card">
+              <div class="pcard-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+                Change Login Email
+              </div>
+              <div class="form-grid">
+                <div class="form-group full-width">
+                  <label for="Email">Login Email *</label>
+                  <input type="email" id="Email" name="Email" value="<?php echo htmlspecialchars($accountFormData['Email']); ?>" required>
+                </div>
+              </div>
+              <div class="action-bar">
+                <button class="btn-cancel" type="button" onclick="toggleEmailEdit(false)">Cancel</button>
+                <button class="btn-save" type="submit">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
 
         <div id="account-edit" style="display:<?php echo $accountEditOpen ? 'block' : 'none'; ?>;margin-top:20px;">
@@ -1031,8 +1063,19 @@ function togglePersonalEdit(editing) {
 function toggleAccountEdit(editing) {
   document.getElementById('account-readonly').style.display = editing ? 'none' : 'block';
   document.getElementById('account-edit').style.display = editing ? 'block' : 'none';
+  document.getElementById('email-edit').style.display = 'none';
   if (editing) {
     document.getElementById('account-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+// Toggle email edit
+function toggleEmailEdit(editing) {
+  document.getElementById('account-readonly').style.display = editing ? 'none' : 'block';
+  document.getElementById('email-edit').style.display = editing ? 'block' : 'none';
+  document.getElementById('account-edit').style.display = 'none';
+  if (editing) {
+    document.getElementById('email-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
 
@@ -1044,6 +1087,11 @@ document.addEventListener('DOMContentLoaded', function () {
 <?php if ($accountEditOpen): ?>
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('account-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+<?php endif; ?>
+<?php if ($emailEditOpen): ?>
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('email-edit').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 <?php endif; ?>
 

@@ -1904,6 +1904,59 @@ body {
   margin-bottom: 16px;
 }
  
+/* Vitals form actions: back + undo */
+.vitals-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #eef0f3;
+}
+.vitals-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.vitals-btn-back {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  color: var(--color-ink);
+}
+.vitals-btn-back:hover { background: var(--color-bg); }
+.vitals-btn-undo {
+  background: var(--color-primary-tint);
+  border: 1px solid var(--color-primary-tint-border);
+  color: var(--color-primary-hover);
+}
+.vitals-btn-undo:hover:not(:disabled) { background: #d9f7ee; }
+.vitals-btn-undo:disabled {
+  background: #f9fafb;
+  border-color: var(--color-border);
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+.vitals-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Inline SVG icons in vitals UI */
+.vitals-alert-badge svg { width: 18px; height: 18px; }
+.vitals-alert-normal-ok { display: inline-flex; align-items: center; gap: 4px; }
+.vitals-recorded-by svg { flex-shrink: 0; }
+.vh-pager-btn svg { width: 16px; height: 16px; }
+
 /* Vitals history cards */
 .vh-card {
   border: 1px solid #e5e7eb;
@@ -1959,6 +2012,50 @@ body {
   color: #dc2626;
 }
  
+/* Vitals history: 3 per page with previous / next arrows */
+.vh-card[hidden] { display: none; }
+.vh-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #eef0f3;
+}
+.vh-pager-info {
+  font-size: 0.82rem;
+  color: var(--color-ink-soft);
+}
+.vh-pager-arrows { display: flex; gap: 8px; }
+.vh-pager-btn {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-primary-hover);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.vh-pager-btn:hover:not(:disabled) {
+  background: var(--color-primary-tint);
+  border-color: var(--color-primary-tint-border);
+}
+.vh-pager-btn:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+.vh-pager-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* Vitals history panel (records page) */
 .vh-history-panel {
   background: #fff;

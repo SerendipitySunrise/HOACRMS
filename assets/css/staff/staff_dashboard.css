@@ -502,20 +502,6 @@ body {
 }
 .btn-noshow:hover { background: var(--color-red); color: #fff; border-color: var(--color-red); }
 
-.btn-followup {
-  background: var(--color-blue);
-  color: #fff;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-family: var(--font-family);
-  font-weight: 700;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-followup:hover { background: var(--color-blue-hover); }
-
 .btn-vitals {
   background: var(--color-primary);
   color: #fff;
@@ -542,18 +528,6 @@ body {
 .no-show-panel {
   margin-top: 20px;
   width: 100%;
-}
-
-.followup-select {
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  font-family: var(--font-family);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--color-ink);
-  background: #fff;
-  cursor: pointer;
 }
 
 .followup-status {

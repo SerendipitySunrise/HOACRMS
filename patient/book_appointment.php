@@ -119,6 +119,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
     } else {
 
+        $dateObjForDay = DateTime::createFromFormat('Y-m-d', $appointmentDate);
+        $dayOfWeek = (int) $dateObjForDay->format('N');
+
         /*
         |--------------------------------------------------------------------------
         | FIND AVAILABLE STAFF/DOCTOR
@@ -132,13 +135,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
              WHERE DepartmentID = ?
              AND AvailabilityStatus = "Available"
              AND StaffRole = "Doctor"
+             AND EXISTS (
+                 SELECT 1 FROM department_schedules ds
+                 WHERE ds.DepartmentID = staff.DepartmentID
+                   AND ds.DayOfWeek = ?
+                   AND ds.StartTime <= ?
+                   AND ds.EndTime > ?
+             )
              LIMIT 1'
         );
 
         mysqli_stmt_bind_param(
             $staffStmt,
-            'i',
-            $departmentID
+            'iiss',
+            $departmentID,
+            $dayOfWeek,
+            $appointmentTime,
+            $appointmentTime
         );
 
         mysqli_stmt_execute($staffStmt);

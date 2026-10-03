@@ -325,6 +325,12 @@ function parseLabRequests($labRequest) {
           </div>
         <?php endif; ?>
       <?php endif; ?>
+
+      <div class="appt-pagination" id="rx-pagination" hidden>
+  <button type="button" class="appt-page-btn" data-prev>Previous</button>
+  <span class="appt-page-info" aria-live="polite">Page 1 of 1</span>
+  <button type="button" class="appt-page-btn" data-next>Next</button>
+</div>
     </div>
 
     <!-- Lab Requests Tab -->
@@ -402,6 +408,12 @@ function parseLabRequests($labRequest) {
           </div>
         <?php endif; ?>
       <?php endif; ?>
+
+      <div class="appt-pagination" id="lab-pagination" hidden>
+  <button type="button" class="appt-page-btn" data-prev>Previous</button>
+  <span class="appt-page-info" aria-live="polite">Page 1 of 1</span>
+  <button type="button" class="appt-page-btn" data-next>Next</button>
+</div>
     </div>
 
   </main>
@@ -437,6 +449,50 @@ function toggleCard(card) {
     chevron.style.transform = 'rotate(180deg)';
   }
 }
+
+function initPaginator(container, itemSelector, pager, perPage) {
+  if (!container || !pager) { return; }
+
+  var items = Array.prototype.slice.call(container.querySelectorAll(itemSelector));
+  var pages = Math.ceil(items.length / perPage);
+  if (pages <= 1) { pager.hidden = true; return; }
+
+  var page = 1;
+  var prev = pager.querySelector('[data-prev]');
+  var next = pager.querySelector('[data-next]');
+  var info = pager.querySelector('.appt-page-info');
+  pager.hidden = false;
+
+  function render(scrollToTop) {
+    items.forEach(function (item, i) {
+      item.hidden = Math.floor(i / perPage) + 1 !== page;
+    });
+    info.textContent = 'Page ' + page + ' of ' + pages;
+    prev.disabled = page <= 1;
+    next.disabled = page >= pages;
+    if (scrollToTop) {
+      container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  prev.addEventListener('click', function () { if (page > 1) { page--; render(true); } });
+  next.addEventListener('click', function () { if (page < pages) { page++; render(true); } });
+
+  render(false);
+}
+
+initPaginator(
+  document.getElementById('tab-prescriptions'),
+  '.result-card',
+  document.getElementById('rx-pagination'),
+  5
+);
+initPaginator(
+  document.getElementById('tab-lab-requests'),
+  '.result-card',
+  document.getElementById('lab-pagination'),
+  5
+);
 </script>
 
 

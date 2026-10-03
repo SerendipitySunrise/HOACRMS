@@ -15,7 +15,6 @@
 ------------------------------------------------------------------ */
 
 const APPT_STATUS_PENDING         = 'Pending';
-const APPT_STATUS_SCHEDULED       = 'Scheduled';
 const APPT_STATUS_CHECKED_IN      = 'Checked In';
 const APPT_STATUS_CALLED          = 'Called';
 const APPT_STATUS_IN_CONSULTATION = 'In Consultation';
@@ -33,6 +32,7 @@ const QUEUE_STATUS_IN_CONSULTATION = 'In Consultation';
 const QUEUE_STATUS_COMPLETED       = 'Completed';
 const QUEUE_STATUS_CANCELLED       = 'Cancelled';
 const QUEUE_STATUS_NO_SHOW         = 'No Show';
+const QUEUE_STATUS_IN_PROGRESS     = 'In Progress';
 
 /* ------------------------------------------------------------------
    CONSULTATION STATUSES (consultations.Status)

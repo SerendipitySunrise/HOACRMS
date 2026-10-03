@@ -18,7 +18,7 @@ function disruptionAffectedAppointments(PDO $pdo, ?int $doctorId, ?int $departme
            LEFT JOIN staff doctor ON doctor.StaffID = a.StaffID
            LEFT JOIN users doctorUser ON doctorUser.UserID = doctor.UserID
            LEFT JOIN departments d ON d.DepartmentID = a.DepartmentID
-          WHERE a.Status IN ('Pending', 'Scheduled')
+          WHERE a.Status IN ('Pending')
             AND a.AppointmentDate BETWEEN :start_date AND :end_date
             AND (:doctor_id_filter IS NULL OR a.StaffID = :doctor_id_value)
             AND (:department_id_filter IS NULL OR a.DepartmentID = :department_id_value)
@@ -107,7 +107,7 @@ function executeDisruption(PDO $pdo, int $unavailabilityId, array $appointmentId
                FROM appointments a
                INNER JOIN patients p ON p.PatientID = a.PatientID
                INNER JOIN users u ON u.UserID = p.UserID
-              WHERE a.AppointmentID IN ($placeholders) AND a.Status IN ('Pending', 'Scheduled')
+              WHERE a.AppointmentID IN ($placeholders) AND a.Status IN ('Pending')
                 AND a.AppointmentDate BETWEEN ? AND ?"
         );
         $affectedStmt->execute(array_merge($appointmentIds, [$unavailability['StartDate'], $unavailability['EndDate']]));
@@ -137,7 +137,7 @@ function executeDisruption(PDO $pdo, int $unavailabilityId, array $appointmentId
                     is_emergency_disruption = :is_emergency, reschedule_token = :token,
                     UpdatedAt = NOW()
               WHERE AppointmentID = :appointment_id
-                AND Status IN ('Pending', 'Scheduled')"
+                AND Status IN ('Pending')"
         );
         foreach ($appointments as $appointment) {
             $token = bin2hex(random_bytes(32));

@@ -569,11 +569,6 @@ if (
                 LabRequest = ?,
                 FollowUpDate = ?,
                 Status = '" . CONSULTATION_STATUS_COMPLETED . "',
-                BloodPressure = ?,
-                Temperature = NULLIF(?, ''),
-                PulseRate = NULLIF(?, ''),
-                Weight = NULLIF(?, ''),
-                Height = NULLIF(?, ''),
                 ConsultationDate = ?,
                 ConsultationTime = ?
             WHERE ConsultationID = ?
@@ -593,18 +588,13 @@ if (
 
         mysqli_stmt_bind_param(
             $updateStmt,
-            'sssssssssssssii',
+            'ssssssssii',
             $chiefComplaint,
             $diagnosis,
             $finalTreatment,
             $clinicalNotes,
             $labRequestsText,
             $followUpDate,
-            $bloodPressure,
-            $temperature,
-            $pulseRate,
-            $weight,
-            $height,
             $consultationDate,
             $consultationTime,
             $consultationID,
@@ -614,6 +604,42 @@ if (
         mysqli_stmt_execute($updateStmt);
 
         mysqli_stmt_close($updateStmt);
+
+        /* Vitals now live in the vitals table as Source='Consultation'. */
+        $vitalsSelect = mysqli_prepare(
+            $conn,
+            'SELECT v.VitalID FROM vitals v
+             JOIN consultations c ON c.VitalID = v.VitalID
+             WHERE c.ConsultationID = ? AND c.StaffID = ? LIMIT 1'
+        );
+        mysqli_stmt_bind_param($vitalsSelect, 'ii', $consultationID, $staffID);
+        mysqli_stmt_execute($vitalsSelect);
+        $vitalsFound = mysqli_fetch_assoc(mysqli_stmt_get_result($vitalsSelect));
+        mysqli_stmt_close($vitalsSelect);
+
+        if ($vitalsFound) {
+            $vitalsUpdate = mysqli_prepare(
+                $conn,
+                'UPDATE vitals SET BloodPressure = ?, Temperature = NULLIF(?, \'\'), PulseRate = NULLIF(?, \'\'), Weight = NULLIF(?, \'\'), Height = NULLIF(?, \'\') WHERE VitalID = ?'
+            );
+            mysqli_stmt_bind_param($vitalsUpdate, 'sssssi', $bloodPressure, $temperature, $pulseRate, $weight, $height, $vitalsFound['VitalID']);
+            mysqli_stmt_execute($vitalsUpdate);
+            mysqli_stmt_close($vitalsUpdate);
+        } else {
+            $vitalsInsert = mysqli_prepare(
+                $conn,
+                'INSERT INTO vitals (AppointmentID, PatientID, StaffID, BloodPressure, Temperature, PulseRate, Weight, Height, Source) SELECT AppointmentID, PatientID, StaffID, ?, NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'), \'Consultation\' FROM consultations WHERE ConsultationID = ? AND StaffID = ? LIMIT 1'
+            );
+            mysqli_stmt_bind_param($vitalsInsert, 'sssii', $bloodPressure, $temperature, $pulseRate, $weight, $height, $consultationID, $staffID);
+            mysqli_stmt_execute($vitalsInsert);
+            $newVitalID = mysqli_insert_id($conn);
+            mysqli_stmt_close($vitalsInsert);
+
+            $vitalsLink = mysqli_prepare($conn, 'UPDATE consultations SET VitalID = ? WHERE ConsultationID = ? AND StaffID = ?');
+            mysqli_stmt_bind_param($vitalsLink, 'iii', $newVitalID, $consultationID, $staffID);
+            mysqli_stmt_execute($vitalsLink);
+            mysqli_stmt_close($vitalsLink);
+        }
 
     }
 
@@ -638,12 +664,7 @@ if (
                 Notes,
                 LabRequest,
                 FollowUpDate,
-                Status,
-                BloodPressure,
-                Temperature,
-                PulseRate,
-                Weight,
-                Height
+                Status
             )
             VALUES
             (
@@ -658,12 +679,7 @@ if (
                 ?,
                 ?,
                 ?,
-                '" . CONSULTATION_STATUS_COMPLETED . "',
-                ?,
-                NULLIF(?, ''),
-                NULLIF(?, ''),
-                NULLIF(?, ''),
-                NULLIF(?, '')
+                '" . CONSULTATION_STATUS_COMPLETED . "'
             )
         ";
 
@@ -680,7 +696,7 @@ if (
 
         mysqli_stmt_bind_param(
             $insertStmt,
-            'iiisssssssssssss',
+            'iiissssssss',
             $appointmentID,
             $patientID,
             $staffID,
@@ -691,12 +707,7 @@ if (
             $finalTreatment,
             $clinicalNotes,
             $labRequestsText,
-            $followUpDate,
-            $bloodPressure,
-            $temperature,
-            $pulseRate,
-            $weight,
-            $height
+            $followUpDate
         );
 
         mysqli_stmt_execute($insertStmt);
@@ -705,6 +716,21 @@ if (
             (int) mysqli_insert_id($conn);
 
         mysqli_stmt_close($insertStmt);
+
+        /* Insert the vitals row with Source='Consultation' and link it. */
+        $vitalsInsert = mysqli_prepare(
+            $conn,
+            'INSERT INTO vitals (AppointmentID, PatientID, StaffID, BloodPressure, Temperature, PulseRate, Weight, Height, Source) VALUES (?, ?, ?, ?, NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'), \'Consultation\')'
+        );
+        mysqli_stmt_bind_param($vitalsInsert, 'iiisssss', $appointmentID, $patientID, $staffID, $bloodPressure, $temperature, $pulseRate, $weight, $height);
+        mysqli_stmt_execute($vitalsInsert);
+        $newVitalID = mysqli_insert_id($conn);
+        mysqli_stmt_close($vitalsInsert);
+
+        $vitalsLink = mysqli_prepare($conn, 'UPDATE consultations SET VitalID = ? WHERE ConsultationID = ? AND StaffID = ?');
+        mysqli_stmt_bind_param($vitalsLink, 'iii', $newVitalID, $consultationID, $staffID);
+        mysqli_stmt_execute($vitalsLink);
+        mysqli_stmt_close($vitalsLink);
     }
 
 
@@ -1302,11 +1328,11 @@ $queueSql = "
         c.Treatment,
         c.Notes,
         c.ChiefComplaint,
-        c.BloodPressure,
-        c.Temperature,
-        c.PulseRate,
-        c.Weight,
-        c.Height,
+        COALESCE(v.BloodPressure, c.BloodPressure) AS BloodPressure,
+        COALESCE(v.Temperature, c.Temperature) AS Temperature,
+        COALESCE(v.PulseRate, c.PulseRate) AS PulseRate,
+        COALESCE(v.Weight, c.Weight) AS Weight,
+        COALESCE(v.Height, c.Height) AS Height,
         c.ConsultationDate,
         c.ConsultationTime,
         c.LabRequest,
@@ -1325,6 +1351,9 @@ $queueSql = "
 
     LEFT JOIN consultations c
         ON a.AppointmentID = c.AppointmentID
+
+    LEFT JOIN vitals v
+        ON v.VitalID = c.VitalID
 
     WHERE a.StaffID = ?
       AND a.AppointmentDate = ?
@@ -3256,9 +3285,16 @@ if (isset($_GET['consult'])) {
 
     <?php else: ?>
 
+        <?php
+            $vhLimit = 3; // readings per page
+            $vhTotal = count($consultPatient['vitals_history']);
+        ?>
+
+        <div class="vh-list" id="vh-list">
+
         <?php foreach (
             $consultPatient['vitals_history']
-            as $vh
+            as $vhIdx => $vh
         ): ?>
 
             <?php
@@ -3279,7 +3315,7 @@ if (isset($_GET['consult'])) {
                 }
             ?>
 
-        <div class="vh-card">
+        <div class="vh-card" data-vh-page="<?= intdiv($vhIdx, $vhLimit) + 1 ?>">
 
             <div class="vh-head">
 
@@ -3348,6 +3384,84 @@ if (isset($_GET['consult'])) {
 
         <?php endforeach; ?>
 
+        </div>
+
+        <?php if ($vhTotal > $vhLimit): ?>
+
+        <div class="vh-pager"
+             id="vh-pager"
+             data-total="<?= $vhTotal ?>"
+             data-limit="<?= $vhLimit ?>">
+
+            <span class="vh-pager-info" id="vh-pager-info" aria-live="polite">
+                Showing 1&ndash;<?= min($vhLimit, $vhTotal) ?>
+                of <?= $vhTotal ?>
+            </span>
+
+            <div class="vh-pager-arrows">
+
+                <button type="button"
+                        class="vh-pager-btn"
+                        id="vh-prev"
+                        aria-label="Newer readings"
+                        disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+                </button>
+
+                <button type="button"
+                        class="vh-pager-btn"
+                        id="vh-next"
+                        aria-label="Older readings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                </button>
+
+            </div>
+
+        </div>
+
+        <script>
+        (function () {
+            var pager = document.getElementById('vh-pager');
+            if (!pager) { return; }
+
+            var total = parseInt(pager.dataset.total, 10);
+            var limit = parseInt(pager.dataset.limit, 10);
+            var pages = Math.ceil(total / limit);
+            var page  = 1;
+
+            var cards = document.querySelectorAll('#vh-list .vh-card');
+            var prev  = document.getElementById('vh-prev');
+            var next  = document.getElementById('vh-next');
+            var info  = document.getElementById('vh-pager-info');
+
+            function render() {
+                cards.forEach(function (card) {
+                    card.hidden =
+                        parseInt(card.dataset.vhPage, 10) !== page;
+                });
+
+                var from = (page - 1) * limit + 1;
+                var to   = Math.min(page * limit, total);
+
+                info.textContent = 'Showing ' + from + '\u2013' + to +
+                                   ' of ' + total;
+                prev.disabled = page <= 1;
+                next.disabled = page >= pages;
+            }
+
+            prev.addEventListener('click', function () {
+                if (page > 1) { page--; render(); }
+            });
+            next.addEventListener('click', function () {
+                if (page < pages) { page++; render(); }
+            });
+
+            render();
+        })();
+        </script>
+
+        <?php endif; ?>
+
     <?php endif; ?>
 
 </div>
@@ -3414,7 +3528,7 @@ if (isset($_GET['consult'])) {
         <div class="vitals-alert-head">
 
             <span class="vitals-alert-badge">
-                <i class="fas fa-exclamation-triangle"></i>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3L2.5 20h19L12 3z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></svg>
             </span>
 
             <div>
@@ -3494,7 +3608,7 @@ if (isset($_GET['consult'])) {
                     </span>
 
                     <span class="vitals-alert-normal-ok">
-                        <i class="fas fa-check"></i> Normal
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Normal
                     </span>
 
                 </div>
@@ -3514,7 +3628,7 @@ if (isset($_GET['consult'])) {
 
     <div class="vitals-recorded-by">
 
-        <i class="fas fa-user-nurse"></i>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
 
         Vitals recorded by:
 
@@ -3648,6 +3762,71 @@ if (isset($_GET['consult'])) {
 
 
     </div>
+
+
+    <div class="vitals-actions">
+
+        <a class="vitals-btn vitals-btn-back"
+           id="vitals-back"
+           href="doctor_queue.php">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg> Back to Queue
+        </a>
+
+        <button type="button"
+                class="vitals-btn vitals-btn-undo"
+                id="vitals-undo"
+                disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg> Undo changes
+        </button>
+
+    </div>
+
+    <script>
+    (function () {
+        var ids = ['vital-bp', 'vital-temp', 'vital-pulse',
+                   'vital-weight', 'vital-height'];
+        var fields = ids.map(function (id) {
+            return document.getElementById(id);
+        }).filter(Boolean);
+
+        var undoBtn = document.getElementById('vitals-undo');
+        var backBtn = document.getElementById('vitals-back');
+        if (!fields.length || !undoBtn || !backBtn) { return; }
+
+        // Values as loaded from the server
+        var original = fields.map(function (f) { return f.value; });
+
+        function isDirty() {
+            return fields.some(function (f, i) {
+                return f.value !== original[i];
+            });
+        }
+
+        function refresh() {
+            undoBtn.disabled = !isDirty();
+        }
+
+        fields.forEach(function (f) {
+            f.addEventListener('input', refresh);
+        });
+
+        undoBtn.addEventListener('click', function () {
+            fields.forEach(function (f, i) {
+                f.value = original[i];
+                f.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            refresh();
+        });
+
+        backBtn.addEventListener('click', function (e) {
+            if (isDirty() && !confirm(
+                'You have unsaved vitals changes. Leave without saving?'
+            )) {
+                e.preventDefault();
+            }
+        });
+    })();
+    </script>
 
 </div>
 
@@ -4841,6 +5020,15 @@ function classifyVitalJS(key, value) {
     }
 }
 
+var VITALS_ICON_WARN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3L2.5 20h19L12 3z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/></svg>';
+var VITALS_ICON_OK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+function vitalsEsc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
 function updateVitalsAlert() {
     var fields = {
         'blood_pressure':    ['vital-bp', 'Blood Pressure', 'mmHg'],
@@ -4848,74 +5036,87 @@ function updateVitalsAlert() {
         'pulse_rate':        ['vital-pulse', 'Pulse', 'bpm']
     };
 
-    var list = [];
-    var hasAbnormal = false;
+    var flagged = [];
+    var normal  = [];
 
-    Object.keys(fields).forEach(function(key) {
+    Object.keys(fields).forEach(function (key) {
         var el = document.getElementById(fields[key][0]);
         if (!el) { return; }
         var value = el.value.trim();
+        if (value === '') { return; }
+
         var cls = classifyVitalJS(key, value);
-        var status = value === '' ? 'empty' : cls.status;
-        if (status === 'high' || status === 'low' || status === 'warning') { hasAbnormal = true; }
+        var item = {
+            label:  fields[key][1],
+            value:  value + ' ' + fields[key][2],
+            status: cls.status,
+            note:   cls.note
+        };
 
-        var itemClass = 'vitals-alert-item';
-        var flag;
-        var note;
-        if (status === 'empty') {
-            list.push({
-                status: status,
-                text: ''
-            });
-            return;
-        }
-        if (status === 'high' || status === 'low') {
-            itemClass += ' vitals-alert-abnormal';
-            flag = '\u26A0\uFE0F';
-            note = ' (' + cls.note + ')';
-        } else if (status === 'warning') {
-            itemClass += ' vitals-alert-warning';
-            flag = '\u26A0\uFE0F';
-            note = ' (' + cls.note + ')';
-        } else {
-            itemClass += ' vitals-alert-normal';
-            flag = '\u2705';
-            note = ' (Normal)';
-        }
-
-        list.push({
-            status: status,
-            itemClass: itemClass,
-            flag: flag,
-            text: fields[key][1] + ': ' + value + ' ' + fields[key][2] + note
-        });
+        if (cls.status === 'normal') { normal.push(item); }
+        else { flagged.push(item); }
     });
 
     var box = document.getElementById('vitals-alert-box');
 
-    if (hasAbnormal) {
-        if (!box) {
-            box = document.createElement('div');
-            box.id = 'vitals-alert-box';
-            box.className = 'vitals-alert';
-            var host = document.querySelector('.vitals-recorded-by');
-            if (!host) {
-                var panel = document.querySelector('.consult-panel-title');
-                host = panel && panel.parentElement ? panel.parentElement.parentElement : null;
-            }
-            var grid = document.querySelector('.vitals-grid');
-            if (grid && host) { host.insertBefore(box, grid); }
-        }
-        box.innerHTML =
-            '<div class="vitals-alert-title"><i class="fas fa-exclamation-triangle"></i> Abnormal Vitals Alert</div>' +
-            '<div class="vitals-alert-list">' +
-            list.filter(function(i){ return i.status !== 'empty'; })
-                .map(function(i){ return '<div class="' + i.itemClass + '"><span class="vitals-alert-icon">' + i.flag + '</span><span class="vitals-alert-text">' + i.text + '</span></div>'; })
-                .join('') +
-            '</div>';
-    } else if (box) {
-        box.remove();
+    if (!flagged.length) {
+        if (box) { box.remove(); }
+        return;
     }
+
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'vitals-alert-box';
+        box.className = 'vitals-alert';
+
+        var ref = document.querySelector('.vitals-recorded-by') ||
+                  document.querySelector('.vitals-grid');
+        if (ref && ref.parentNode) { ref.parentNode.insertBefore(box, ref); }
+    }
+
+    var html =
+        '<div class="vitals-alert-head">' +
+            '<span class="vitals-alert-badge">' + VITALS_ICON_WARN + '</span>' +
+            '<div>' +
+                '<div class="vitals-alert-title">Abnormal Vitals</div>' +
+                '<div class="vitals-alert-sub">' + flagged.length +
+                    ' reading' + (flagged.length === 1 ? '' : 's') +
+                    ' need' + (flagged.length === 1 ? 's' : '') + ' review</div>' +
+            '</div>' +
+        '</div>';
+
+    flagged.forEach(function (i) {
+        var pill = i.note, range = '';
+        var m = i.note.match(/^(.*?)\s*\((.*)\)\s*$/);
+        if (m) { pill = m[1]; range = m[2]; }
+
+        html +=
+            '<div class="vitals-alert-item ' +
+                (i.status === 'warning' ? 'vitals-alert-warning' : 'vitals-alert-abnormal') + '">' +
+                '<div class="vitals-alert-text">' +
+                    '<div class="vitals-alert-label">' + vitalsEsc(i.label) +
+                        ' <span class="vitals-alert-value">' + vitalsEsc(i.value) + '</span></div>' +
+                    (range ? '<div class="vitals-alert-range">' + vitalsEsc(range) + '</div>' : '') +
+                '</div>' +
+                '<span class="vitals-alert-pill">' + vitalsEsc(pill) + '</span>' +
+            '</div>';
+    });
+
+    if (normal.length) {
+        html += '<div class="vitals-alert-normal-title">Within normal range</div>' +
+                '<div class="vitals-alert-normal-list">';
+        normal.forEach(function (i) {
+            html +=
+                '<div class="vitals-alert-normal-row">' +
+                    '<span class="vitals-alert-normal-label">' + vitalsEsc(i.label) + '</span>' +
+                    '<span class="vitals-alert-normal-value">' + vitalsEsc(i.value) + '</span>' +
+                    '<span class="vitals-alert-normal-ok">' + VITALS_ICON_OK + ' Normal</span>' +
+                '</div>';
+        });
+        html += '</div>';
+    }
+
+    box.innerHTML = html;
 }
 
 (function() {

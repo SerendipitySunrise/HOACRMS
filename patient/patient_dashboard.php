@@ -74,7 +74,7 @@ $appointmentStmt = mysqli_prepare(
      LEFT JOIN users u ON s.UserID = u.UserID
      WHERE a.PatientID = ?
        AND a.AppointmentDate >= CURDATE()
-       AND a.Status IN ("Pending", "Scheduled", "Confirmed")
+       AND a.Status IN ("Pending")
      ORDER BY a.AppointmentDate ASC, a.AppointmentTime ASC
      LIMIT 1'
 );
