@@ -1,5 +1,25 @@
 <?php
 
+/*
+| Clinic timezone.
+|
+| php.ini pins date.timezone to UTC, but MySQL inherits the host clock
+| (@@time_zone = SYSTEM), which is UTC+8 for this clinic. The two therefore
+| disagreed by 8 hours, and between 00:00 and 08:00 local time a page using
+| date('Y-m-d') would look up "today" as yesterday while CURDATE() in SQL
+| already returned the new day. That produced check-ins whose queue.QueueDate
+| did not match the appointment's AppointmentDate.
+|
+| Setting this explicitly makes PHP agree with the database and with the
+| clinic's actual local time. It is set in code rather than php.ini on
+| purpose so it travels with the repository and survives a redeploy.
+|
+| Asia/Manila is UTC+8 with no daylight saving, matching the host clock.
+*/
+if (!ini_get('date.timezone') || strtolower(ini_get('date.timezone')) === 'utc') {
+    date_default_timezone_set('Asia/Manila');
+}
+
 $host = 'localhost';
 $username = 'root';
 $password = '';

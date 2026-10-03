@@ -38,9 +38,13 @@ function verifyCsrf(): bool {
 // further down near the UPDATE query for the SQL to add them once you confirm
 // where you'd like this data stored.
 //
-// NOTE: s.EmployeeID, s.DateHired, s.AssignedDays and s.AssignedResponsibilities
-// do NOT exist on the `staff` table (defaults are derived below instead) — removed
-// so the page does not throw "Unknown column" on load.
+// NOTE: s.EmployeeID, s.DateHired and s.AssignedResponsibilities are not selected
+// here because the profile derives display defaults for them instead. They do
+// exist on the `staff` table; the UPDATE query further down writes them.
+//
+// HISTORY: this comment originally also listed s.AssignedDays. That column had no
+// reader anywhere in the codebase and was dropped in the Phase 3 schema
+// normalization, so the "Unknown column" caveat no longer applies to it.
 $staffStmt = mysqli_prepare(
     $conn,
     "SELECT s.StaffID, s.DepartmentID, s.StaffRole, s.Specialization,

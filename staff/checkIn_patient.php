@@ -20,7 +20,19 @@ if (!isset($_SESSION['RoleName']) || $_SESSION['RoleName'] !== 'Staff') {
     exit();
 }
 
-$today = date('Y-m-d');
+/*
+| Clinic date, taken from the database rather than PHP.
+|
+| $today is compared against appointments.AppointmentDate and written into
+| queue.QueueDate. Reading it from the server guarantees it always agrees with
+| the SQL side (CURDATE() in the listing queries, department_schedules day
+| resolution) even if the timezone bootstrap in includes/db.php is ever
+| refactored away or this file is reached without it.
+*/
+$todayResult = mysqli_query($conn, 'SELECT CURDATE()');
+$today = ($todayResult && ($todayRow = mysqli_fetch_row($todayResult)))
+    ? (string) $todayRow[0]
+    : date('Y-m-d');
 
 $message = '';
 $messageType = '';
@@ -159,6 +171,12 @@ if (
                     $queueTime = date('H:i:s');
                     $queueStatus = QUEUE_STATUS_WAITING;
 
+                    // The department comes from the appointment being checked in.
+                    // $departmentId is the WALK-IN form field and is still 0 at this
+                    // point in the file, so binding it raised FK error 1452.
+                    // It must be a plain variable: bind_param() takes by reference.
+                    $queueDepartmentId = (int) $appointment['DepartmentID'];
+
                     $queueStmt = mysqli_prepare(
                         $conn,
                         "INSERT INTO queue
@@ -175,11 +193,13 @@ if (
                         $today,
                         $queueTime,
                         $queueStatus,
-                        $departmentId
+                        $queueDepartmentId
                     );
 
                     if (!mysqli_stmt_execute($queueStmt)) {
-                        throw new Exception('Failed to create queue record.');
+                        throw new Exception(
+                            'Failed to create queue record: ' . mysqli_stmt_error($queueStmt)
+                        );
                     }
 
                     $appointmentStatus = APPT_STATUS_CHECKED_IN;
@@ -194,7 +214,9 @@ if (
                     mysqli_stmt_bind_param($updateAppointmentStmt, 'si', $appointmentStatus, $appointmentID);
 
                     if (!mysqli_stmt_execute($updateAppointmentStmt)) {
-                        throw new Exception('Failed to update appointment status.');
+                        throw new Exception(
+                            'Failed to update appointment status: ' . mysqli_stmt_error($updateAppointmentStmt)
+                        );
                     }
 
                     mysqli_commit($conn);
@@ -213,6 +235,10 @@ if (
                 } catch (Exception $e) {
 
                     mysqli_rollback($conn);
+
+                    // Log the real cause; the user-facing message stays generic
+                    // so database detail is never shown to the patient.
+                    error_log('checkIn_patient checkin failed: ' . $e->getMessage());
 
                     $message = 'Unable to check in patient. Please try again.';
                     $messageType = 'error';
@@ -570,6 +596,9 @@ if (
         } catch (Exception $e) {
 
             mysqli_rollback($conn);
+
+            // Also log server-side; the user-facing text below is unchanged.
+            error_log('checkIn_patient walkin failed: ' . $e->getMessage());
 
             // Show the specific reason in dev; you can log it in prod
             $message = 'Unable to add walk-in patient. ' . $e->getMessage();
