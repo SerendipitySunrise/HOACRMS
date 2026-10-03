@@ -367,31 +367,65 @@ if (
   <?php include __DIR__ . '/../includes/admin_notification_widget.php'; ?>
 </div>
 
-    <!-- Stat cards -->
-    <div class="admin-stats">
-      <div class="admin-stat-card mint">
+    <!-- Context stats -->
+    <div class="admin-stats-context">
+      <div class="admin-stat-card">
+        <div class="admin-stat-top">
+          <div class="admin-stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-1a7 7 0 0 0-7-7h-2a7 7 0 0 0-7 7v1"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="admin-stat-label">Total Patients Today</div>
+        </div>
         <div class="admin-stat-value"><?= $totalPatientsToday ?></div>
-        <div class="admin-stat-label">Total Patients Today</div>
       </div>
-      <div class="admin-stat-card cream">
-        <div class="admin-stat-value"><?= $waitingToday ?></div>
-        <div class="admin-stat-label">Waiting in Queue</div>
-      </div>
-      <div class="admin-stat-card lavender">
-        <div class="admin-stat-value"><?= $inConsultationToday ?></div>
-        <div class="admin-stat-label">In Consultation</div>
-      </div>
-      <div class="admin-stat-card green">
-        <div class="admin-stat-value"><?= $completedToday ?></div>
-        <div class="admin-stat-label">Completed Today</div>
-      </div>
-      <div class="admin-stat-card red">
+      <div class="admin-stat-card">
+        <div class="admin-stat-top">
+          <div class="admin-stat-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="admin-stat-label">Avg Wait Time</div>
+        </div>
         <div class="admin-stat-value"><?= $averageWaitMinutes ?>m</div>
-        <div class="admin-stat-label">Avg Wait Time</div>
       </div>
-      <div class="admin-stat-card red">
+      <div class="admin-stat-card">
+        <div class="admin-stat-top">
+          <div class="admin-stat-icon red">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="admin-stat-label">No-Shows Today</div>
+        </div>
         <div class="admin-stat-value"><?= $noShowCountToday ?></div>
-        <div class="admin-stat-label">No-Shows Today</div>
+      </div>
+    </div>
+
+    <!-- Patient-flow pipeline -->
+    <div class="admin-flow">
+      <div class="admin-flow-step">
+        <div class="admin-flow-icon orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="admin-flow-label">Waiting in Queue</div>
+        <div class="admin-flow-value orange"><?= $waitingToday ?></div>
+      </div>
+      <div class="admin-flow-arrow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="admin-flow-step">
+        <div class="admin-flow-icon blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
+        </div>
+        <div class="admin-flow-label">In Consultation</div>
+        <div class="admin-flow-value blue"><?= $inConsultationToday ?></div>
+      </div>
+      <div class="admin-flow-arrow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="admin-flow-step">
+        <div class="admin-flow-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="admin-flow-label">Completed Today</div>
+        <div class="admin-flow-value green"><?= $completedToday ?></div>
       </div>
     </div>
 

@@ -9,19 +9,22 @@
  */
 
 /**
- * Calculate BMI from weight (kg) and height (cm).
+ * Calculate BMI from weight (kg) and height (m).
+ *
+ * Height is stored in meters throughout the application (e.g. 1.65
+ * for 165 cm), matching how it is captured in the forms.
  *
  * @param float|int|null $weightKg
- * @param float|int|null $heightCm
+ * @param float|int|null $heightM
  * @return float|null BMI, or null when inputs are missing / invalid.
  */
-function bmi(float|int|null $weightKg, float|int|null $heightCm): ?float
+function bmi(float|int|null $weightKg, float|int|null $heightM): ?float
 {
-    if ($weightKg === null || $heightCm === null || (float)$weightKg <= 0 || (float)$heightCm <= 0) {
+    if ($weightKg === null || $heightM === null || (float)$weightKg <= 0 || (float)$heightM <= 0) {
         return null;
     }
 
-    $heightM = (float)$heightCm / 100.0;
+    $heightM = (float)$heightM;
     $bmi     = (float)$weightKg / ($heightM * $heightM);
 
     return round($bmi, 1);
@@ -131,7 +134,7 @@ function classifyVitals(array $vitals): array
         'temperature'        => ['label' => 'Temperature',    'unit' => '°C'],
         'pulse_rate'         => ['label' => 'Pulse',          'unit' => 'bpm'],
         'weight'             => ['label' => 'Weight',         'unit' => 'kg'],
-        'height'             => ['label' => 'Height',         'unit' => 'cm'],
+        'height'             => ['label' => 'Height',         'unit' => 'm'],
     ];
 
     $items = [];

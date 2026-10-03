@@ -416,7 +416,7 @@ body {
 /* ---------- TWO COLUMN GRID ---------- */
 .doctor-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 20px;
   margin-top: 20px;
   align-items: start;
@@ -1260,7 +1260,7 @@ body {
    PATIENT SEARCH PAGE
    ============================================ */
 
-.search-bar-wrap { margin-top: 22px; }
+.search-bar-wrap { margin-top: 22px; margin-bottom: 24px; }
 .search-bar-wrap label {
   font-size: 0.78rem;
   font-weight: 700;
@@ -1782,72 +1782,126 @@ body {
 .vitals-alert {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  border-left: 4px solid #f97316;
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 16px;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
 }
-.vitals-alert-title {
+.vitals-alert-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: #9a3412;
+  gap: 12px;
 }
-.vitals-alert-list {
+.vitals-alert-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  background: #fef3c7;
+  color: #92400e;
+  flex-shrink: 0;
 }
+.vitals-alert:has(.vitals-alert-abnormal) .vitals-alert-badge {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.vitals-alert-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+}
+.vitals-alert-sub {
+  font-size: 0.78rem;
+  color: var(--color-ink-soft);
+}
+
+/* Flagged reading row */
 .vitals-alert-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  color: #b45309;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
 }
-.vitals-alert-icon {
-  min-width: 18px;
-  text-align: center;
-}
-.vitals-alert-text { line-height: 1.4; }
-.vitals-alert-item.vitals-alert-normal {
-  color: #166534;
-  font-weight: 500;
-}
-.vitals-alert-item.vitals-alert-normal .vitals-alert-icon {
-  color: #16a34a;
-}
-.vitals-alert-item.vitals-alert-warning {
-  color: #b45309;
+.vitals-alert-label {
+  font-size: 0.9rem;
   font-weight: 600;
+  color: var(--color-ink);
 }
-.vitals-alert-item.vitals-alert-warning .vitals-alert-icon {
-  color: #f59e0b;
+.vitals-alert-value {
+  font-weight: 500;
+  margin-left: 6px;
 }
-.vitals-alert-item.vitals-alert-abnormal {
-  color: #b91c1c;
-  font-weight: 700;
+.vitals-alert-range {
+  font-size: 0.78rem;
+  color: var(--color-ink-soft);
+  margin-top: 2px;
 }
-.vitals-alert-item.vitals-alert-abnormal .vitals-alert-icon {
-  color: #dc2626;
+.vitals-alert-pill {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
- 
+.vitals-alert-item.vitals-alert-warning { background: #fffbeb; }
+.vitals-alert-item.vitals-alert-warning .vitals-alert-pill {
+  background: #fef3c7;
+  color: #92400e;
+}
+.vitals-alert-item.vitals-alert-abnormal { background: #fef2f2; }
+.vitals-alert-item.vitals-alert-abnormal .vitals-alert-pill {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Normal readings (muted) */
+.vitals-alert-normal-title {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+.vitals-alert-normal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid #eef0f3;
+  font-size: 0.85rem;
+}
+.vitals-alert-normal-label {
+  min-width: 110px;
+  color: var(--color-ink-soft);
+}
+.vitals-alert-normal-value {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.vitals-alert-normal-ok {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #15803d;
+}
+
+/* Recorded-by line: quiet, no colored box */
 .vitals-recorded-by {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.82rem;
-  color: #0e7a6e;
-  background: #f0fdfa;
-  border: 1px solid #99f6e4;
-  border-radius: 8px;
-  padding: 6px 10px;
-  margin-bottom: 14px;
+  font-size: 0.8rem;
+  color: var(--color-ink-soft);
+  margin-bottom: 16px;
 }
  
 /* Vitals history cards */
@@ -2293,6 +2347,22 @@ body {
     align-items: center;
     gap: 8px;
 }
+.fu-availability--inline {
+    margin-top: 8px;
+}
+.fu-field-note {
+    margin: 6px 0 0;
+    font-size: 0.72rem;
+    color: #64748b;
+    line-height: 1.4;
+}
+.queue-alert-note {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: inherit;
+    opacity: 0.9;
+}
 .fu-avail-dot {
     display: inline-block;
     width: 8px;
@@ -2498,6 +2568,24 @@ body {
 .tl-edit-field textarea {
   resize: vertical;
   line-height: 1.4;
+}
+.tl-edit-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.tl-edit-subhead label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tl-edit-subhead .btn-add-sm {
+  padding: 4px 12px;
+  font-size: 0.75rem;
 }
 .tl-edit-note {
   margin-top: 12px;

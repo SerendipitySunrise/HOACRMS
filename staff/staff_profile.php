@@ -199,11 +199,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 
-    if ($_POST['action'] === 'update_account') {
-        $email = trim($_POST['Email'] ?? '');
+    // Handle Password Update ONLY (New Action)
+    if ($_POST['action'] === 'update_password') {
         $newPassword = trim($_POST['NewPassword'] ?? '');
         $confirmPassword = trim($_POST['ConfirmPassword'] ?? '');
 
+        if ($newPassword === '') {
+            $updateMessage = 'Please enter a new password.';
+            $accountEditOpen = true;
+        } elseif ($newPassword !== $confirmPassword) {
+            $updateMessage = 'Passwords do not match.';
+            $accountEditOpen = true;
+        } elseif (strlen($newPassword) < 8) {
+            $updateMessage = 'Password must be at least 8 characters.';
+            $accountEditOpen = true;
+        } else {
+            $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
+            $pStmt = mysqli_prepare($conn, 'UPDATE users SET Password=? WHERE UserID=?');
+            mysqli_stmt_bind_param($pStmt, 'si', $hashed, $userId);
+            mysqli_stmt_execute($pStmt);
+            mysqli_stmt_close($pStmt);
+
+            header('Location: staff_profile.php?updated=1');
+            exit();
+        }
+    }
+
+    // Handle Email Update (Kept for separate logic if needed later)
+    if ($_POST['action'] === 'update_account') {
+        $email = trim($_POST['Email'] ?? '');
         $accountFormData['Email'] = $email;
 
         if (empty($email)) {
@@ -212,14 +236,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $updateMessage = 'Please enter a valid email address.';
             $accountEditOpen = true;
-        } elseif ($newPassword !== '' && $newPassword !== $confirmPassword) {
-            $updateMessage = 'Passwords do not match.';
-            $accountEditOpen = true;
-        } elseif ($newPassword !== '' && strlen($newPassword) < 8) {
-            $updateMessage = 'Password must be at least 8 characters.';
-            $accountEditOpen = true;
         } else {
-            // Make sure no other account is already using this email
             $dupStmt = mysqli_prepare($conn, 'SELECT UserID FROM users WHERE Email = ? AND UserID != ? LIMIT 1');
             mysqli_stmt_bind_param($dupStmt, 'si', $email, $userId);
             mysqli_stmt_execute($dupStmt);
@@ -235,14 +252,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 mysqli_stmt_bind_param($uStmt, 'si', $email, $userId);
                 mysqli_stmt_execute($uStmt);
                 mysqli_stmt_close($uStmt);
-
-                if ($newPassword !== '') {
-                    $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
-                    $pStmt = mysqli_prepare($conn, 'UPDATE users SET Password=? WHERE UserID=?');
-                    mysqli_stmt_bind_param($pStmt, 'si', $hashed, $userId);
-                    mysqli_stmt_execute($pStmt);
-                    mysqli_stmt_close($pStmt);
-                }
 
                 header('Location: staff_profile.php?updated=1');
                 exit();
@@ -382,6 +391,7 @@ $scheduleDisplay = ($staff['ScheduleStart'] && $staff['ScheduleEnd'])
   align-items: start;
 }
 .profile-card {
+  margin-top: 20px;
   background: #fff;
   border: 1px solid var(--color-border);
   border-radius: 16px;
@@ -540,6 +550,41 @@ $scheduleDisplay = ($staff['ScheduleStart'] && $staff['ScheduleEnd'])
 
 /* Full width card */
 .profile-card.full-width { grid-column: 1 / -1; }
+
+/* Password Toggle Styles */
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding-right: 42px; /* Make room for the eye icon */
+}
+
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8; /* Muted icon color */
+  transition: color 0.15s;
+}
+
+.password-toggle:hover {
+  color: var(--color-primary); /* Your theme's teal color */
+}
+
+.password-toggle svg {
+  width: 18px;
+  height: 18px;
+}
 
 @media (max-width: 900px) {
   .profile-columns { grid-template-columns: 1fr; }
@@ -855,7 +900,7 @@ $scheduleDisplay = ($staff['ScheduleStart'] && $staff['ScheduleEnd'])
 
         <div id="account-edit" style="display:<?php echo $accountEditOpen ? 'block' : 'none'; ?>;margin-top:20px;">
           <form method="POST" id="accountForm">
-            <input type="hidden" name="action" value="update_account">
+            <input type="hidden" name="action" value="update_password">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
             <div class="profile-card">
               <div class="pcard-title">
@@ -864,19 +909,23 @@ $scheduleDisplay = ($staff['ScheduleStart'] && $staff['ScheduleEnd'])
               </div>
               <div class="form-grid">
                 <div class="form-group full-width">
-                  <label for="Email">Email Address *</label>
-                  <input type="email" id="Email" name="Email" value="<?php echo htmlspecialchars($accountFormData['Email']); ?>" required>
-                </div>
-                <hr class="pinfo-divider" style="grid-column:1/-1;">
-                <div class="form-group full-width">
                   <label for="NewPassword">New Password <small>(leave blank to keep current)</small></label>
-                  <input type="password" id="NewPassword" name="NewPassword" placeholder="Min. 8 characters" minlength="8">
+                  <div class="password-wrapper">
+                    <input type="password" id="NewPassword" name="NewPassword" placeholder="Min. 8 characters" minlength="8">
+                    <button type="button" class="password-toggle" onclick="togglePassword('NewPassword', this)" aria-label="Show password">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
                 </div>
                 <div class="form-group full-width">
                   <label for="ConfirmPassword">Confirm New Password</label>
-                  <input type="password" id="ConfirmPassword" name="ConfirmPassword" placeholder="Re-enter new password">
+                  <div class="password-wrapper">
+                    <input type="password" id="ConfirmPassword" name="ConfirmPassword" placeholder="Re-enter new password">
+                    <button type="button" class="password-toggle" onclick="togglePassword('ConfirmPassword', this)" aria-label="Show password">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
               <div class="action-bar">
                 <button class="btn-cancel" type="button" onclick="toggleAccountEdit(false)">Cancel</button>
                 <button class="btn-save" type="submit">
@@ -1015,6 +1064,24 @@ document.getElementById('accountForm').addEventListener('submit', function(e) {
     alert('Passwords do not match.');
   }
 });
+
+// Password visibility toggle
+function togglePassword(inputId, button) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  const isPassword = input.type === 'password';
+  input.type = isPassword ? 'text' : 'password';
+
+  // Update the icon (change to eye-off when visible)
+  if (isPassword) {
+    button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    button.setAttribute('aria-label', 'Hide password');
+  } else {
+    button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    button.setAttribute('aria-label', 'Show password');
+  }
+}
 </script>
 
 <script src="../assets/js/responsive_nav.js"></script>

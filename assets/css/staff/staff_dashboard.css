@@ -337,11 +337,20 @@ body {
   justify-content: center;
   cursor: default;
 }
-.vitals-missing { filter: grayscale(0.15); opacity: 0.85; }
+.vitals-missing { color: var(--color-orange); }
 
-.queue-status { font-size: 0.78rem; font-weight: 700; }
-.queue-status.waiting { color: var(--color-orange); }
-.queue-status.called { color: var(--color-blue); }
+.queue-status {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.queue-status svg { width: 13px; height: 13px; }
+.queue-status.waiting { background: #fef3c7; color: #b45309; }
+.queue-status.called { background: #dbeafe; color: #185fa5; }
 
 .btn-call {
   background: var(--color-blue);
@@ -1180,20 +1189,6 @@ body {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-}
-
-.queue-status {
-  font-size: 0.78rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.queue-status.waiting {
-  color: var(--color-orange);
-}
-
-.queue-status.called {
-  color: var(--color-blue);
 }
 
 .queue-status.in_progress {
@@ -2521,6 +2516,40 @@ img, svg, canvas, video, embed, iframe { max-width: 100%; height: auto; }
   table[data-responsive] tbody td[colspan] { display: block; text-align: center; }
   table[data-responsive] .queue-actions-cell { text-align: right; white-space: nowrap; }
   table[data-responsive] .queue-actions-cell::before { white-space: normal; }
+}
+
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding-right: 42px; /* Make room for the eye icon */
+}
+
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8; /* Muted icon color */
+  transition: color 0.15s;
+}
+
+.password-toggle:hover {
+  color: var(--color-primary); /* Your theme's teal color */
+}
+
+.password-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* ---- 4. Forms ---- */

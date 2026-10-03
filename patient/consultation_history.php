@@ -314,8 +314,10 @@ function parseLabRequests($labRequest) {
               <div class="history-section">
                 <div class="history-section-label">Follow-up Check-up</div>
                 <div class="history-section-content">
-                  Next appointment scheduled on
+                  Your doctor suggested a follow-up on
                   <?php echo htmlspecialchars(date('F j, Y', strtotime($consult['FollowUpDate']))); ?>.
+                  Schedule your own appointment to confirm.
+                  <a class="history-book-link" href="book_appointment.php">Book an appointment</a>
                 </div>
               </div>
             <?php endif; ?>

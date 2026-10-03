@@ -213,7 +213,9 @@ if (
             c.Status,
             c.BloodPressure,
             c.Temperature,
-            c.PulseRate
+            c.PulseRate,
+            c.Weight,
+            c.Height
         FROM consultations c
         WHERE c.ConsultationID = ?
           AND c.StaffID = ?
@@ -236,17 +238,58 @@ if (
     */
     $allowedStatuses = ['Ongoing', 'Completed', 'In Progress', 'Cancelled'];
 
+    /* Clinical Notes — SOAP sections (mirrors the consultation form) */
+    $soapSubjective = trim($_POST['edit_soap_subjective'] ?? '');
+    $soapObjective  = trim($_POST['edit_soap_objective'] ?? '');
+    $soapAssessment = trim($_POST['edit_soap_assessment'] ?? '');
+    $soapPlan       = trim($_POST['edit_soap_plan'] ?? '');
+
+    $soapParts = [];
+    if ($soapSubjective !== '') {
+        $soapParts[] = "SUBJECTIVE:\n" . $soapSubjective;
+    }
+    if ($soapObjective !== '') {
+        $soapParts[] = "OBJECTIVE:\n" . $soapObjective;
+    }
+    if ($soapAssessment !== '') {
+        $soapParts[] = "ASSESSMENT:\n" . $soapAssessment;
+    }
+    if ($soapPlan !== '') {
+        $soapParts[] = "PLAN:\n" . $soapPlan;
+    }
+
+    /* Lab requests: one test per row, stored newline-separated. */
+    $labRequestsSaved = [];
+    foreach (($_POST['edit_lab_requests'] ?? []) as $req) {
+        $req = trim((string) $req);
+        if ($req !== '') {
+            $labRequestsSaved[] = $req;
+        }
+    }
+
+    /*
+    | The current edit form no longer submits a Treatment box (plans live in
+    | the SOAP "Plan" section). Preserve the stored legacy Treatment column
+    | when nothing new is submitted, mirroring the consultation form.
+    */
+    $editTreatment = trim($_POST['edit_treatment'] ?? '');
+    if ($editTreatment === '') {
+        $editTreatment = (string) ($existing['Treatment'] ?? '');
+    }
+
     $newValues = [
         'ChiefComplaint' => trim($_POST['edit_chief_complaint'] ?? ''),
         'Diagnosis'      => trim($_POST['edit_diagnosis'] ?? ''),
-        'Treatment'      => trim($_POST['edit_treatment'] ?? ''),
-        'LabRequest'     => trim($_POST['edit_lab_request'] ?? ''),
-        'Notes'          => trim($_POST['edit_notes'] ?? ''),
+        'Treatment'      => $editTreatment,
+        'LabRequest'     => implode("\n", $labRequestsSaved),
+        'Notes'          => implode("\n\n", $soapParts),
         'FollowUpDate'   => trim($_POST['edit_follow_up'] ?? ''),
         'Status'         => trim($_POST['edit_status'] ?? ''),
         'BloodPressure'  => trim($_POST['edit_blood_pressure'] ?? ''),
         'Temperature'    => trim($_POST['edit_temperature'] ?? ''),
         'PulseRate'      => trim($_POST['edit_pulse_rate'] ?? ''),
+        'Weight'         => trim($_POST['edit_weight'] ?? ''),
+        'Height'         => trim($_POST['edit_height'] ?? ''),
     ];
 
     if (!in_array($newValues['Status'], $allowedStatuses, true)) {
@@ -273,6 +316,31 @@ if (
         $newValues['PulseRate'] = (int) $newPulse;
     }
 
+    /*
+    | Normalize Weight/Height as numbers so re-saving an unchanged value
+    | ("62" in the form vs "62.00" in the DB) does not register a change.
+    */
+    $canonFloat = function ($val) {
+        if ($val === null || $val === '') {
+            return '';
+        }
+        return rtrim(rtrim(number_format((float) $val, 2), '0'), '.');
+    };
+
+    $newWeight = $newValues['Weight'];
+    if ($newWeight === '') {
+        $newValues['Weight'] = null;
+    } elseif ($canonFloat($newWeight) !== $canonFloat($existing['Weight'] ?? 0)) {
+        $newValues['Weight'] = $canonFloat($newWeight);
+    }
+
+    $newHeight = $newValues['Height'];
+    if ($newHeight === '') {
+        $newValues['Height'] = null;
+    } elseif ($canonFloat($newHeight) !== $canonFloat($existing['Height'] ?? 0)) {
+        $newValues['Height'] = $canonFloat($newHeight);
+    }
+
     if ($newValues['Temperature'] !== null
         && $newValues['Temperature'] === (string) $existing['Temperature']) {
         $newValues['Temperature'] = $existing['Temperature'];
@@ -282,6 +350,40 @@ if (
         && $newValues['PulseRate'] === (string) $existing['PulseRate']) {
         $newValues['PulseRate'] = $existing['PulseRate'];
     }
+
+    /*
+    | Collect prescription rows (mirrors the consultation form).
+    */
+    $rxRows = [];
+    $rxNames        = $_POST['edit_rx_name'] ?? [];
+    $rxDosages      = $_POST['edit_rx_dosage'] ?? [];
+    $rxFrequencies  = $_POST['edit_rx_frequency'] ?? [];
+    $rxDurations    = $_POST['edit_rx_duration'] ?? [];
+    $rxInstructions = $_POST['edit_rx_instructions'] ?? [];
+
+    foreach ((array) $rxNames as $i => $rxNameRaw) {
+        $rxName = trim((string) $rxNameRaw);
+        if ($rxName === '') {
+            continue;
+        }
+        $rxRows[] = [
+            'name'         => $rxName,
+            'dosage'       => trim((string) ($rxDosages[$i] ?? '')),
+            'frequency'    => trim((string) ($rxFrequencies[$i] ?? '')),
+            'duration'     => trim((string) ($rxDurations[$i] ?? '')),
+            'instructions' => trim((string) ($rxInstructions[$i] ?? '')),
+        ];
+    }
+
+    $rxRowSignature = function (array $row): string {
+        return implode('|', [
+            $row['name'],
+            $row['dosage'],
+            $row['frequency'],
+            $row['duration'],
+            $row['instructions'],
+        ]);
+    };
 
     /*
     | Compare old vs new, building the list of changed fields.
@@ -297,6 +399,8 @@ if (
         'BloodPressure'  => 'Blood Pressure',
         'Temperature'    => 'Temperature',
         'PulseRate'      => 'Pulse Rate',
+        'Weight'         => 'Weight',
+        'Height'         => 'Height',
     ];
 
     $normalize = function ($val) {
@@ -322,6 +426,47 @@ if (
     }
 
     /*
+    | Compare prescription rows against what is currently saved so
+    | prescription edits are also captured in the change list.
+    */
+    $existingRx = [];
+    $rxLoadStmt = $conn->prepare("
+        SELECT pi.MedicineName, pi.Dosage, pi.Frequency, pi.Duration, pi.Instructions
+        FROM prescriptions pr
+        INNER JOIN prescription_items pi
+            ON pi.PrescriptionID = pr.PrescriptionID
+        WHERE pr.ConsultationID = ?
+        ORDER BY pi.PrescriptionItemID ASC
+    ");
+    $rxLoadStmt->bind_param("i", $editCid);
+    $rxLoadStmt->execute();
+    $rxLoadResult = $rxLoadStmt->get_result();
+    while ($rxRow = $rxLoadResult->fetch_assoc()) {
+        $existingRx[] = [
+            'name'         => (string) ($rxRow['MedicineName'] ?? ''),
+            'dosage'       => (string) ($rxRow['Dosage'] ?? ''),
+            'frequency'    => (string) ($rxRow['Frequency'] ?? ''),
+            'duration'     => (string) ($rxRow['Duration'] ?? ''),
+            'instructions' => (string) ($rxRow['Instructions'] ?? ''),
+        ];
+    }
+    $rxLoadStmt->close();
+
+    $existingRxSigs = array_map($rxRowSignature, $existingRx);
+    $newRxSigs      = array_map($rxRowSignature, $rxRows);
+
+    $rxChanged = ($existingRxSigs !== $newRxSigs);
+
+    if ($rxChanged) {
+        $changes[] = [
+            'field' => 'Prescriptions',
+            'label' => 'Medications / Prescriptions',
+            'old'   => json_encode($existingRx, JSON_PRETTY_PRINT),
+            'new'   => json_encode($rxRows, JSON_PRETTY_PRINT),
+        ];
+    }
+
+    /*
     | If nothing changed, just redirect back (no audit row).
     */
     if (empty($changes)) {
@@ -343,7 +488,9 @@ if (
             Status = ?,
             BloodPressure = ?,
             Temperature = ?,
-            PulseRate = ?
+            PulseRate = ?,
+            Weight = NULLIF(?, ''),
+            Height = NULLIF(?, '')
         WHERE ConsultationID = ?
           AND StaffID = ?
     ");
@@ -358,9 +505,11 @@ if (
     $uBP      = $newValues['BloodPressure'];
     $uTemp    = $newValues['Temperature'];
     $uPulse   = $newValues['PulseRate'];
+    $uWeight  = $newValues['Weight'];
+    $uHeight  = $newValues['Height'];
 
     $updateStmt->bind_param(
-        "sssssssssiii",
+        "sssssssssssiii",
         $uChief,
         $uDiag,
         $uTreat,
@@ -371,6 +520,8 @@ if (
         $uBP,
         $uTemp,
         $uPulse,
+        $uWeight,
+        $uHeight,
         $editCid,
         $staffID
     );
@@ -428,6 +579,67 @@ if (
 
     $auditStmt->execute();
     $auditStmt->close();
+
+    /*
+    | Save prescriptions (delete + re-insert, mirroring the consultation
+    | form so removed items are actually removed).
+    */
+    if ($rxChanged) {
+
+        $delItemsStmt = $conn->prepare("
+            DELETE pi
+            FROM prescription_items pi
+            INNER JOIN prescriptions pr
+                ON pi.PrescriptionID = pr.PrescriptionID
+            WHERE pr.ConsultationID = ?
+        ");
+        $delItemsStmt->bind_param("i", $editCid);
+        $delItemsStmt->execute();
+        $delItemsStmt->close();
+
+        $delPrescStmt = $conn->prepare("
+            DELETE FROM prescriptions
+            WHERE ConsultationID = ?
+        ");
+        $delPrescStmt->bind_param("i", $editCid);
+        $delPrescStmt->execute();
+        $delPrescStmt->close();
+
+        if (!empty($rxRows)) {
+
+            $prescDate = date('Y-m-d');
+
+            $insPrescStmt = $conn->prepare("
+                INSERT INTO prescriptions (ConsultationID, PrescribedDate)
+                VALUES (?, ?)
+            ");
+            $insPrescStmt->bind_param("is", $editCid, $prescDate);
+            $insPrescStmt->execute();
+            $newPrescriptionID = (int) $insPrescStmt->insert_id;
+            $insPrescStmt->close();
+
+            $insItemStmt = $conn->prepare("
+                INSERT INTO prescription_items
+                    (PrescriptionID, MedicineName, Dosage, Frequency, Duration, Instructions)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ");
+
+            foreach ($rxRows as $rxItem) {
+                $insItemStmt->bind_param(
+                    "isssss",
+                    $newPrescriptionID,
+                    $rxItem['name'],
+                    $rxItem['dosage'],
+                    $rxItem['frequency'],
+                    $rxItem['duration'],
+                    $rxItem['instructions']
+                );
+                $insItemStmt->execute();
+            }
+
+            $insItemStmt->close();
+        }
+    }
 
     header('Location: records.php?msg=updated&cid=' . $editCid);
     exit;
@@ -668,6 +880,97 @@ if (
 |
 */
 
+/*
+|--------------------------------------------------------------------------
+| PARSE SOAP CLINICAL NOTES
+|--------------------------------------------------------------------------
+|
+| The Notes column stores the assembled SOAP text produced by the live
+| consultation form ("SUBJECTIVE:...\n\nOBJECTIVE:...", ...). This helper
+| splits it back into the four sections so the edit form can prefill its
+| Subjective / Objective / Assessment / Plan fields individually.
+|
+| Returns an assoc array with keys: subjective, objective, assessment, plan.
+| Unstructured (legacy) notes are returned under 'subjective' plus the
+| remaining sections empty.
+|
+*/
+
+function parseSoapNotes(?string $text): array
+{
+    $sections = [
+        'subjective' => '',
+        'objective'  => '',
+        'assessment' => '',
+        'plan'       => '',
+    ];
+
+    $text = trim((string) $text);
+
+    if ($text === '') {
+        return $sections;
+    }
+
+    $pattern =
+        '/^(SUBJECTIVE|OBJECTIVE|ASSESSMENT|PLAN):\s*(.*?)(?=^(?:SUBJECTIVE|OBJECTIVE|ASSESSMENT|PLAN):|\z)/msi';
+
+    if (
+        preg_match_all(
+            $pattern,
+            $text,
+            $matches,
+            PREG_SET_ORDER
+        ) &&
+        !empty($matches)
+    ) {
+        $map = [
+            'SUBJECTIVE' => 'subjective',
+            'OBJECTIVE'  => 'objective',
+            'ASSESSMENT' => 'assessment',
+            'PLAN'       => 'plan',
+        ];
+
+        foreach ($matches as $match) {
+            $key = strtoupper($match[1]);
+            if (isset($map[$key])) {
+                $sections[$map[$key]] = trim($match[2]);
+            }
+        }
+
+        return $sections;
+    }
+
+    // Legacy / unstructured note.
+    $sections['subjective'] = $text;
+
+    return $sections;
+}
+
+/*
+|--------------------------------------------------------------------------
+| SPLIT LAB REQUESTS INTO ROWS
+|--------------------------------------------------------------------------
+|
+| LabRequest is stored newline-separated. Split it back into an array of
+| individual tests so the edit form can render one input per test.
+|
+*/
+
+function splitLabRequestRows(?string $labText): array
+{
+    $labText = trim((string) $labText);
+
+    if ($labText === '') {
+        return [];
+    }
+
+    return array_values(
+        array_filter(
+            array_map('trim', preg_split('/\r\n|\r|\n/', $labText))
+        )
+    );
+}
+
 $records = [];
 
 $recordsStmt = $conn->prepare("
@@ -691,6 +994,8 @@ $recordsStmt = $conn->prepare("
         c.BloodPressure,
         c.Temperature,
         c.PulseRate,
+        c.Weight,
+        c.Height,
 
         p.BloodType,
         p.Allergies,
@@ -844,6 +1149,23 @@ while ($row = $recordsResult->fetch_assoc()) {
 
     /*
     |--------------------------------------------------------------------------
+    | FORMAT WEIGHT / HEIGHT
+    |--------------------------------------------------------------------------
+    */
+
+    $weight = null;
+    if ($row['Weight'] !== null && $row['Weight'] !== '') {
+        $weight = rtrim(rtrim(number_format((float) $row['Weight'], 2), '0'), '.');
+    }
+
+    $height = null;
+    if ($row['Height'] !== null && $row['Height'] !== '') {
+        $height = rtrim(rtrim(number_format((float) $row['Height'], 2), '0'), '.');
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
     | BUILD RECORD
     |--------------------------------------------------------------------------
     */
@@ -900,6 +1222,12 @@ while ($row = $recordsResult->fetch_assoc()) {
 
         'raw_status' => $row['Status'] ?? '',
 
+        'weight' => $weight,
+
+        'height' => $height,
+
+        'prescriptions' => $rxRowsByConsultation[(int) $row['ConsultationID']] ?? [],
+
         'vitals' => [
 
             'bp' => $bloodPressure,
@@ -932,12 +1260,17 @@ $recordsStmt->close();
 */
 
 $medsByConsultation = [];
+$rxRowsByConsultation = [];
 
 $medsStmt = $conn->prepare("
     SELECT
         pr.ConsultationID,
         pi.MedicineName,
-        pi.Dosage
+        pi.Dosage,
+        pi.Frequency,
+        pi.Duration,
+        pi.Instructions,
+        pi.PrescriptionItemID
     FROM prescriptions pr
     INNER JOIN prescription_items pi
         ON pi.PrescriptionID = pr.PrescriptionID
@@ -969,11 +1302,21 @@ while ($medRow = $medsResult->fetch_assoc()) {
         continue;
     }
 
+    $displayName = $medName;
     if ($dosage !== '') {
-        $medName .= ' (' . $dosage . ')';
+        $displayName .= ' (' . $dosage . ')';
     }
 
-    $medsByConsultation[$cid][] = $medName;
+    $medsByConsultation[$cid][] = $displayName;
+
+    $rxRowsByConsultation[$cid][] = [
+        'name'         => $medName,
+        'dosage'       => trim($medRow['Dosage'] ?? ''),
+        'frequency'    => trim($medRow['Frequency'] ?? ''),
+        'duration'     => trim($medRow['Duration'] ?? ''),
+        'instructions' => trim($medRow['Instructions'] ?? ''),
+        'item_id'      => (int) ($medRow['PrescriptionItemID'] ?? 0),
+    ];
 }
 
 $medsStmt->close();
@@ -1774,12 +2117,12 @@ $totalRecords = count($records);
                                 <?php
 
                                 $flagIcons = [
-                                    'allergy'    => '\u26a0',
-                                    'high_risk'  => '\u26a0',
-                                    'lab_pending'=> '\u25cf',
+                                    'allergy'    => '⚠',
+                                    'high_risk'  => '⚠',
+                                    'lab_pending'=> '●',
                                 ];
 
-                                echo $flagIcons[$fkey] ?? '\u25cf';
+                                echo $flagIcons[$fkey] ?? '●';
 
                                 ?>
 
@@ -2119,6 +2462,16 @@ $totalRecords = count($records);
                                             <?= htmlspecialchars($v['vitals']['pulse']) ?>
                                         </div>
 
+                                        <div class="tl-vital">
+                                            <span>Weight</span>
+                                            <?= $v['weight'] !== null ? htmlspecialchars((string) $v['weight']) . ' kg' : '—' ?>
+                                        </div>
+
+                                        <div class="tl-vital">
+                                            <span>Height</span>
+                                            <?= $v['height'] !== null ? htmlspecialchars((string) $v['height']) . ' m' : '—' ?>
+                                        </div>
+
                                     </div>
 
 
@@ -2154,25 +2507,37 @@ $totalRecords = count($records);
                                                     <textarea name="edit_diagnosis" rows="3"><?= htmlspecialchars($v['diagnosis']) ?></textarea>
                                                 </div>
 
+                                                <?php $soapEdit = parseSoapNotes($v['notes']); ?>
+
                                                 <div class="tl-edit-field tl-edit-wide">
-                                                    <label>Treatment / Plan</label>
-                                                    <textarea name="edit_treatment" rows="3"><?= htmlspecialchars($v['treatment']) ?></textarea>
+                                                    <label>Clinical Notes — Subjective</label>
+                                                    <textarea name="edit_soap_subjective" rows="3" placeholder="Chief complaint in patient's own words, history of present illness..."><?= htmlspecialchars($soapEdit['subjective']) ?></textarea>
                                                 </div>
 
                                                 <div class="tl-edit-field tl-edit-wide">
-                                                    <label>Lab Request</label>
-                                                    <textarea name="edit_lab_request" rows="2"><?= htmlspecialchars($v['lab']) ?></textarea>
+                                                    <label>Clinical Notes — Objective</label>
+                                                    <textarea name="edit_soap_objective" rows="3" placeholder="Observations, examination findings, vitals, test results..."><?= htmlspecialchars($soapEdit['objective']) ?></textarea>
                                                 </div>
 
                                                 <div class="tl-edit-field tl-edit-wide">
-                                                    <label>Notes</label>
-                                                    <textarea name="edit_notes" rows="3"><?= htmlspecialchars($v['notes']) ?></textarea>
+                                                    <label>Clinical Notes — Assessment</label>
+                                                    <textarea name="edit_soap_assessment" rows="3" placeholder="Working diagnosis, differentials, assessment of findings..."><?= htmlspecialchars($soapEdit['assessment']) ?></textarea>
                                                 </div>
 
-                                                <div class="tl-edit-field">
-                                                    <label>Follow-up Date</label>
+                                                <div class="tl-edit-field tl-edit-wide">
+                                                    <label>Clinical Notes — Plan</label>
+                                                    <textarea name="edit_soap_plan" rows="3" placeholder="Treatment, medications, tests, follow-up, referrals..."><?= htmlspecialchars($soapEdit['plan']) ?></textarea>
+                                                </div>
+
+                                                <div class="tl-edit-field tl-edit-wide">
+                                                    <label>Suggested Follow-up Date</label>
                                                     <input type="date" name="edit_follow_up"
-                                                           value="<?= htmlspecialchars($v['follow_up']) ?>">
+                                                           value="<?= htmlspecialchars($v['follow_up']) ?>"
+                                                           onchange="checkEditFollowupAvailability(<?= (int)$v['id'] ?>, this.value)">
+                                                    <div class="fu-availability" id="edit-fu-availability-<?= (int)$v['id'] ?>" style="display:none"></div>
+                                                    <p class="fu-field-note edit-fu-note">
+                                                        Suggestion only — the patient schedules the appointment themselves in the patient portal.
+                                                    </p>
                                                 </div>
 
                                                 <div class="tl-edit-field">
@@ -2190,7 +2555,7 @@ $totalRecords = count($records);
                                                     </select>
                                                 </div>
 
-                                                <div class="tl-edit-field">
+                                                <div class="tl-edit-field tl-edit-wide">
                                                     <label>Blood Pressure</label>
                                                     <input type="text" name="edit_blood_pressure"
                                                            value="<?= htmlspecialchars($v['vitals']['bp'] === 'Not recorded' ? '' : (string) $v['vitals']['bp']) ?>">
@@ -2206,6 +2571,158 @@ $totalRecords = count($records);
                                                     <label>Pulse Rate (bpm)</label>
                                                     <input type="number" name="edit_pulse_rate"
                                                            value="<?= $v['vitals']['pulse'] !== 'Not recorded' ? (int) filter_var($v['vitals']['pulse'], FILTER_SANITIZE_NUMBER_INT) : '' ?>">
+                                                </div>
+
+                                                <div class="tl-edit-field">
+                                                    <label>Weight (kg)</label>
+                                                    <input type="number" step="0.01" name="edit_weight"
+                                                           value="<?= $v['weight'] !== null ? (float) $v['weight'] : '' ?>">
+                                                </div>
+
+                                                <div class="tl-edit-field">
+                                                    <label>Height (m)</label>
+                                                    <input type="number" step="0.01" name="edit_height"
+                                                           value="<?= $v['height'] !== null ? (float) $v['height'] : '' ?>">
+                                                </div>
+
+                                                <!-- Prescriptions (rows, mirrors the consultation form) -->
+                                                <div class="tl-edit-field tl-edit-wide">
+                                                    <div class="tl-edit-subhead">
+                                                        <label>Prescriptions</label>
+                                                        <button
+                                                            type="button"
+                                                            class="btn-add-sm"
+                                                            onclick="addEditRxRow(
+                                                                <?= (int)$v['id'] ?>
+                                                            )"
+                                                        >
+                                                            + Add
+                                                        </button>
+                                                    </div>
+
+                                                    <div id="edit-rx-list-<?= (int)$v['id'] ?>">
+
+                                                        <?php if (!empty($v['prescriptions'])): ?>
+
+                                                            <?php foreach ($v['prescriptions'] as $rx): ?>
+
+                                                            <div class="prescription-entry">
+
+                                                                <div class="prescription-row">
+                                                                    <input type="text" name="edit_rx_name[]" placeholder="Medication"
+                                                                           value="<?= htmlspecialchars($rx['name']) ?>">
+                                                                    <input type="text" name="edit_rx_dosage[]" placeholder="Dosage & Form"
+                                                                           value="<?= htmlspecialchars($rx['dosage']) ?>">
+                                                                    <input type="text" name="edit_rx_frequency[]" placeholder="Frequency"
+                                                                           value="<?= htmlspecialchars($rx['frequency']) ?>">
+                                                                    <input type="text" name="edit_rx_duration[]" placeholder="Duration"
+                                                                           value="<?= htmlspecialchars($rx['duration']) ?>">
+                                                                </div>
+
+                                                                <div class="prescription-row">
+                                                                    <input type="text" name="edit_rx_instructions[]" class="full" placeholder="Instructions"
+                                                                           value="<?= htmlspecialchars($rx['instructions']) ?>">
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    class="btn-remove-rx"
+                                                                    onclick="this.closest('.prescription-entry').remove()"
+                                                                >
+                                                                    Remove
+                                                                </button>
+
+                                                            </div>
+
+                                                            <?php endforeach; ?>
+
+                                                        <?php else: ?>
+
+                                                            <div class="prescription-entry">
+
+                                                                <div class="prescription-row">
+                                                                    <input type="text" name="edit_rx_name[]" placeholder="Medication">
+                                                                    <input type="text" name="edit_rx_dosage[]" placeholder="Dosage & Form">
+                                                                    <input type="text" name="edit_rx_frequency[]" placeholder="Frequency">
+                                                                    <input type="text" name="edit_rx_duration[]" placeholder="Duration">
+                                                                </div>
+
+                                                                <div class="prescription-row">
+                                                                    <input type="text" name="edit_rx_instructions[]" class="full" placeholder="Instructions">
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    class="btn-remove-rx"
+                                                                    onclick="this.closest('.prescription-entry').remove()"
+                                                                >
+                                                                    Remove
+                                                                </button>
+
+                                                            </div>
+
+                                                        <?php endif; ?>
+
+                                                    </div>
+                                                </div>
+
+                                                <!-- Lab Requests (rows, mirrors the consultation form) -->
+                                                <?php $labEditRows = splitLabRequestRows($v['lab']); ?>
+
+                                                <div class="tl-edit-field tl-edit-wide">
+                                                    <div class="tl-edit-subhead">
+                                                        <label>Lab Test Requests</label>
+                                                        <button
+                                                            type="button"
+                                                            class="btn-add-sm"
+                                                            onclick="addEditLabRow(
+                                                                <?= (int)$v['id'] ?>
+                                                            )"
+                                                        >
+                                                            + Add
+                                                        </button>
+                                                    </div>
+
+                                                    <div id="edit-lab-list-<?= (int)$v['id'] ?>">
+
+                                                        <?php foreach ($labEditRows as $labRow): ?>
+
+                                                            <div class="lab-entry">
+                                                                <div class="prescription-row">
+                                                                    <input type="text" name="edit_lab_requests[]"
+                                                                           placeholder="Test to request (e.g. Complete Blood Count)"
+                                                                           value="<?= htmlspecialchars($labRow) ?>">
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    class="btn-remove-rx"
+                                                                    onclick="this.closest('.lab-entry').remove()"
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+
+                                                        <?php endforeach; ?>
+
+                                                        <?php if (empty($labEditRows)): ?>
+
+                                                            <div class="lab-entry">
+                                                                <div class="prescription-row">
+                                                                    <input type="text" name="edit_lab_requests[]"
+                                                                           placeholder="Test to request (e.g. Complete Blood Count)">
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    class="btn-remove-rx"
+                                                                    onclick="this.closest('.lab-entry').remove()"
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+
+                                                        <?php endif; ?>
+
+                                                    </div>
                                                 </div>
 
                                             </div>
@@ -2566,6 +3083,209 @@ function toggleEdit(consultationId) {
         }
         editEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| EDIT FORM - ADD PRESCRIPTION ROW
+|--------------------------------------------------------------------------
+*/
+
+function addEditRxRow(consultationId) {
+
+    const list =
+        document.getElementById(
+            'edit-rx-list-' + consultationId
+        );
+
+    if (!list) {
+        return;
+    }
+
+    const entry =
+        document.createElement('div');
+
+    entry.className =
+        'prescription-entry';
+
+    entry.innerHTML = `
+
+        <div class="prescription-row">
+
+            <input
+                type="text"
+                name="edit_rx_name[]"
+                placeholder="Medication"
+            >
+
+            <input
+                type="text"
+                name="edit_rx_dosage[]"
+                placeholder="Dosage & Form"
+            >
+
+            <input
+                type="text"
+                name="edit_rx_frequency[]"
+                placeholder="Frequency"
+            >
+
+            <input
+                type="text"
+                name="edit_rx_duration[]"
+                placeholder="Duration"
+            >
+
+        </div>
+
+        <div class="prescription-row">
+
+            <input
+                type="text"
+                name="edit_rx_instructions[]"
+                class="full"
+                placeholder="Instructions"
+            >
+
+        </div>
+
+        <button
+            type="button"
+            class="btn-remove-rx"
+            onclick="this.closest('.prescription-entry').remove()"
+        >
+
+            Remove
+
+        </button>
+    `;
+
+    list.appendChild(entry);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| EDIT FORM - ADD LAB REQUEST ROW
+|--------------------------------------------------------------------------
+*/
+
+function addEditLabRow(consultationId) {
+
+    const list =
+        document.getElementById(
+            'edit-lab-list-' + consultationId
+        );
+
+    if (!list) {
+        return;
+    }
+
+    const entry =
+        document.createElement('div');
+
+    entry.className =
+        'lab-entry';
+
+    entry.innerHTML = `
+
+        <div class="prescription-row">
+
+            <input
+                type="text"
+                name="edit_lab_requests[]"
+                placeholder="Test to request (e.g. Complete Blood Count)"
+            >
+
+        </div>
+
+        <button
+            type="button"
+            class="btn-remove-rx"
+            onclick="this.closest('.lab-entry').remove()"
+        >
+
+            Remove
+
+        </button>
+    `;
+
+    list.appendChild(entry);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| EDIT FORM - FOLLOW-UP DATE AVAILABILITY
+| Suggestion only: the doctor views department availability and suggests
+| a date; the patient schedules the appointment themselves.
+|--------------------------------------------------------------------------
+*/
+
+function checkEditFollowupAvailability(consultationId, dateVal) {
+
+    const box =
+        document.getElementById(
+            'edit-fu-availability-' + consultationId
+        );
+
+    if (!box) {
+        return;
+    }
+
+    if (!dateVal) {
+        box.style.display = 'none';
+        return;
+    }
+
+    box.style.display = '';
+    box.innerHTML =
+        '<span class="fu-spin"></span> Checking department availability\u2026';
+
+    fetch(
+        'doctor_queue.php?action=check_availability&date=' +
+        encodeURIComponent(dateVal)
+    )
+        .then(function (r) {
+            return r.json();
+        })
+        .then(function (d) {
+            if (!d.ok) {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--unavail"></span> Error: ' +
+                    d.error;
+                return;
+            }
+            if (!d.open) {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--unavail"></span> ' +
+                    d.message;
+                return;
+            }
+            let sessionInfo = '';
+            if (d.sessions && d.sessions.length > 0) {
+                sessionInfo = ' (' + d.day_name + ': ' + d.sessions.join(', ') + ')';
+            }
+            if (d.available) {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--avail"></span> ' +
+                    d.department + ' — ' + d.remaining + ' of ' +
+                    d.max_per_day + ' slots open on ' + d.date +
+                    sessionInfo;
+            } else {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--unavail"></span> ' +
+                    d.department + ' is fully booked on ' + d.date + ' (' +
+                    d.appointments + '/' + d.max_per_day + ')' +
+                    sessionInfo;
+            }
+        })
+        .catch(function () {
+            box.innerHTML =
+                '<span class="fu-avail-dot fu-avail-dot--unavail"></span> ' +
+                'Could not check availability.';
+        });
 }
 
 

@@ -374,6 +374,7 @@ foreach ($latestVitals as $k => $v) {
   .vital-badge-warning { background: #fef3c7; color: #b45309; }
 
   @media (max-width: 900px) { .vitals-grid { grid-template-columns: 1fr 1fr; } }
+
 </style>
 
 </head>
@@ -454,23 +455,39 @@ foreach ($latestVitals as $k => $v) {
         </div>
 
         <?php if ($message !== ''): ?>
-          <div class="alert-block <?= $messageType === 'success' ? 'alert-success' : 'alert-error' ?>">
-            <?= htmlspecialchars($message) ?>
-          </div>
+          <?php if ($messageType === 'success'): ?>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #166534">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 12.5l3 3 5-6"></path></svg>
+              <?= htmlspecialchars($message) ?>
+            </div>
+          <?php else: ?>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #991b1b">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#991b1b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M15 9l-6 6"></path><path d="M9 9l6 6"></path></svg>
+              <?= htmlspecialchars($message) ?>
+            </div>
+          <?php endif; ?>
         <?php endif; ?>
 
         <?php if (!empty($abnormalItems)): ?>
-          <div class="alert-block alert-warn">
-            <strong>Abnormal vitals alert.</strong> Review the following readings:
-            <ul class="abnormal-list">
-              <?php foreach ($abnormalItems as $item): ?>
-                <li>
-                  <?= htmlspecialchars($item['label']) ?>:
-                  <?= htmlspecialchars($item['value'] . ' ' . $item['unit']) ?>
-                  &mdash; <?= htmlspecialchars($item['note']) ?>
-                </li>
-              <?php endforeach; ?>
-            </ul>
+          <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px 24px; margin-bottom: 24px; box-shadow: 0 1px 2px rgba(17,24,39,0.04)">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px">
+              <div style="width: 32px; height: 32px; border-radius: 8px; background: #fef3c7; display: flex; align-items: center; justify-content: center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L2.5 20h19L12 3z"></path><path d="M12 10v4"></path><path d="M12 17.2v.1"></path></svg>
+              </div>
+              <div>
+                <div style="font-size: 16px; font-weight: 700">Abnormal vitals</div>
+                <div style="font-size: 13px; color: #5b6472"><?= count($abnormalItems) ?> reading<?= count($abnormalItems) === 1 ? '' : 's' ?> need<?= count($abnormalItems) === 1 ? 's' : '' ?> review</div>
+              </div>
+            </div>
+            <?php $row = 0; foreach ($abnormalItems as $item): $row++; $isLast = ($row === count($abnormalItems)); $isMild = ($item['status'] === 'warning'); $note = (string)($item['note'] ?? ''); $before = trim(explode('(', $note)[0] ?? $note, " \t"); $pill = ($before !== '' ? explode(' ', $before)[0] : ucfirst($item['status'])); if ($pill === 'At') { $pill = 'At risk'; } ?>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: <?= $isLast ? '14px 0 0' : '14px 0' ?>; border-top: 1px solid #eef0f3">
+              <div>
+                <div style="font-size: 15px; font-weight: 600"><?= htmlspecialchars($item['label']) ?> <span style="font-weight: 500; margin-left: 6px"><?= htmlspecialchars($item['value'] . ' ' . $item['unit']) ?></span></div>
+                <div style="font-size: 13px; color: #5b6472; margin-top: 2px"><?= htmlspecialchars($note) ?></div>
+              </div>
+              <span style="padding: 3px 12px; border-radius: 999px; background: <?= $isMild ? '#fef3c7' : '#fee2e2' ?>; color: <?= $isMild ? '#92400e' : '#991b1b' ?>; font-size: 13px; font-weight: 600"><?= htmlspecialchars($pill) ?></span>
+            </div>
+            <?php endforeach; ?>
           </div>
         <?php endif; ?>
 
@@ -503,8 +520,8 @@ foreach ($latestVitals as $k => $v) {
             </div>
 
             <div class="vitals-field">
-              <label for="height">Height (cm)</label>
-              <input type="number" step="0.01" id="height" name="height" placeholder="170" value="<?= htmlspecialchars($latestVitals['height']) ?>">
+              <label for="height">Height (m)</label>
+              <input type="number" step="0.01" id="height" name="height" placeholder="1.70" value="<?= htmlspecialchars($latestVitals['height']) ?>">
             </div>
 
           </div>
@@ -525,7 +542,7 @@ foreach ($latestVitals as $k => $v) {
                 <th>Temp</th>
                 <th>Pulse</th>
                 <th>Wt (kg)</th>
-                <th>Ht (cm)</th>
+                <th>Ht (m)</th>
               </tr>
             </thead>
             <tbody>
@@ -543,7 +560,7 @@ foreach ($latestVitals as $k => $v) {
                   <td data-label="Temp"><?= htmlspecialchars($h['Temperature'] ?? '') ?><?php if (($hItems[1]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[1]); } ?></td>
                   <td data-label="Pulse"><?= htmlspecialchars($h['PulseRate'] ?? '') ?><?php if (($hItems[2]['status'] ?? '') !== 'normal') { echo vitalStatusBadge($hItems[2]); } ?></td>
                   <td data-label="Wt (kg)"><?= htmlspecialchars($h['Weight'] ?? '') ?></td>
-                  <td data-label="Ht (cm)"><?= htmlspecialchars($h['Height'] ?? '') ?></td>
+                  <td data-label="Ht (m)"><?= htmlspecialchars($h['Height'] ?? '') ?></td>
                 </tr>
               <?php endforeach; ?>
             </tbody>

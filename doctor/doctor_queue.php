@@ -874,7 +874,11 @@ if (
        RETURN TO QUEUE
     ------------------------------------------------------------ */
 
-    header('Location: doctor_queue.php?saved=1&appt=' . $appointmentID . '&pid=' . $patientID);
+    $followUpForRedirect = $followUpDate !== null
+        ? '&fu=' . urlencode($followUpDate)
+        : '';
+
+    header('Location: doctor_queue.php?saved=1&appt=' . $appointmentID . '&pid=' . $patientID . $followUpForRedirect);
     exit;
 }
 
@@ -1099,11 +1103,12 @@ if (
 
 
 /* ================================================================
-   AJAX: CHECK FOLLOW-UP AVAILABILITY
+   AJAX: CHECK DEPARTMENT FOLLOW-UP AVAILABILITY
    ================================================================
-   Called by the follow-up modal to show how many appointments a
-   doctor already has on a given date.
-   Returns JSON: { ok, appointments, max_per_day }
+   Called by the follow-up date field to show how many appointment
+   slots are open in the doctor's department on a given date.
+   Returns JSON: { ok, date, department, doctors, appointments,
+                   max_per_day, remaining, available }
    ================================================================ */
 
 if (
@@ -1121,89 +1126,142 @@ if (
         exit;
     }
 
-    $maxPerDay = 10;
+    /*
+    | Department-level availability. The doctor only *suggests* a
+    | follow-up date; the patient schedules the appointment
+    | themselves. A date is only "open" if the department actually
+    | holds consultations on that weekday (department_schedules)
+    | AND still has unused slots that day.
+    |
+    | department_schedules.DayOfWeek uses ISO-8601: 1 = Monday ...
+    | 7 = Sunday (same as PHP date('N')).
+    */
+    $deptID   = (int)($doctor['DepartmentID'] ?? 0);
+    $deptName = $doctor['DepartmentName'] ?? 'Department';
 
+    /* Collect the department's consultation schedule (day => sessions). */
+    $scheduleStmt = mysqli_prepare(
+        $conn,
+        "SELECT DayOfWeek, SessionName, StartTime, EndTime, PatientSlots
+         FROM department_schedules
+         WHERE DepartmentID = ?
+         ORDER BY DayOfWeek ASC, StartTime ASC"
+    );
+
+    mysqli_stmt_bind_param($scheduleStmt, 'i', $deptID);
+    mysqli_stmt_execute($scheduleStmt);
+    $scheduleResult = mysqli_stmt_get_result($scheduleStmt);
+
+    $deptSchedules = [];
+    while ($schRow = mysqli_fetch_assoc($scheduleResult)) {
+        $day = (int)$schRow['DayOfWeek'];
+        if (!isset($deptSchedules[$day])) {
+            $deptSchedules[$day] = [];
+        }
+        $deptSchedules[$day][] = $schRow;
+    }
+    mysqli_stmt_close($scheduleStmt);
+
+    $dateForWeekday = strtotime($checkDate);
+    $dayOfWeek = (int)date('N', $dateForWeekday); // 1 = Mon ... 7 = Sun
+    $dayName   = date('l', $dateForWeekday);
+    $sessions  = $deptSchedules[$dayOfWeek] ?? [];
+
+    /* Short day names for the message (Mon..Sun). */
+    $shortDays = [
+        1 => 'Monday',   2 => 'Tuesday',  3 => 'Wednesday',
+        4 => 'Thursday', 5 => 'Friday',   6 => 'Saturday',
+        7 => 'Sunday',
+    ];
+
+    $openDaysText = '';
+    if (count($deptSchedules) > 0) {
+        $openDayNames = [];
+        foreach (array_keys($deptSchedules) as $openDay) {
+            $openDayNames[] = $shortDays[(int)$openDay];
+        }
+        $openDaysText = count($openDayNames) > 1
+            ? implode(', ', array_slice($openDayNames, 0, -1)) . ' & ' . end($openDayNames)
+            : $openDayNames[0];
+    }
+
+    /* Appointments already booked across the department on that date. */
     $availStmt = mysqli_prepare(
         $conn,
         "SELECT COUNT(*) AS cnt
          FROM appointments
-         WHERE StaffID = ?
+         WHERE DepartmentID = ?
            AND AppointmentDate = ?
            AND Status NOT IN ('" . APPT_STATUS_CANCELLED . "','" . APPT_STATUS_NO_SHOW . "')"
     );
 
-    mysqli_stmt_bind_param($availStmt, 'is', $staffID, $checkDate);
+    mysqli_stmt_bind_param($availStmt, 'is', $deptID, $checkDate);
     mysqli_stmt_execute($availStmt);
     $availResult = mysqli_stmt_get_result($availStmt);
     $availRow = mysqli_fetch_assoc($availResult);
     mysqli_stmt_close($availStmt);
 
     $existingCount = (int)($availRow['cnt'] ?? 0);
-    $remaining = max(0, $maxPerDay - $existingCount);
+
+    /* The department has no consultations on this weekday -> closed. */
+    if (count($sessions) === 0) {
+        echo json_encode([
+            'ok'            => true,
+            'date'          => $checkDate,
+            'department'    => $deptName,
+            'open'          => false,
+            'sessions'      => [],
+            'capacity'      => 0,
+            'appointments'  => $existingCount,
+            'remaining'     => 0,
+            'available'     => false,
+            'day_name'      => $dayName,
+            'message'       => $openDaysText !== ''
+                ? $deptName . ' has no consultations on ' . $dayName
+                  . '. Open days: ' . $openDaysText . '.'
+                : $deptName . ' has no consultations scheduled on ' . $dayName . '.',
+        ]);
+        exit;
+    }
+
+    /* Capacity is the sum of slots across that weekday's sessions. */
+    $departmentCapacity = 0;
+    $sessionLabels = [];
+    foreach ($sessions as $session) {
+        $departmentCapacity += (int)($session['PatientSlots'] ?? 0);
+        $sessionLabels[] =
+            date('g:i A', strtotime($session['StartTime'])) . '–' .
+            date('g:i A', strtotime($session['EndTime']));
+    }
+
+    $remaining = max(0, $departmentCapacity - $existingCount);
 
     echo json_encode([
-        'ok'           => true,
-        'date'         => $checkDate,
-        'appointments' => $existingCount,
-        'max_per_day'  => $maxPerDay,
-        'remaining'    => $remaining,
-        'available'    => $remaining > 0,
+        'ok'            => true,
+        'date'          => $checkDate,
+        'department'    => $deptName,
+        'open'          => true,
+        'sessions'      => $sessionLabels,
+        'day_name'      => $dayName,
+        'capacity'      => $departmentCapacity,
+        'appointments'  => $existingCount,
+        'remaining'     => $remaining,
+        'max_per_day'   => $departmentCapacity,
+        'available'     => $remaining > 0,
     ]);
     exit;
 }
 
 
 /* ================================================================
-   SCHEDULE FOLLOW-UP APPOINTMENT
+   FOLLOW-UP: SUGGESTION ONLY
    ================================================================
-   Triggered by the "Confirm Follow-up" button inside the follow-up
-   modal. Creates a new appointment with Status = 'Scheduled' and
-   redirects back to the queue with a confirmation message.
+   The doctor does NOT schedule the follow-up appointment for the
+   patient. The suggested follow-up date is recorded on the
+   consultation (FollowUpDate) when the consultation is saved, and
+   the patient schedules the appointment themselves through the
+   patient portal. This endpoint only re-confirms the suggestion.
    ================================================================ */
-
-if (
-    $_SERVER['REQUEST_METHOD'] === 'POST'
-    && isset($_POST['action'])
-    && $_POST['action'] === 'schedule_followup'
-) {
-    $fuPatientID = (int)($_POST['followup_patient_id'] ?? 0);
-    $fuDate      = $_POST['followup_date'] ?? '';
-    $fuTime      = $_POST['followup_time'] ?? '10:00:00';
-    $fuPurpose   = trim($_POST['followup_purpose'] ?? 'Follow-up consultation');
-
-    if (!$fuPatientID || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fuDate)) {
-        header('Location: doctor_queue.php?error=Invalid follow-up data.');
-        exit;
-    }
-
-    $fuDeptID = (int)$doctor['DepartmentID'];
-
-    $fuInsert = mysqli_prepare(
-        $conn,
-        "INSERT INTO appointments
-            (PatientID, StaffID, DepartmentID, AppointmentDate,
-             AppointmentTime, Purpose, Status)
-         VALUES (?, ?, ?, ?, ?, ?, '" . APPT_STATUS_SCHEDULED . "')"
-    );
-
-    mysqli_stmt_bind_param(
-        $fuInsert,
-        'iiisss',
-        $fuPatientID,
-        $staffID,
-        $fuDeptID,
-        $fuDate,
-        $fuTime,
-        $fuPurpose
-    );
-
-    mysqli_stmt_execute($fuInsert);
-    $newApptId = mysqli_insert_id($conn);
-    mysqli_stmt_close($fuInsert);
-
-    header('Location: doctor_queue.php?followup_scheduled=' . $newApptId);
-    exit;
-}
 
 
 
@@ -2749,7 +2807,7 @@ if (isset($_GET['consult'])) {
 
         <label for="follow-up-date">
 
-            Follow-up Date
+            Suggested Follow-up Date
 
         </label>
 
@@ -2760,7 +2818,19 @@ if (isset($_GET['consult'])) {
             value="<?= htmlspecialchars(
                 $consultPatient['follow_up_date'] ?? ''
             ) ?>"
+            onchange="checkFollowupAvailability(this.value)"
         >
+
+        <div
+            id="followup-availability"
+            class="fu-availability fu-availability--inline"
+            style="display:none"
+        ></div>
+
+        <p class="fu-field-note">
+            Suggestion only — the patient schedules the appointment
+            themselves in the patient portal.
+        </p>
 
     </div>
 
@@ -3321,52 +3391,110 @@ if (isset($_GET['consult'])) {
 
     <?php if ($vitalsHaveAbnormal): ?>
 
+    <?php
+        // Split readings: flagged ones first, normal ones summarised below.
+        $vFlagged = [];
+        $vNormal  = [];
+
+        foreach ($vitalsValidated as $vItem) {
+            if ($vItem['value'] === '' || $vItem['value'] === null) {
+                continue;
+            }
+
+            if ($vItem['status'] === 'normal') {
+                $vNormal[] = $vItem;
+            } else {
+                $vFlagged[] = $vItem;
+            }
+        }
+    ?>
+
     <div class="vitals-alert" id="vitals-alert-box">
 
-        <div class="vitals-alert-title">
+        <div class="vitals-alert-head">
 
-            <i class="fas fa-exclamation-triangle"></i>
+            <span class="vitals-alert-badge">
+                <i class="fas fa-exclamation-triangle"></i>
+            </span>
 
-            Abnormal Vitals Alert
+            <div>
+                <div class="vitals-alert-title">Abnormal Vitals</div>
+                <div class="vitals-alert-sub">
+                    <?= count($vFlagged) ?>
+                    reading<?= count($vFlagged) === 1 ? '' : 's' ?>
+                    need<?= count($vFlagged) === 1 ? 's' : '' ?> review
+                </div>
+            </div>
 
         </div>
 
-        <div class="vitals-alert-list">
+        <?php foreach ($vFlagged as $vItem): ?>
 
-            <?php foreach ($vitalsValidated as $vItem): ?>
+            <?php
+                // "Obese (BMI >= 30)" -> pill "Obese" + range "BMI >= 30"
+                $vNote  = (string)$vItem['note'];
+                $vPill  = $vNote;
+                $vRange = '';
 
-                <?php
-                    if ($vItem['value'] === '' || $vItem['value'] === null) {
-                        continue;
-                    }
+                if (preg_match('/^(.*?)\s*\((.*)\)\s*$/u', $vNote, $vm)) {
+                    $vPill  = $vm[1];
+                    $vRange = $vm[2];
+                }
 
-                    $vAlertClass = 'vitals-alert-item';
-                    $vAlertIcon  = '&#9888;&#65039;';
-                    $vAlertTag   = htmlspecialchars($vItem['note']);
+                $vFlagClass = $vItem['status'] === 'warning'
+                    ? 'vitals-alert-warning'
+                    : 'vitals-alert-abnormal';
+            ?>
 
-                    if ($vItem['status'] === 'normal') {
-                        $vAlertClass .= ' vitals-alert-normal';
-                        $vAlertIcon  = '&#9989;';
-                        $vAlertTag   = 'Normal';
-                    } elseif ($vItem['status'] === 'warning') {
-                        $vAlertClass .= ' vitals-alert-warning';
-                    } else {
-                        $vAlertClass .= ' vitals-alert-abnormal';
-                    }
-                ?>
+            <div class="vitals-alert-item <?= $vFlagClass ?>">
 
-                <div class="<?= $vAlertClass ?>">
+                <div class="vitals-alert-text">
+                    <div class="vitals-alert-label">
+                        <?= htmlspecialchars($vItem['label']) ?>
+                        <span class="vitals-alert-value">
+                            <?= htmlspecialchars(
+                                $vItem['value'] . ' ' . $vItem['unit']
+                            ) ?>
+                        </span>
+                    </div>
 
-                    <span class="vitals-alert-icon">
-                        <?= $vAlertIcon ?>
+                    <?php if ($vRange !== ''): ?>
+                        <div class="vitals-alert-range">
+                            <?= htmlspecialchars($vRange) ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <span class="vitals-alert-pill">
+                    <?= htmlspecialchars($vPill) ?>
+                </span>
+
+            </div>
+
+        <?php endforeach; ?>
+
+        <?php if (!empty($vNormal)): ?>
+
+        <div class="vitals-alert-normal-title">Within normal range</div>
+
+        <div class="vitals-alert-normal-list">
+
+            <?php foreach ($vNormal as $vItem): ?>
+
+                <div class="vitals-alert-normal-row">
+
+                    <span class="vitals-alert-normal-label">
+                        <?= htmlspecialchars($vItem['label']) ?>
                     </span>
 
-                    <span class="vitals-alert-text">
-                        <?= htmlspecialchars($vItem['label']) ?>:
+                    <span class="vitals-alert-normal-value">
                         <?= htmlspecialchars(
                             $vItem['value'] . ' ' . $vItem['unit']
                         ) ?>
-                        (<?= $vAlertTag ?>)
+                    </span>
+
+                    <span class="vitals-alert-normal-ok">
+                        <i class="fas fa-check"></i> Normal
                     </span>
 
                 </div>
@@ -3374,6 +3502,8 @@ if (isset($_GET['consult'])) {
             <?php endforeach; ?>
 
         </div>
+
+        <?php endif; ?>
 
     </div>
 
@@ -3499,7 +3629,7 @@ if (isset($_GET['consult'])) {
 
             <label for="vital-height">
 
-                Height (cm)
+                Height (m)
 
             </label>
 
@@ -3511,7 +3641,7 @@ if (isset($_GET['consult'])) {
                 value="<?= htmlspecialchars(
                     $consultPatient['height'] ?? ''
                 ) ?>"
-                placeholder="170 (cm)"
+                placeholder="1.70 (m)"
             >
 
         </div>
@@ -3850,6 +3980,57 @@ function toggleConsultDetails(btn)
     }
 }
 
+/* ==========================================================
+   FOLLOW-UP DATE AVAILABILITY (INLINE SUGGESTION)
+   The doctor only suggests a date; the patient books their
+   own appointment. This shows department-level availability.
+========================================================== */
+
+function checkFollowupAvailability(dateVal) {
+    var box = document.getElementById('followup-availability');
+
+    if (!dateVal) {
+        box.style.display = 'none';
+        return;
+    }
+
+    box.style.display = '';
+    box.innerHTML = '<span class="fu-spin"></span> Checking department availability\u2026';
+
+    fetch('doctor_queue.php?action=check_availability&date=' + encodeURIComponent(dateVal))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) {
+                box.innerHTML = '<span class="fu-avail-dot fu-avail-dot--unavail"></span> Error: ' + d.error;
+                return;
+            }
+            if (!d.open) {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--unavail"></span> ' +
+                    d.message;
+                return;
+            }
+            var sessionInfo = '';
+            if (d.sessions && d.sessions.length > 0) {
+                sessionInfo = ' (' + d.day_name + ': ' + d.sessions.join(', ') + ')';
+            }
+            if (d.available) {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--avail"></span> ' +
+                    d.department + ' — ' + d.remaining + ' of ' + d.max_per_day + ' slots open on ' + d.date +
+                    sessionInfo;
+            } else {
+                box.innerHTML =
+                    '<span class="fu-avail-dot fu-avail-dot--unavail"></span> ' +
+                    d.department + ' is fully booked on ' + d.date + ' (' + d.appointments + '/' + d.max_per_day + ')' +
+                    sessionInfo;
+            }
+        })
+        .catch(function() {
+            box.innerHTML = '<span class="fu-avail-dot fu-avail-dot--unavail"></span> Could not check availability.';
+        });
+}
+
 </script>
 
 
@@ -3888,15 +4069,12 @@ function toggleConsultDetails(btn)
 
     Consultation saved successfully.
 
-    <?php if (!empty($_GET['pid'])): ?>
+    <?php if (!empty($_GET['pid']) && !empty($_GET['fu'])): ?>
 
-    <button
-        type="button"
-        class="btn-followup-launch"
-        onclick="openFollowupModal(<?= (int)$_GET['pid'] ?>)"
-    >
-        Schedule Follow-up
-    </button>
+        <span class="queue-alert-note">
+            Suggested follow-up date recorded (<strong><?= htmlspecialchars($_GET['fu']) ?></strong>).
+            The patient will schedule their own appointment in the patient portal.
+        </span>
 
     <?php endif; ?>
 
@@ -3925,86 +4103,6 @@ function toggleConsultDetails(btn)
 </div>
 
 <?php endif; ?>
-
-
-<!-- ==========================================================
-     FOLLOW-UP SCHEDULING MODAL
-========================================================== -->
-
-<div id="followupModal" class="fu-modal" style="display:none">
-
-    <div class="fu-modal-backdrop" onclick="closeFollowupModal()"></div>
-
-    <div class="fu-modal-dialog">
-
-        <div class="fu-modal-header">
-            <h3>Schedule Follow-up</h3>
-            <button type="button" class="fu-modal-close" onclick="closeFollowupModal()">&times;</button>
-        </div>
-
-        <div class="fu-modal-body">
-
-            <div class="fu-field">
-                <label for="fu_date">Follow-up Date</label>
-                <input
-                    type="date"
-                    id="fu_date"
-                    min="<?= date('Y-m-d', strtotime('+1 day')) ?>"
-                    onchange="checkFollowupAvailability(this.value)"
-                />
-            </div>
-
-            <div id="fu_availability" class="fu-availability" style="display:none"></div>
-
-            <div class="fu-field">
-                <label for="fu_time">Preferred Time</label>
-                <select id="fu_time">
-                    <option value="08:00:00">8:00 AM</option>
-                    <option value="08:30:00">8:30 AM</option>
-                    <option value="09:00:00" selected>9:00 AM</option>
-                    <option value="09:30:00">9:30 AM</option>
-                    <option value="10:00:00">10:00 AM</option>
-                    <option value="10:30:00">10:30 AM</option>
-                    <option value="11:00:00">11:00 AM</option>
-                    <option value="11:30:00">11:30 AM</option>
-                    <option value="13:00:00">1:00 PM</option>
-                    <option value="13:30:00">1:30 PM</option>
-                    <option value="14:00:00">2:00 PM</option>
-                    <option value="14:30:00">2:30 PM</option>
-                    <option value="15:00:00">3:00 PM</option>
-                    <option value="15:30:00">3:30 PM</option>
-                    <option value="16:00:00">4:00 PM</option>
-                </select>
-            </div>
-
-            <div class="fu-field">
-                <label for="fu_purpose">Purpose</label>
-                <input
-                    type="text"
-                    id="fu_purpose"
-                    value="Follow-up consultation"
-                    maxlength="255"
-                />
-            </div>
-
-        </div>
-
-        <div class="fu-modal-footer">
-            <button type="button" class="fu-btn fu-btn-cancel" onclick="closeFollowupModal()">Cancel</button>
-            <button
-                type="button"
-                id="fu_confirm"
-                class="fu-btn fu-btn-confirm"
-                disabled
-                onclick="submitFollowup()"
-            >
-                Confirm Follow-up
-            </button>
-        </div>
-
-    </div>
-
-</div>
 
 
 <?php if ($queueMessage): ?>
@@ -4463,12 +4561,12 @@ $statusLabel =
                 <?php
 
                 $flagIcons = [
-                    'allergy'    => '\u26a0',
-                    'high_risk'  => '\u26a0',
-                    'lab_pending'=> '\u25cf',
+                    'allergy'    => '⚠',
+                    'high_risk'  => '⚠',
+                    'lab_pending'=> '●',
                 ];
 
-                echo $flagIcons[$fkey] ?? '\u25cf';
+                echo $flagIcons[$fkey] ?? '●';
 
                 ?>
 
@@ -4699,101 +4797,6 @@ function filterQueue(status, btn)
                 }
             }
         );
-}
-
-
-/* ==========================================================
-   FOLLOW-UP SCHEDULING MODAL
-========================================================== */
-
-var _fuPatientId = 0;
-
-function openFollowupModal(patientId) {
-    _fuPatientId = patientId;
-    document.getElementById('fu_date').value = '';
-    document.getElementById('fu_time').value = '09:00:00';
-    document.getElementById('fu_purpose').value = 'Follow-up consultation';
-    document.getElementById('fu_availability').style.display = 'none';
-    document.getElementById('fu_confirm').disabled = true;
-    document.getElementById('followupModal').style.display = '';
-    document.getElementById('fu_date').focus();
-}
-
-function closeFollowupModal() {
-    document.getElementById('followupModal').style.display = 'none';
-    _fuPatientId = 0;
-}
-
-function checkFollowupAvailability(dateVal) {
-    var box = document.getElementById('fu_availability');
-    var btn = document.getElementById('fu_confirm');
-
-    if (!dateVal) {
-        box.style.display = 'none';
-        btn.disabled = true;
-        return;
-    }
-
-    box.style.display = '';
-    box.innerHTML = '<span class="fu-spin"></span> Checking availability\u2026';
-    btn.disabled = true;
-
-    fetch('doctor_queue.php?action=check_availability&date=' + encodeURIComponent(dateVal))
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (!d.ok) {
-                box.innerHTML = '<span class="fu-avail-dot fu-avail-dot--unavail"></span> Error: ' + d.error;
-                return;
-            }
-            if (d.available) {
-                box.innerHTML =
-                    '<span class="fu-avail-dot fu-avail-dot--avail"></span> ' +
-                    d.remaining + ' of ' + d.max_per_day + ' slots available on ' + d.date;
-                btn.disabled = false;
-            } else {
-                box.innerHTML =
-                    '<span class="fu-avail-dot fu-avail-dot--unavail"></span> ' +
-                    'Fully booked on ' + d.date + ' (' + d.appointments + '/' + d.max_per_day + ')';
-                btn.disabled = true;
-            }
-        })
-        .catch(function() {
-            box.innerHTML = '<span class="fu-avail-dot fu-avail-dot--unavail"></span> Could not check availability.';
-            btn.disabled = true;
-        });
-}
-
-function submitFollowup() {
-    var dateVal = document.getElementById('fu_date').value;
-    var timeVal = document.getElementById('fu_time').value;
-    var purposeVal = document.getElementById('fu_purpose').value;
-
-    if (!_fuPatientId || !dateVal) {
-        return;
-    }
-
-    var form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'doctor_queue.php';
-
-    var fields = {
-        action: 'schedule_followup',
-        followup_patient_id: _fuPatientId,
-        followup_date: dateVal,
-        followup_time: timeVal,
-        followup_purpose: purposeVal
-    };
-
-    Object.keys(fields).forEach(function(key) {
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = fields[key];
-        form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
 }
 
 

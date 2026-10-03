@@ -679,12 +679,12 @@ if (!empty($patients) && isset($_GET['patient_id'])) {
                                         <?php
 
                                         $flagIcons = [
-                                            'allergy'    => '\u26a0',
-                                            'high_risk'  => '\u26a0',
-                                            'lab_pending'=> '\u25cf',
+                                            'allergy'    => '⚠',
+                                            'high_risk'  => '⚠',
+                                            'lab_pending'=> '●',
                                         ];
 
-                                        echo $flagIcons[$fkey] ?? '\u25cf';
+                                        echo $flagIcons[$fkey] ?? '●';
 
                                         ?>
 
@@ -897,14 +897,14 @@ function renderQuickLookup(patient) {
     if (patient.flags && Object.keys(patient.flags).length > 0) {
 
         let flagIcons = {
-            allergy: '\u26a0',
-            high_risk: '\u26a0',
-            lab_pending: '\u25cf'
+            allergy: '⚠',
+            high_risk: '⚠',
+            lab_pending: '●'
         };
 
         flagHtml = Object.keys(patient.flags).map(function(key) {
             let label = patient.flags[key];
-            let icon = flagIcons[key] || '\u25cf';
+            let icon = flagIcons[key] || '●';
             return '<span class="pflag pflag--' + key + '">' +
                 '<span class="pflag-icon">' + icon + '</span>' +
                 escapeHtml(label) +

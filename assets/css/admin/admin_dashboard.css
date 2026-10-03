@@ -299,50 +299,85 @@ width: 38px;
   transform: scale(0.95);
 }
 
-/* ---------- ADMIN STAT CARDS (5-up, colored backgrounds) ---------- */
-.admin-stats {
+/* ---------- ADMIN STAT CARDS (icon-badge style, matches staff dashboard) ---------- */
+.admin-stats-context {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   margin-top: 22px;
 }
 
 .admin-stat-card {
-  border: 1px solid transparent;
+  background: #fff;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  padding: 18px;
-  text-align: center;
+  padding: 16px 18px;
 }
 
-.admin-stat-value {
-  font-size: 1.9rem;
-  font-weight: 800;
-  color: var(--color-ink);
-  line-height: 1.15;
+.admin-stat-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
-.admin-stat-label {
-  font-size: 0.78rem;
-  color: var(--color-ink-soft);
-  margin-top: 6px;
-  font-weight: 500;
+.admin-stat-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.admin-stat-icon svg { width: 17px; height: 17px; }
+.admin-stat-icon.orange { background: #ffedd5; color: var(--color-orange); }
+.admin-stat-icon.red { background: #fde2e2; color: var(--color-red); }
+
+.admin-stat-label { font-size: 0.8rem; color: var(--color-ink-soft); font-weight: 500; }
+.admin-stat-value { font-size: 1.7rem; font-weight: 800; color: var(--color-ink); line-height: 1.15; }
+
+/* Patient-flow pipeline: Waiting â†’ In Consultation â†’ Completed */
+.admin-flow { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+
+.admin-flow-step {
+  flex: 1;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 16px 18px;
 }
 
-.admin-stat-card.mint { background: var(--color-primary-tint); border-color: var(--color-primary-tint-border); }
-.admin-stat-card.mint .admin-stat-value { color: var(--color-primary-hover); }
+.admin-flow-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.admin-flow-icon svg { width: 17px; height: 17px; }
+.admin-flow-icon.orange { background: #ffedd5; color: var(--color-orange); }
+.admin-flow-icon.blue { background: #dbeafe; color: var(--color-blue); }
+.admin-flow-icon.green { background: #d1fae5; color: var(--color-green); }
 
-.admin-stat-card.cream { background: #fef9e7; border-color: #f6e6a8; }
-.admin-stat-card.cream .admin-stat-value { color: var(--color-orange); }
+.admin-flow-label { font-size: 0.78rem; color: var(--color-ink-soft); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+.admin-flow-value { font-size: 1.7rem; font-weight: 800; margin-top: 2px; }
+.admin-flow-value.orange { color: var(--color-orange); }
+.admin-flow-value.blue { color: var(--color-blue); }
+.admin-flow-value.green { color: var(--color-green); }
 
-.admin-stat-card.lavender { background: #eef2ff; border-color: #c7d2fe; }
-.admin-stat-card.lavender .admin-stat-value { color: #4338ca; }
+.admin-flow-arrow { color: var(--color-ink-soft); flex-shrink: 0; }
+.admin-flow-arrow svg { width: 20px; height: 20px; }
 
-.admin-stat-card.green { background: var(--color-primary-tint); border-color: var(--color-primary-tint-border); }
-.admin-stat-card.green .admin-stat-value { color: var(--color-green); }
-
-.admin-stat-card.red { background: #fde2e2; border-color: #f8b4b4; }
-.admin-stat-card.red .admin-stat-value { color: var(--color-red); }
-.admin-stat-card.red .admin-stat-label { color: #9f1d1d; }
+@media (max-width: 900px) {
+  .admin-stats-context { grid-template-columns: 1fr; }
+  .admin-flow { flex-direction: column; }
+  .admin-flow-arrow { transform: rotate(90deg); }
+}
 
 /* Two column grid */
 .staff-grid {

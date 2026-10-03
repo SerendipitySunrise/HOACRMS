@@ -128,56 +128,6 @@ if ($queue) {
     $nowServing = mysqli_fetch_assoc($servingResult);
 }
 
-// Get recent notifications for this patient
-$notifStmt = mysqli_prepare(
-    $conn,
-    'SELECT
-        n.NotificationID,
-        n.Title,
-        n.Message,
-        n.Type,
-        n.IsRead,
-        n.CreatedAt,
-        a.AppointmentID
-     FROM notifications n
-     LEFT JOIN appointments a ON n.Message LIKE CONCAT("%", a.AppointmentDate, "%") 
-     WHERE n.UserID = ?
-     ORDER BY n.IsRead ASC, n.CreatedAt DESC
-     LIMIT 10'
-);
-
-mysqli_stmt_bind_param($notifStmt, 'i', $userID);
-mysqli_stmt_execute($notifStmt);
-$notifResult = mysqli_stmt_get_result($notifStmt);
-
-$notifications = [];
-while ($row = mysqli_fetch_assoc($notifResult)) {
-    $row['IsRead'] = (int) $row['IsRead'];
-    $row['DisplayTime'] = $row['CreatedAt'];
-    $notifications[] = $row;
-}
-
-// --- NOTIFICATION GROUPING LOGIC ---
-// Group repeat reschedule notifications by appointment ID
-$groupedNotifications = [];
-foreach ($notifications as $notif) {
-    // Use AppointmentID if available, otherwise fallback to the message content
-    $key = $notif['AppointmentID'] ?? md5($notif['Message']); 
-    
-    if (!isset($groupedNotifications[$key])) {
-        $groupedNotifications[$key] = $notif;
-        $groupedNotifications[$key]['Count'] = 1;
-    } else {
-        $groupedNotifications[$key]['Count']++;
-        // Keep the most recent message but mark it as updated
-        $groupedNotifications[$key]['Message'] = $notif['Message'];
-        $groupedNotifications[$key]['DisplayTime'] = $notif['DisplayTime']; // Keep newest time
-    }
-}
-// Limit back to 5 unique items for the dashboard widget
-$groupedNotifications = array_slice($groupedNotifications, 0, 5);
-// -----------------------------------
-
 // Get recent consultations count
 $consultCountStmt = mysqli_prepare(
     $conn,
@@ -216,7 +166,7 @@ $latestVitals = mysqli_fetch_assoc($vitalsResult);
 $bmi = null;
 $bmiCategory = null;
 if ($latestVitals && $latestVitals['Weight'] > 0 && $latestVitals['Height'] > 0) {
-    $heightM = $latestVitals['Height'] / 100;
+    $heightM = $latestVitals['Height'];
     if ($heightM > 0) {
         $bmi = round($latestVitals['Weight'] / ($heightM * $heightM), 1);
         if ($bmi < 18.5) $bmiCategory = 'Underweight';
@@ -290,33 +240,6 @@ if (!$nextFollowUp && $appointment) {
         'FollowUpDate' => $appointment['AppointmentDate'],
         'DepartmentName' => $appointment['DepartmentName']
     ];
-}
-
-// Helper function for time ago
-function timeAgo($datetime) {
-    $now = new DateTime();
-    $past = new DateTime($datetime);
-    $diff = $now->diff($past);
-
-    if ($diff->y > 0) return $diff->y . ' year' . ($diff->y > 1 ? 's' : '') . ' ago';
-    if ($diff->m > 0) return $diff->m . ' month' . ($diff->m > 1 ? 's' : '') . ' ago';
-    if ($diff->d > 0) {
-        if ($diff->d === 1) return 'Yesterday';
-        if ($diff->d < 7) return $diff->d . ' days ago';
-        return floor($diff->d / 7) . ' week' . (floor($diff->d / 7) > 1 ? 's' : '') . ' ago';
-    }
-    if ($diff->h > 0) return $diff->h . ' hour' . ($diff->h > 1 ? 's' : '') . ' ago';
-    if ($diff->i > 0) return $diff->i . ' minute' . ($diff->i > 1 ? 's' : '') . ' ago';
-    return 'Just now';
-}
-
-// Get notification dot color based on type
-function getNotifDotColor($type) {
-    $type = strtolower($type ?? '');
-    if (strpos($type, 'appointment') !== false || strpos($type, 'reminder') !== false) return 'green';
-    if (strpos($type, 'queue') !== false || strpos($type, 'urgent') !== false) return 'red';
-    if (strpos($type, 'result') !== false || strpos($type, 'lab') !== false) return 'amber';
-    return 'green';
 }
 
 ?>
@@ -521,7 +444,7 @@ function getNotifDotColor($type) {
                 </div>
                 <div class="hs-vital-item status-neutral">
                   <span class="vital-name">Wt / Ht</span>
-                  <span class="vital-val"><?php echo htmlspecialchars($latestVitals['Weight']); ?>kg / <?php echo htmlspecialchars($latestVitals['Height']); ?>cm</span>
+                  <span class="vital-val"><?php echo htmlspecialchars((string)($latestVitals['Weight'] ?? '')); ?>kg / <?php echo htmlspecialchars((string)($latestVitals['Height'] ?? '')); ?>m</span>
                 </div>
               </div>
               <div class="hs-vitals-date">Recorded <?php echo date('M j, Y', strtotime($latestVitals['RecordedAt'])); ?></div>
@@ -597,7 +520,7 @@ function getNotifDotColor($type) {
                 <div class="hs-next-item priority-high">
                   <div class="hs-next-date"><?php echo date('M j, Y', strtotime($fu['FollowUpDate'])); ?></div>
                   <div class="hs-next-title"><?php echo htmlspecialchars($fu['DepartmentName'] ?? 'Follow-up'); ?></div>
-                  <div class="hs-next-badge">Surgery</div>
+                  <div class="hs-next-badge">Suggested Follow-up</div>
                 </div>
               <?php endif; ?>
             <?php endif; ?>
@@ -761,36 +684,6 @@ function getNotifDotColor($type) {
               <div class="queue-empty-text">
                 <strong>No Active Queue</strong>
                 <span>You are not currently in a queue today.</span>
-              </div>
-            </div>
-          <?php endif; ?>
-        </div>
-
-        <div class="panel notif-panel">
-          <div class="panel-head">
-            <h2>Notifications</h2>
-            <a href="notifications.php">View All</a>
-          </div>
-
-          <?php if (!empty($groupedNotifications)): ?>
-            <?php foreach ($groupedNotifications as $notif): ?>
-              <div class="notif-item <?php echo !$notif['IsRead'] ? 'unread' : ''; ?>">
-                <span class="notif-dot <?php echo getNotifDotColor($notif['Type']); ?>"></span>
-                <div>
-                  <div class="notif-text">
-                    <?php echo htmlspecialchars($notif['Message']); ?>
-                    <?php if (isset($notif['Count']) && $notif['Count'] > 1): ?>
-                      <span class="notif-badge">Rescheduled <?php echo $notif['Count']; ?>x</span>
-                    <?php endif; ?>
-                  </div>
-                  <div class="notif-time"><?php echo timeAgo($notif['DisplayTime']); ?></div>
-                </div>
-              </div>
-            <?php endforeach; ?>
-          <?php else: ?>
-            <div class="notif-item">
-              <div>
-                <div class="notif-text" style="color: var(--color-ink-soft);">No notifications yet</div>
               </div>
             </div>
           <?php endif; ?>

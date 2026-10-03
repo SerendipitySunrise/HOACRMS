@@ -559,9 +559,9 @@ function statDelta(int $todayCount, int $yesterdayCount): string
                   </div>
                   <div class="vitals-indicator">
                     <?php if ((int) $appt['vitals_today'] > 0): ?>
-                      <span class="vitals-status recorded" title="Vitals recorded today">✅ Recorded</span>
+                      <span class="vitals-status recorded" title="Vitals recorded today"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Recorded</span>
                     <?php else: ?>
-                      <span class="vitals-status pending" title="Vitals not recorded today">⚠️ Pending</span>
+                      <span class="vitals-status pending" title="Vitals not recorded today"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Pending</span>
                     <?php endif; ?>
                   </div>
                   <div class="queue-actions">
@@ -569,7 +569,7 @@ function statDelta(int $todayCount, int $yesterdayCount): string
                       href="record_vitals.php?appointment_id=<?php echo (int) $appt['AppointmentID']; ?>&patient_id=<?php echo (int) $appt['PatientID']; ?>"
                       class="btn-vitals-sm"
                       title="Record vitals for this patient"
-                    >📊 Vitals</a>
+                    ><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Vitals</a>
                     <a href="checkin_patient.php?appointment_id=<?php echo (int) $appt['AppointmentID']; ?>" class="btn-call">Check In</a>
                   </div>
                 </div>
@@ -624,12 +624,7 @@ function statDelta(int $todayCount, int $yesterdayCount): string
                       <span
                         class="vitals-check"
                         title="Vitals recorded today"
-                      >✅</span>
-                    <?php else: ?>
-                      <span
-                        class="vitals-missing"
-                        title="Vitals not recorded today"
-                      >⚠️</span>
+                      ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
                     <?php endif; ?>
                   </div>
                   <div class="queue-actions">
@@ -643,9 +638,15 @@ function statDelta(int $todayCount, int $yesterdayCount): string
                         </button>
                       </form>
                     <?php elseif ($status === 'called'): ?>
-                      <span class="queue-status called">called</span>
+                      <span class="queue-status called">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                        called
+                      </span>
                     <?php else: ?>
-                      <span class="queue-status waiting">waiting</span>
+                      <span class="queue-status waiting">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        waiting
+                      </span>
                       <form method="POST" action="queue_action.php" style="display:inline;">
                         <input type="hidden" name="queue_id" value="<?php echo (int) $q['QueueID']; ?>">
                         <input type="hidden" name="action" value="call">

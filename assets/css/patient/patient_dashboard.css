@@ -2853,6 +2853,22 @@ body.landing-page {
   line-height: 1.6;
 }
 
+.history-book-link {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 7px 14px;
+  background: var(--color-primary-tint, #eef2ff);
+  color: var(--color-primary-hover, #1e40af);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.history-book-link:hover {
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+}
+
 /* ---------- NOTIFICATIONS PAGE ---------- */
 .notif-toolbar {
   display: flex;
