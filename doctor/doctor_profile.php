@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/department_capacity.php';
 
 if (!isset($conn) || !$conn) {
     die('Database connection is not available.');
@@ -98,7 +99,7 @@ function field($value, $fallback = 'Not provided') {
 // Fetch department schedules
 $scheduleStmt = mysqli_prepare(
     $conn,
-    "SELECT DayOfWeek, SessionName, StartTime, EndTime, PatientSlots
+    "SELECT DayOfWeek, SessionName, StartTime, EndTime
      FROM department_schedules
      WHERE DepartmentID = ?
      ORDER BY DayOfWeek, FIELD(SessionName, 'Morning', 'Afternoon')"
@@ -922,7 +923,7 @@ if (isset($_GET['updated'])) {
                 </span>
               </td>
               <td data-label="Hours"><?php echo date('g:i A', strtotime($sch['StartTime'])) . ' – ' . date('g:i A', strtotime($sch['EndTime'])); ?></td>
-              <td data-label="Slots"><?php echo htmlspecialchars($sch['PatientSlots']); ?> max patients/session</td>
+              <td data-label="Slots"><?php echo (int) capacitySlotCount($sch['StartTime'], $sch['EndTime']); ?> max patients/session</td>
             </tr>
             <?php endforeach; ?>
           </tbody>

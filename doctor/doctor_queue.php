@@ -26,6 +26,7 @@ require_once __DIR__ . '/../includes/admin_notifications.php';
 require_once __DIR__ . '/../includes/status_constants.php';
 require_once __DIR__ . '/../includes/pdf_helper.php';
 require_once __DIR__ . '/../includes/vitals.php';
+require_once __DIR__ . '/../includes/department_capacity.php';
 
 
 /* ================================================================
@@ -1168,7 +1169,7 @@ if (
     /* Collect the department's consultation schedule (day => sessions). */
     $scheduleStmt = mysqli_prepare(
         $conn,
-        "SELECT DayOfWeek, SessionName, StartTime, EndTime, PatientSlots
+        "SELECT DayOfWeek, SessionName, StartTime, EndTime
          FROM department_schedules
          WHERE DepartmentID = ?
          ORDER BY DayOfWeek ASC, StartTime ASC"
@@ -1250,15 +1251,20 @@ if (
         exit;
     }
 
-    /* Capacity is the sum of slots across that weekday's sessions. */
-    $departmentCapacity = 0;
+    /* Session time labels for the response. */
     $sessionLabels = [];
     foreach ($sessions as $session) {
-        $departmentCapacity += (int)($session['PatientSlots'] ?? 0);
         $sessionLabels[] =
             date('g:i A', strtotime($session['StartTime'])) . '–' .
             date('g:i A', strtotime($session['EndTime']));
     }
+
+    /*
+     * Capacity = 30-minute slots x available doctors, so it matches the
+     * patient booking page (one patient per doctor per slot). The
+     * department_schedules.PatientSlots column is no longer used for capacity.
+     */
+    $departmentCapacity = departmentCapacityForDay($conn, $deptID, $dayOfWeek)['capacity'];
 
     $remaining = max(0, $departmentCapacity - $existingCount);
 

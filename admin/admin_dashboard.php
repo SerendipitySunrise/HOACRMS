@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../includes/session.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/status_constants.php';
+require_once __DIR__ . '/../includes/department_capacity.php';
 requireRole('Admin');
 
 /**
@@ -98,8 +99,6 @@ $hasAppointments = dashboardTableExists($conn, 'appointments');
 $hasQueue = dashboardTableExists($conn, 'queue');
 $hasNoShows = dashboardTableExists($conn, 'no_shows');
 $hasDepartmentSchedules = dashboardTableExists($conn, 'department_schedules');
-$hasPatientSlots = $hasDepartmentSchedules
-    && dashboardColumnExists($conn, 'department_schedules', 'PatientSlots');
 
 $totalPatientsToday = 0;
 $waitingToday = 0;
@@ -213,24 +212,16 @@ if ($hasAppointments) {
     );
 }
 
-if ($hasPatientSlots) {
-    $morningCapacity = (int) dashboardScalar(
-        $conn,
-        "SELECT COALESCE(SUM(PatientSlots), 0) AS total
-           FROM department_schedules
-          WHERE DayOfWeek = DAYOFWEEK(CURDATE()) - 1
-            AND SessionName = 'Morning'",
-        'total'
-    );
+if ($hasDepartmentSchedules) {
+    $todayDow = (int) date('N'); // ISO-8601: 1 = Monday ... 7 = Sunday
 
-    $afternoonCapacity = (int) dashboardScalar(
-        $conn,
-        "SELECT COALESCE(SUM(PatientSlots), 0) AS total
-           FROM department_schedules
-          WHERE DayOfWeek = DAYOFWEEK(CURDATE()) - 1
-            AND SessionName = 'Afternoon'",
-        'total'
-    );
+    /*
+     * Capacity = 30-minute slots x available doctors, so the admin dashboard
+     * matches the patient booking page (one patient per doctor per slot).
+     * department_schedules.PatientSlots is no longer used for capacity.
+     */
+    $morningCapacity = allDepartmentsCapacityForDay($conn, $todayDow, 'Morning')['capacity'];
+    $afternoonCapacity = allDepartmentsCapacityForDay($conn, $todayDow, 'Afternoon')['capacity'];
 }
 
 $morningProgress = $morningCapacity > 0
