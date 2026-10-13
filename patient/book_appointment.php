@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/appointment_assignment.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -119,137 +120,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
     } else {
 
-        $dateObjForDay = DateTime::createFromFormat('Y-m-d', $appointmentDate);
-        $dayOfWeek = (int) $dateObjForDay->format('N');
-
         /*
         |--------------------------------------------------------------------------
-        | FIND AVAILABLE STAFF/DOCTOR
+        | FIND AVAILABLE DOCTOR
+        |
+        | Same rule as api/appointments/save_appointment.php: prefer the
+        | doctor the patient saw most recently, otherwise the least-loaded
+        | free doctor (tie -> lowest StaffID). One shared helper decides, so
+        | this fallback path can never diverge from the API again.
         |--------------------------------------------------------------------------
         */
 
-        $staffStmt = mysqli_prepare(
+        $previousStaffID = findPatientPreviousDoctor($conn, $patientID, $departmentID);
+
+        $staffID = findAssignableDoctor(
             $conn,
-            'SELECT StaffID
-             FROM staff
-             WHERE DepartmentID = ?
-             AND AvailabilityStatus = "Available"
-             AND StaffRole = "Doctor"
-             AND EXISTS (
-                 SELECT 1 FROM department_schedules ds
-                 WHERE ds.DepartmentID = staff.DepartmentID
-                   AND ds.DayOfWeek = ?
-                   AND ds.StartTime <= ?
-                   AND ds.EndTime > ?
-             )
-             LIMIT 1'
-        );
-
-        mysqli_stmt_bind_param(
-            $staffStmt,
-            'iiss',
             $departmentID,
-            $dayOfWeek,
+            $appointmentDate,
             $appointmentTime,
-            $appointmentTime
+            $previousStaffID
         );
 
-        mysqli_stmt_execute($staffStmt);
+        if ($staffID <= 0) {
 
-        $staffResult = mysqli_stmt_get_result($staffStmt);
-
-        if (mysqli_num_rows($staffResult) === 0) {
-
-            $bookingMessage =
-                'No available doctor is currently assigned to this department.';
+            if (departmentHasDoctorForSlot($conn, $departmentID, $appointmentDate, $appointmentTime)) {
+                $bookingMessage =
+                    'This time slot is already booked. Please select another time.';
+            } else {
+                $bookingMessage =
+                    'No available doctor is currently assigned to this department.';
+            }
 
         } else {
 
-            $staff = mysqli_fetch_assoc($staffResult);
-
-            $staffID = (int) $staff['StaffID'];
-
-
             /*
             |--------------------------------------------------------------------------
-            | CHECK IF TIME SLOT IS ALREADY BOOKED
+            | INSERT APPOINTMENT
             |--------------------------------------------------------------------------
             */
 
-            $checkStmt = mysqli_prepare(
+            $insertStmt = mysqli_prepare(
                 $conn,
-                'SELECT AppointmentID
-                 FROM appointments
-                 WHERE StaffID = ?
-                 AND AppointmentDate = ?
-                 AND AppointmentTime = ?
-                 AND Status NOT IN ("Cancelled", "Completed")
-                 LIMIT 1'
+                'INSERT INTO appointments
+                (
+                    PatientID,
+                    StaffID,
+                    DepartmentID,
+                    AppointmentDate,
+                    AppointmentTime,
+                    Purpose,
+                    Status
+                )
+                VALUES (?, ?, ?, ?, ?, ?, "Pending")'
             );
 
             mysqli_stmt_bind_param(
-                $checkStmt,
-                'iss',
+                $insertStmt,
+                'iiisss',
+                $patientID,
                 $staffID,
+                $departmentID,
                 $appointmentDate,
-                $appointmentTime
+                $appointmentTime,
+                $purpose
             );
 
-            mysqli_stmt_execute($checkStmt);
+            if (mysqli_stmt_execute($insertStmt)) {
 
-            $checkResult = mysqli_stmt_get_result($checkStmt);
-
-
-            if (mysqli_num_rows($checkResult) > 0) {
-
-                $bookingMessage =
-                    'This time slot is already booked. Please select another time.';
+                $bookingSuccess = true;
 
             } else {
 
-                /*
-                |--------------------------------------------------------------------------
-                | INSERT APPOINTMENT
-                |--------------------------------------------------------------------------
-                */
-
-                $insertStmt = mysqli_prepare(
-                    $conn,
-                    'INSERT INTO appointments
-                    (
-                        PatientID,
-                        StaffID,
-                        DepartmentID,
-                        AppointmentDate,
-                        AppointmentTime,
-                        Purpose,
-                        Status
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, "Pending")'
-                );
-
-                $purpose = trim($_POST['purpose'] ?? '');
-
-                mysqli_stmt_bind_param(
-                    $insertStmt,
-                    'iiisss',
-                    $patientID,
-                    $staffID,
-                    $departmentID,
-                    $appointmentDate,
-                    $appointmentTime,
-                    $purpose
-                );
-
-                if (mysqli_stmt_execute($insertStmt)) {
-
-                    $bookingSuccess = true;
-
-                } else {
-
-                    $bookingMessage =
-                        'Unable to book the appointment. Please try again.';
-                }
+                $bookingMessage =
+                    'Unable to book the appointment. Please try again.';
             }
         }
     }

@@ -4,6 +4,7 @@ session_start();
 
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/admin_notifications.php';
+require_once __DIR__ . '/../../includes/appointment_assignment.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -346,119 +347,23 @@ try {
 
     // -------------------------------------------------
     // STAFF / DOCTOR ASSIGNMENT
-    // Prefer the current doctor if available at the new slot,
-    // otherwise pick any available doctor in the department.
+    // Try the appointment's current doctor first; otherwise the
+    // least-loaded free doctor (tie -> lowest StaffID). Same shared rule as
+    // a brand new booking, so both paths behave identically.
     // -------------------------------------------------
 
     $oldStaffID = (int) ($appointment['StaffID'] ?? 0);
-    $newStaffID = 0;
 
-    if ($oldStaffID > 0) {
-        $keepStmt = mysqli_prepare(
-            $conn,
-            'SELECT s.StaffID
-             FROM staff s
-             WHERE s.StaffID = ?
-               AND s.DepartmentID = ?
-               AND s.AvailabilityStatus = "Available"
-               AND s.StaffRole = "Doctor"
-               AND EXISTS (
-                   SELECT 1 FROM department_schedules ds
-                   WHERE ds.DepartmentID = s.DepartmentID
-                     AND ds.DayOfWeek = ?
-                     AND ds.StartTime <= ?
-                     AND ds.EndTime > ?
-               )
-               AND NOT EXISTS (
-                   SELECT 1
-                   FROM appointments a
-                   WHERE a.StaffID = s.StaffID
-                     AND a.AppointmentDate = ?
-                     AND a.AppointmentTime = ?
-                     AND a.Status NOT IN ("Cancelled", "Completed")
-                     AND a.AppointmentID <> ?
-               )
-             LIMIT 1'
-        );
+    $newStaffID = findAssignableDoctor(
+        $conn,
+        $departmentID,
+        $appointmentDate,
+        $appointmentTime,
+        $oldStaffID,
+        $appointmentID
+    );
 
-        mysqli_stmt_bind_param(
-            $keepStmt,
-            'iiissssi',
-            $oldStaffID,
-            $departmentID,
-            $dayOfWeek,
-            $appointmentTime,
-            $appointmentTime,
-            $appointmentDate,
-            $appointmentTime,
-            $appointmentID
-        );
-
-        mysqli_stmt_execute($keepStmt);
-
-        $keepResult = mysqli_stmt_get_result($keepStmt);
-        $keep = mysqli_fetch_assoc($keepResult);
-
-        mysqli_stmt_close($keepStmt);
-
-        if ($keep) {
-            $newStaffID = (int) $keep['StaffID'];
-        }
-    }
-
-    if ($newStaffID === 0) {
-        $assignStmt = mysqli_prepare(
-            $conn,
-            'SELECT s.StaffID
-             FROM staff s
-             WHERE s.DepartmentID = ?
-               AND s.AvailabilityStatus = "Available"
-               AND s.StaffRole = "Doctor"
-               AND EXISTS (
-                   SELECT 1 FROM department_schedules ds
-                   WHERE ds.DepartmentID = s.DepartmentID
-                     AND ds.DayOfWeek = ?
-                     AND ds.StartTime <= ?
-                     AND ds.EndTime > ?
-               )
-               AND NOT EXISTS (
-                   SELECT 1
-                   FROM appointments a
-                   WHERE a.StaffID = s.StaffID
-                     AND a.AppointmentDate = ?
-                     AND a.AppointmentTime = ?
-                     AND a.Status NOT IN ("Cancelled", "Completed")
-                     AND a.AppointmentID <> ?
-               )
-             ORDER BY s.StaffID ASC
-             LIMIT 1'
-        );
-
-        mysqli_stmt_bind_param(
-            $assignStmt,
-            'iissssi',
-            $departmentID,
-            $dayOfWeek,
-            $appointmentTime,
-            $appointmentTime,
-            $appointmentDate,
-            $appointmentTime,
-            $appointmentID
-        );
-
-        mysqli_stmt_execute($assignStmt);
-
-        $assignResult = mysqli_stmt_get_result($assignStmt);
-        $assign = mysqli_fetch_assoc($assignResult);
-
-        mysqli_stmt_close($assignStmt);
-
-        if ($assign) {
-            $newStaffID = (int) $assign['StaffID'];
-        }
-    }
-
-    if ($newStaffID === 0) {
+    if ($newStaffID <= 0) {
         respond(false, 'This time slot is fully booked. Please select another time.');
     }
 

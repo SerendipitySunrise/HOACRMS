@@ -3,6 +3,7 @@ session_start();
 
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/admin_notifications.php';
+require_once __DIR__ . '/../../includes/appointment_assignment.php';
 
 header('Content-Type: application/json');
 
@@ -158,53 +159,29 @@ if (mysqli_num_rows($patientConflictResult) > 0) {
     respond(false, 'You already have an appointment at this date and time.');
 }
 
-$staffStmt = mysqli_prepare(
+/*
+|--------------------------------------------------------------------------
+| DOCTOR ASSIGNMENT
+|
+| Prefer the doctor the patient saw most recently, otherwise the
+| least-loaded free doctor (tie -> lowest StaffID). The shared helper keeps
+| every booking path on the same rule.
+|--------------------------------------------------------------------------
+*/
+
+$previousStaffID = findPatientPreviousDoctor($conn, $patientID, $departmentID);
+
+$staffID = findAssignableDoctor(
     $conn,
-    'SELECT s.StaffID
-     FROM staff s
-     WHERE s.DepartmentID = ?
-       AND s.AvailabilityStatus = "Available"
-       AND s.StaffRole = "Doctor"
-       AND EXISTS (
-           SELECT 1 FROM department_schedules ds
-           WHERE ds.DepartmentID = s.DepartmentID
-             AND ds.DayOfWeek = ?
-             AND ds.StartTime <= ?
-             AND ds.EndTime > ?
-       )
-       AND NOT EXISTS (
-           SELECT 1
-           FROM appointments a
-           WHERE a.StaffID = s.StaffID
-             AND a.AppointmentDate = ?
-             AND a.AppointmentTime = ?
-             AND a.Status NOT IN ("Cancelled", "Completed")
-       )
-     ORDER BY s.StaffID ASC
-     LIMIT 1'
-);
-
-mysqli_stmt_bind_param(
-    $staffStmt,
-    'iissss',
     $departmentID,
-    $dayOfWeek,
-    $appointmentTime,
-    $appointmentTime,
     $appointmentDate,
-    $appointmentTime
+    $appointmentTime,
+    $previousStaffID
 );
 
-mysqli_stmt_execute($staffStmt);
-
-$staffResult = mysqli_stmt_get_result($staffStmt);
-$staff = mysqli_fetch_assoc($staffResult);
-
-if (!$staff) {
+if ($staffID <= 0) {
     respond(false, 'This time slot is fully booked. Please select another time.');
 }
-
-$staffID = (int) $staff['StaffID'];
 
 $insertStmt = mysqli_prepare(
     $conn,
