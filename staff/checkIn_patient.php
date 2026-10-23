@@ -5,6 +5,8 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/admin_notifications.php';
 require_once __DIR__ . '/../includes/status_constants.php';
 require_once __DIR__ . '/../includes/validation.php';
+require_once __DIR__ . '/../includes/booking_rules.php';
+require_once __DIR__ . '/../includes/booking_session_capacity.php';
 
 // ======================================================
 // AUTHENTICATION
@@ -42,6 +44,7 @@ $fullName          = '';
 $dateOfBirth       = '';
 $gender            = 'Male';
 $phone             = '';
+$accompaniedByWalkin = '';
 $bloodType         = '';
 $allergies         = '';
 $currentMedication = '';
@@ -122,6 +125,50 @@ if (
             $message = 'Appointment not found for today.';
             $messageType = 'error';
         } else {
+
+            // Spec test 11: a minor may not be checked in unaccompanied.
+            $accompaniedBy = trim((string) ($_POST['accompanied_by'] ?? ''));
+            $accompaniedBy = $accompaniedBy !== '' ? sanitizeTextInput($accompaniedBy, 100) : '';
+
+            $apptPatientId = (int) $appointment['PatientID'];
+            $minorStmt = mysqli_prepare(
+                $conn,
+                'SELECT COALESCE(u.DateOfBirth, p.DateOfBirth) AS DOB
+                 FROM patients p
+                 LEFT JOIN users u ON u.UserID = p.UserID
+                 WHERE p.PatientID = ?
+                 LIMIT 1'
+            );
+            $patientDob = null;
+            if ($minorStmt) {
+                mysqli_stmt_bind_param($minorStmt, 'i', $apptPatientId);
+                mysqli_stmt_execute($minorStmt);
+                $minorRow = mysqli_fetch_assoc(mysqli_stmt_get_result($minorStmt));
+                $patientDob = $minorRow['DOB'] ?? null;
+                mysqli_stmt_close($minorStmt);
+            }
+
+            if (patientIsMinor($patientDob) && $accompaniedBy === '') {
+                $message = 'A minor must be accompanied by a parent or guardian. Please enter the accompanying person\'s name.';
+                $messageType = 'error';
+            } else {
+
+            // Spec 5: check-in opens only within the allowed window before the
+            // scheduled time (late arrivals are still checked in).
+            $checkinOpensMin = bookingSettingInt($conn, 'checkin_opens_minutes_before', 30);
+            $apptStart = DateTimeImmutable::createFromFormat(
+                'Y-m-d H:i:s',
+                $appointment['AppointmentDate'] . ' ' . $appointment['AppointmentTime']
+            );
+            $now = new DateTimeImmutable('now');
+            if (
+                $apptStart instanceof DateTimeImmutable
+                && $apptStart->format('Y-m-d') === $today
+                && $now < $apptStart->modify('-' . $checkinOpensMin . ' minutes')
+            ) {
+                $message = 'Check-in opens ' . $checkinOpensMin . ' minutes before the appointment time. Please come back closer to your scheduled time.';
+                $messageType = 'error';
+            } else {
 
             $existingQueueStmt = mysqli_prepare(
                 $conn,
@@ -204,14 +251,24 @@ if (
 
                     $appointmentStatus = APPT_STATUS_CHECKED_IN;
 
+                    // Spec: check-in records the actual arrival time and the
+                    // accompanying person's name (stored whenever given).
+                    $accompaniedByBind = $accompaniedBy !== '' ? $accompaniedBy : null;
+
                     $updateAppointmentStmt = mysqli_prepare(
                         $conn,
                         "UPDATE appointments
-                         SET Status = ?
+                         SET Status = ?, CheckInTime = NOW(), AccompaniedBy = ?
                          WHERE AppointmentID = ?"
                     );
 
-                    mysqli_stmt_bind_param($updateAppointmentStmt, 'si', $appointmentStatus, $appointmentID);
+                    mysqli_stmt_bind_param(
+                        $updateAppointmentStmt,
+                        'ssi',
+                        $appointmentStatus,
+                        $accompaniedByBind,
+                        $appointmentID
+                    );
 
                     if (!mysqli_stmt_execute($updateAppointmentStmt)) {
                         throw new Exception(
@@ -244,6 +301,9 @@ if (
                     $messageType = 'error';
                 }
             }
+
+            }
+            }
         }
     }
 }
@@ -272,6 +332,7 @@ if (
     $doctorId     = (int) ($_POST['doctor_id'] ?? 0); // ✅ FIX: read doctor
     $session      = $_POST['session'] ?? 'morning';
     $reason       = trim($_POST['reason'] ?? '');
+    $accompaniedByWalkin = trim((string) ($_POST['accompanied_by'] ?? ''));
 
     if (!in_array($session, ['morning', 'afternoon'], true)) {
         $session = 'morning';
@@ -284,6 +345,9 @@ if (
     $pastConditions    = sanitizeTextInput($pastConditions ?? '', 1000) ?: null;
     $familyHistory     = sanitizeTextInput($familyHistory ?? '', 1000) ?: null;
     $reason            = sanitizeTextInput($reason, 500);
+    $accompaniedByWalkin = $accompaniedByWalkin !== ''
+        ? sanitizeTextInput($accompaniedByWalkin, 100)
+        : '';
 
     $errors = [];
 
@@ -322,6 +386,11 @@ if (
         }
     }
 
+    // Spec test 11: a minor may not be checked in unaccompanied.
+    if (patientIsMinor($dateOfBirth) && $accompaniedByWalkin === '') {
+        $errors[] = 'A minor must be accompanied by a parent or guardian. Please enter the accompanying person\'s name.';
+    }
+
     if ($dateOfBirth !== '') {
         $dobError = validateAgeInRange($dateOfBirth, 0, 120);
 
@@ -354,6 +423,24 @@ if (
         } else {
             $appointmentTime = '09:00:00';
         }
+
+        // Spec 5: a full session rejects walk-ins unless the
+        // walkins_may_exceed_session_max setting allows it.
+        $walkinBlocked = false;
+        $walkinWindow = sessionWindowForTime($conn, $departmentId, $today, $appointmentTime);
+        if ($walkinWindow !== null && !bookingSettingBool($conn, 'walkins_may_exceed_session_max', false)) {
+            $walkinDow = (int) (new DateTimeImmutable($today))->format('N');
+            $walkinCapacity = sessionMaxCapacity($conn, $departmentId, $walkinDow, (string) $walkinWindow['SessionName']);
+            $walkinBooked = sessionBookedCount($conn, $departmentId, $today, $appointmentTime);
+            if ($walkinCapacity > 0 && $walkinBooked >= $walkinCapacity) {
+                $walkinBlocked = true;
+            }
+        }
+
+        if ($walkinBlocked) {
+            $message = 'This session is full. Walk-ins cannot be accepted right now. Please come back for another session.';
+            $messageType = 'error';
+        } else {
 
         mysqli_begin_transaction($conn);
 
@@ -483,19 +570,25 @@ if (
             $apptStmt = mysqli_prepare(
                 $conn,
                 'INSERT INTO appointments
-                (PatientID, StaffID, DepartmentID, AppointmentDate, AppointmentTime, Purpose, Status)
-                VALUES (?, ?, ?, ?, ?, ?, "' . APPT_STATUS_CHECKED_IN . '")'
+                (PatientID, StaffID, DepartmentID, AppointmentDate, AppointmentTime, Purpose, Status,
+                 CheckInTime, AccompaniedBy, BookedByUserID)
+                VALUES (?, ?, ?, ?, ?, ?, "' . APPT_STATUS_CHECKED_IN . '", NOW(), ?, ?)'
             );
+
+            $accompaniedByWalkinBind = $accompaniedByWalkin !== '' ? $accompaniedByWalkin : null;
+            $walkInStaffUserId = (int) $_SESSION['UserID'];
 
             mysqli_stmt_bind_param(
                 $apptStmt,
-                'iiisss',
+                'iiissssi',
                 $newPatientId,
                 $doctorId,        // ✅ FIX: real doctor, not NULL
                 $departmentId,
                 $today,
                 $appointmentTime,
-                $reason
+                $reason,
+                $accompaniedByWalkinBind,
+                $walkInStaffUserId
             );
 
             if (!mysqli_stmt_execute($apptStmt)) {
@@ -603,6 +696,8 @@ if (
             // Show the specific reason in dev; you can log it in prod
             $message = 'Unable to add walk-in patient. ' . $e->getMessage();
             $messageType = 'error';
+        }
+
         }
     }
 }
@@ -1223,6 +1318,18 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
 
             <input type="hidden" name="appointment_id" id="selectedAppointmentID" value="">
 
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label class="form-label">Accompanying Parent / Guardian (required for minors)</label>
+                <input
+                    type="text"
+                    name="accompanied_by"
+                    id="checkin_accompanied_by"
+                    class="form-input"
+                    maxlength="100"
+                    placeholder="Full name of the accompanying person"
+                >
+            </div>
+
             <div class="modal-actions">
 
                 <button class="btn-outline" type="button" onclick="closeCheckinModal()">Cancel</button>
@@ -1308,6 +1415,19 @@ $staffName = htmlspecialchars($staffFirstName . ' ' . $staffLastName);
                         </select>
                     </div>
 
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Accompanying Parent / Guardian (required for minors)</label>
+                    <input
+                        type="text"
+                        name="accompanied_by"
+                        id="wi_accompanied_by"
+                        class="form-input"
+                        maxlength="100"
+                        placeholder="Full name of the accompanying person"
+                        value="<?php echo htmlspecialchars($accompaniedByWalkin, ENT_QUOTES, 'UTF-8'); ?>"
+                    >
                 </div>
 
                 <div class="form-row">
@@ -1525,6 +1645,7 @@ function closeCheckinModal() {
     document.getElementById('assignQueueBtn').disabled = true;
     document.getElementById('selectedAppointmentID').value = '';
     document.getElementById('modalSearchInput').value = '';
+    document.getElementById('checkin_accompanied_by').value = '';
 
     filterModalList();
 }

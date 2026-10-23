@@ -2,6 +2,7 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/password_gate.php';
 
 if (!isset($_SESSION['UserID'])) {
     header('Location: ../auth/login.php?portal=patient');
@@ -9,9 +10,11 @@ if (!isset($_SESSION['UserID'])) {
 }
 
 if ($_SESSION['RoleName'] !== 'Patient') {
-    header('Location: ../portal-select.php?action=login');
+    header('Location: ../auth/login.php');
     exit();
 }
+
+passwordGateEnforce();
 
 $userID = $_SESSION['UserID'];
 $today = date('Y-m-d');
@@ -301,6 +304,12 @@ if (!$nextFollowUp && $appointment) {
     <a href="consultation_history.php" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       Consultation History
+    </a>
+  </li>
+  <li>
+    <a href="my_children.php" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      My Children
     </a>
   </li>
   <li>

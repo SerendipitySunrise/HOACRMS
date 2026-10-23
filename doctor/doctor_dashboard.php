@@ -21,6 +21,8 @@
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/password_gate.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -54,6 +56,8 @@ if (!$userID) {
 
 $userID = (int)$userID;
 
+passwordGateEnforce();
+
 /*
 |--------------------------------------------------------------------------
 | CHECK USER ROLE
@@ -73,7 +77,7 @@ $roleName = $_SESSION['RoleName']
     ?? null;
 
 if ($roleName !== null && strcasecmp(trim((string)$roleName), 'Doctor') !== 0) {
-    header('Location: ../portal-select.php?action=login');
+    header('Location: ../auth/login.php');
     exit;
 }
 
@@ -137,7 +141,7 @@ $stmtDoctor->execute();
 $doctorResult = $stmtDoctor->get_result();
 
 if ($doctorResult->num_rows === 0) {
-    header('Location: ../portal-select.php?action=login');
+    header('Location: ../auth/login.php');
     exit;
 }
 

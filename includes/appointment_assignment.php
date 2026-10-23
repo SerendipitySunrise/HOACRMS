@@ -131,6 +131,13 @@ function departmentHasDoctorForSlot(
                  AND ds.StartTime <= ?
                  AND ds.EndTime > ?
            )
+           AND NOT EXISTS (
+               SELECT 1 FROM doctorunavailability du
+               WHERE du.StartDate <= ?
+                 AND du.EndDate >= ?
+                 AND (du.DoctorID = s.StaffID
+                      OR (du.DepartmentID = s.DepartmentID AND du.DoctorID IS NULL))
+           )
          LIMIT 1'
     );
 
@@ -140,11 +147,13 @@ function departmentHasDoctorForSlot(
 
     mysqli_stmt_bind_param(
         $stmt,
-        'iiss',
+        'iissss',
         $departmentID,
         $dayOfWeek,
         $appointmentTime,
-        $appointmentTime
+        $appointmentTime,
+        $appointmentDate,
+        $appointmentDate
     );
 
     mysqli_stmt_execute($stmt);
@@ -191,7 +200,10 @@ function findAssignableDoctor(
 
     /*
      * Conditions every candidate doctor must satisfy for this slot. The
-     * placeholder order is: DepartmentID, DayOfWeek, StartTime, EndTime.
+     * placeholder order is: DepartmentID, DayOfWeek, StartTime, EndTime,
+     * leave range (StartDate, EndDate). Doctors with a DoctorUnavailability
+     * row covering the date (their own, or a department-wide closure) are
+     * excluded so an on-leave doctor is never assigned.
      */
     $assignable = 's.DepartmentID = ?
                    AND s.AvailabilityStatus = "Available"
@@ -202,6 +214,13 @@ function findAssignableDoctor(
                          AND ds.DayOfWeek = ?
                          AND ds.StartTime <= ?
                          AND ds.EndTime > ?
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM doctorunavailability du
+                       WHERE du.StartDate <= ?
+                         AND du.EndDate >= ?
+                         AND (du.DoctorID = s.StaffID
+                              OR (du.DepartmentID = s.DepartmentID AND du.DoctorID IS NULL))
                    )';
 
     // ------------------------------------------------------------------
@@ -229,12 +248,14 @@ function findAssignableDoctor(
         if ($preferStmt) {
             mysqli_stmt_bind_param(
                 $preferStmt,
-                'iiissssii',
+                'iiisssssssii',
                 $preferStaffID,
                 $departmentID,
                 $dayOfWeek,
                 $appointmentTime,
                 $appointmentTime,
+                $appointmentDate,
+                $appointmentDate,
                 $appointmentDate,
                 $appointmentTime,
                 $excludeAppointmentID,
@@ -289,7 +310,7 @@ function findAssignableDoctor(
 
     mysqli_stmt_bind_param(
         $assignStmt,
-        'siiiissssii',
+        'siiiissssssii',
         $appointmentDate,
         $excludeAppointmentID,
         $excludeAppointmentID,
@@ -297,6 +318,8 @@ function findAssignableDoctor(
         $dayOfWeek,
         $appointmentTime,
         $appointmentTime,
+        $appointmentDate,
+        $appointmentDate,
         $appointmentDate,
         $appointmentTime,
         $excludeAppointmentID,

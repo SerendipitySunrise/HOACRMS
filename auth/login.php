@@ -5,9 +5,13 @@ session_start();
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/db_pdo.php';
 require_once __DIR__ . '/../includes/audit_helper.php';
+require_once __DIR__ . '/../includes/security_config.php';
+require_once __DIR__ . '/../includes/rate_limit.php';
+require_once __DIR__ . '/../includes/totp.php';
 
 $message = '';
 $messageType = 'error';
+$resendVerification = false;
 
 if (isset($_GET['reset'])) {
     $message = 'Password changed successfully. Please log in.';
@@ -22,12 +26,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
-    if ($email === '' || $password === '') {
+    if (!rateLimitAllowed($conn, 'login', $clientIp, RATE_LIMIT_LOGIN_PER_15MIN, 900, 900)) {
+
+        $message =
+            'Too many login attempts from this device. Please wait a few minutes and try again.';
+
+    } elseif ($email === '' || $password === '') {
 
         $message = 'Please enter both email and password.';
 
     } else {
+
+        rateLimitRecord($conn, 'login', $clientIp, RATE_LIMIT_LOGIN_PER_15MIN, 900, 900);
 
         $stmt = mysqli_prepare(
             $conn,
@@ -41,10 +53,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 u.Status,
                 u.FailedAttempts,
                 u.LockUntil,
+                u.MustChangePassword,
+                u.TempPasswordExpiresAt,
+                u.EmailVerified,
+                u.SessionVersion,
+                u.TOTPSecret,
+                u.TOTPEnabled,
                 r.RoleName
              FROM users u
              INNER JOIN roles r ON u.RoleID = r.RoleID
              WHERE u.Email = ?
+               AND u.DeletedAt IS NULL
              LIMIT 1"
         );
 
@@ -71,7 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $userRole
                 );
 
-                if (strcasecmp($user['Status'], 'Active') !== 0) {
+                if (strcasecmp($user['Status'], 'Pending') === 0) {
+
+                    $message =
+                        'This account is not ready yet. Please contact the administrator for a new temporary password.';
+
+                } elseif (strcasecmp($user['Status'], 'Active') !== 0) {
 
                     $message =
                         'Your account is not active. Please contact the clinic administrator.';
@@ -85,6 +109,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'Your account has been locked due to multiple failed login attempts.';
 
                 } elseif (password_verify($password, $user['Password'])) {
+
+                    if (
+                        !empty($user['MustChangePassword'])
+                        && !empty($user['TempPasswordExpiresAt'])
+                        && strtotime((string) $user['TempPasswordExpiresAt']) < time()
+                    ) {
+                        // An issued temporary password that has passed its
+                        // expiry is refused with the same generic message as a
+                        // wrong password, so the response cannot be used to
+                        // probe accounts. The administrator sees an
+                        // "Expired temp password" badge in the console and can
+                        // issue a fresh one.
+                        $message = 'Invalid email or password.';
+                    } elseif (
+                        REQUIRE_EMAIL_VERIFICATION
+                        && (int) $user['RoleID'] === 3
+                        && (int) ($user['EmailVerified'] ?? 1) !== 1
+                    ) {
+                        // Patient accounts must confirm their e-mail before the
+                        // first sign-in (anti-spam / fake-account protection).
+                        $message =
+                            'Please verify your e-mail address before signing in. Check your inbox for the verification link.';
+                        $messageType = 'error';
+                        $resendVerification = true;
+                    } else {
+
+                    $userIsAdmin = (int) $user['RoleID'] === 1;
+                    $totpEnabled = (int) ($user['TOTPEnabled'] ?? 0) === 1;
+
+                    // Admin 2FA: when a code is already enrolled, the password
+                    // step only opens a short-lived pending session;
+                    // auth/totp_verify.php finishes the login.
+                    if ($userIsAdmin && $totpEnabled) {
+                        session_regenerate_id(true);
+                        $_SESSION['totp_pending'] = [
+                            'user_id'         => (int) $user['UserID'],
+                            'session_version' => (int) ($user['SessionVersion'] ?? 0),
+                            'role_id'         => (int) $user['RoleID'],
+                            'role_name'       => (string) $user['RoleName'],
+                            'first_name'      => (string) $user['FirstName'],
+                            'last_name'       => (string) $user['LastName'],
+                            'started_at'      => time(),
+                        ];
+                        rateLimitClear($conn, 'login', $clientIp);
+                        header('Location: totp_verify.php');
+                        exit();
+                    }
 
                     $update = mysqli_prepare(
                         $conn,
@@ -120,6 +191,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['RoleID'] = (int) $user['RoleID'];
                     $_SESSION['RoleName'] = $user['RoleName'];
                     $_SESSION['LAST_ACTIVITY'] = time();
+                    $_SESSION['MustChangePassword'] = !empty($user['MustChangePassword']);
+                    // Copied so a later deactivation / password reset can revoke
+                    // this session (see includes/session_liveness.php).
+                    $_SESSION['SessionVersion'] = (int) ($user['SessionVersion'] ?? 0);
+
+                    // Administrator two-factor. An Admin who has not confirmed
+                    // an authenticator must enrol. If the account still carries
+                    // a temporary password, the password change comes first and
+                    // hands off to enrolment (change_password.php); otherwise
+                    // send the Admin straight to enrolment. A secret is created
+                    // on demand so the enrolment page is always reachable.
+                    $adminNeedsTotpSetup = false;
+                    if ((int) $user['RoleID'] === 1 && (int) ($user['TOTPEnabled'] ?? 0) === 0) {
+                        $hasTotpSecret = trim((string) ($user['TOTPSecret'] ?? '')) !== '';
+
+                        if (empty($user['MustChangePassword'])
+                            && (CURORA_FORCE_ADMIN_TOTP || $hasTotpSecret)
+                        ) {
+                            if (!$hasTotpSecret) {
+                                $newSecret = totpGenerateSecret();
+                                $secStmt = mysqli_prepare($conn, 'UPDATE users SET TOTPSecret = ? WHERE UserID = ?');
+                                if ($secStmt) {
+                                    mysqli_stmt_bind_param($secStmt, 'si', $newSecret, $user['UserID']);
+                                    mysqli_stmt_execute($secStmt);
+                                    mysqli_stmt_close($secStmt);
+                                }
+                            }
+                            $adminNeedsTotpSetup = true;
+                        }
+                    }
+                    $_SESSION['MustSetupTotp'] = $adminNeedsTotpSetup;
+
+                    rateLimitClear($conn, 'login', $clientIp);
 
                     logAudit(
                         db_pdo(),
@@ -129,6 +233,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         null,
                         is_string($user['RoleName']) ? (string) $user['RoleName'] : null
                     );
+
+                    // Force a password change before anything else when the
+                    // account was issued a temporary password.
+                    if (!empty($_SESSION['MustChangePassword'])) {
+                        header('Location: change_password.php');
+                        exit();
+                    }
+
+                    if (!empty($_SESSION['MustSetupTotp'])) {
+                        header('Location: setup_totp.php');
+                        exit();
+                    }
 
                     switch ($userRole) {
 
@@ -157,16 +273,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             break;
                     }
 
+                    }
+
                 } else {
 
                     $attempts =
                         (int) $user['FailedAttempts'] + 1;
 
-                    if ($attempts >= 5) {
+                    if ($attempts >= LOGIN_MAX_ATTEMPTS) {
 
                         $lock = date(
                             'Y-m-d H:i:s',
-                            strtotime('+15 minutes')
+                            strtotime('+' . (int) LOGIN_LOCK_MINUTES . ' minutes')
                         );
 
                         $update = mysqli_prepare(
@@ -228,8 +346,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $loginTitle = 'Log in to Curora';
-$registerPath = '../portal-select.php?action=register';
-$registerLabel = 'Create an account';
+$registerPath = 'signup.php';
+$registerLabel = 'Create a patient account';
 
 ?>
 
@@ -318,6 +436,14 @@ $registerLabel = 'Create an account';
                 <?php echo htmlspecialchars($message); ?>
             </div>
 
+        <?php endif; ?>
+
+        <?php if (!empty($resendVerification)): ?>
+            <p style="text-align:center;margin:0 0 16px;">
+                <a href="resend_verification.php" style="color:#149385;font-size:14px;text-decoration:none;">
+                    Resend verification e-mail
+                </a>
+            </p>
         <?php endif; ?>
 
         <form

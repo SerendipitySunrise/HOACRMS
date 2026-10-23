@@ -1,5 +1,9 @@
 <?php
 
+// logAudit() takes a PDO handle from db_pdo(); every caller gets it here so
+// no endpoint can fatal with "undefined function db_pdo()".
+require_once __DIR__ . '/db_pdo.php';
+
 /**
  * Records an administrative action into the `audit_trail` table.
  * Automatically captures the acting user's ID (from the session),

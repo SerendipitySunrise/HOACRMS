@@ -1,0 +1,3 @@
+# Set a shared mail outbox directory so the test harness (CLI PHP) and the
+# web server (Apache) write dry-run e-mails to the same location.
+SetEnv CURORA_MAIL_OUTBOX_DIR "C:/wamp64/tmp/curora_mail_outbox"

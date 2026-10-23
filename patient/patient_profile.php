@@ -295,7 +295,12 @@ if (!empty($patient['CurrentMedication'])) {
             <div class="value"><?php echo field($patient['CivilStatus']); ?></div>
           </div>
 
-          <?php if ($patient['IsPWD']): ?>
+          <div class="info-field">
+            <div class="label">Person with Disability (PWD)</div>
+            <div class="value"><?php echo !empty($patient['IsPWD']) ? 'Yes' : 'No'; ?></div>
+          </div>
+
+          <?php if (!empty($patient['IsPWD'])): ?>
           <div class="info-field">
             <div class="label">Disability Type</div>
             <div class="value"><?php echo field($patient['DisabilityType']); ?></div>
@@ -531,6 +536,15 @@ if (!empty($patient['CurrentMedication'])) {
                 <option value="O+" <?php echo ($patient['BloodType'] === 'O+') ? 'selected' : ''; ?>>O+</option>
                 <option value="O-" <?php echo ($patient['BloodType'] === 'O-') ? 'selected' : ''; ?>>O-</option>
               </select>
+            </div>
+            <div class="form-group">
+              <label for="IsPWD">Person with Disability (PWD)</label>
+              <input type="checkbox" id="IsPWD" name="IsPWD" value="1" <?php echo !empty($patient['IsPWD']) ? 'checked' : ''; ?> onchange="document.getElementById('DisabilityType').disabled = !this.checked;" style="width:auto; margin-top:6px;">
+              <small style="display:block; color:#6b7280; margin-top:4px;">Check if you are a person with a disability.</small>
+            </div>
+            <div class="form-group full-width">
+              <label for="DisabilityType">Disability Type / Kind <small>(fill in only if PWD)</small></label>
+              <input type="text" id="DisabilityType" name="DisabilityType" value="<?php echo htmlspecialchars($patient['DisabilityType'] ?? ''); ?>" maxlength="100" placeholder="e.g. Visual impairment, Mobility impairment" <?php echo !empty($patient['IsPWD']) ? '' : 'disabled'; ?>>
             </div>
             <div class="form-group full-width">
               <label for="Allergies">Allergies <small>(comma-separated)</small></label>

@@ -46,21 +46,14 @@ function portalLoginTitle(string $portal): string
     };
 }
 
-function portalRegisterPath(string $portal): string
-{
-    return match ($portal) {
-        'admin' => 'register_admin.php',
-        'staff' => 'register_staff.php',
-        'doctor' => 'register_doctor.php',
-        default => 'signup.php',
-    };
-}
-
-function registrationInvitationValid(
-    string $provided,
-    string $expectedKey
-): bool {
-    return $provided !== ''
-        && $expectedKey !== ''
-        && hash_equals($expectedKey, $provided);
-}
+/*
+|--------------------------------------------------------------------------
+| Self-service registration
+|--------------------------------------------------------------------------
+| The public website may only create PATIENT accounts. Administrator,
+| Doctor, and Staff accounts are created by an authenticated administrator
+| from Account Management, so the old portal -> registration-path mapping
+| and invitation-code helper have been removed.
+|
+| The only self-service sign-up route is auth/signup.php (Patient role).
+*/

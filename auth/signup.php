@@ -4,10 +4,35 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/admin_notifications.php';
 require_once __DIR__ . '/../includes/validation.php';
 require_once __DIR__ . '/../includes/terms_policy.php';
+require_once __DIR__ . '/../includes/security_config.php';
+require_once __DIR__ . '/../includes/rate_limit.php';
+require_once __DIR__ . '/../includes/csrf.php';
+require_once __DIR__ . '/../includes/mailer.php';
+require_once __DIR__ . '/../includes/app_url.php';
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
 
 $message = '';
+$messageType = 'error';
+$verificationLink = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
+    // Defensive: a public visitor may NEVER choose the account role. Any
+    // posted role field is discarded; the insert below is hard-coded to the
+    // Patient role (RoleID = 3).
+    unset($_POST['role'], $_POST['role_id'], $_POST['RoleID'], $_POST['roleId']);
+
+    if (!csrfValidate($_POST['csrf_token'] ?? null)) {
+        $message = 'Your form session expired. Please refresh the page and try again.';
+    } elseif (!rateLimitAllowed($conn, 'register', $clientIp, RATE_LIMIT_REGISTER_PER_HOUR, 3600, 3600)) {
+        $message = 'Too many registration attempts from this device. Please try again later.';
+    } else {
+        rateLimitRecord($conn, 'register', $clientIp, RATE_LIMIT_REGISTER_PER_HOUR, 3600, 3600);
+
     $fname = trim($_POST['fname'] ?? '');
     $lname = trim($_POST['lname'] ?? '');
     $email = trim($_POST['email'] ?? '');
@@ -67,6 +92,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_bind_param($patientStmt, 'i', $userId);
 
                 if (mysqli_stmt_execute($patientStmt)) {
+                    $verifyToken = bin2hex(random_bytes(32));
+
+                    if (REQUIRE_EMAIL_VERIFICATION) {
+                        $expiry = date('Y-m-d H:i:s', time() + (EMAIL_VERIFICATION_TTL_HOURS * 3600));
+                        $verifyStmt = mysqli_prepare(
+                            $conn,
+                            'UPDATE users
+                                SET EmailVerified = 0, EmailVerificationToken = ?, EmailVerificationExpiry = ?
+                              WHERE UserID = ?'
+                        );
+                        mysqli_stmt_bind_param($verifyStmt, 'ssi', $verifyToken, $expiry, $userId);
+                        mysqli_stmt_execute($verifyStmt);
+                        mysqli_stmt_close($verifyStmt);
+                    }
+
                     mysqli_commit($conn);
                     adminNotificationCreateForActiveAdmins(
                         $conn,
@@ -77,14 +117,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'users',
                         'Medium'
                     );
-                    header('Location: login.php?portal=patient');
-                    exit();
+
+                    if (REQUIRE_EMAIL_VERIFICATION) {
+                        // Build the link from the configured base URL, never from
+                        // the client-supplied Host header (host-header injection).
+                        $verifyUrl = curoraAbsoluteUrl('auth/verify_email.php')
+                            . '?token=' . urlencode($verifyToken);
+
+                        $verifyHtml = '<p>Hi ' . htmlspecialchars($fname, ENT_QUOTES, 'UTF-8') . ',</p>'
+                            . '<p>Welcome to Curora. Please confirm your e-mail address to activate your patient account.</p>'
+                            . '<p><a href="' . htmlspecialchars($verifyUrl, ENT_QUOTES, 'UTF-8') . '">Verify my e-mail address</a></p>'
+                            . '<p>This link expires in ' . (int) EMAIL_VERIFICATION_TTL_HOURS . ' hours.</p>';
+
+                        $mailSent = false;
+                        if (function_exists('sendCuroraEmail')) {
+                            $mailSent = sendCuroraEmail($email, 'Verify your Curora patient account', $verifyHtml);
+                        }
+
+                        // In dry-run (no SMTP configured) the message is only
+                        // written to the outbox, so surface the link on screen.
+                        $showLink = !$mailSent || curoraMailIsDryRun();
+
+                        $message = $mailSent && !curoraMailIsDryRun()
+                            ? 'Account created. We sent a verification link to ' . $email . '. Please confirm your e-mail, then sign in.'
+                            : 'Account created. Use the link below to confirm your e-mail address, then sign in.';
+                        $messageType = 'success';
+                        $verificationLink = $showLink ? $verifyUrl : '';
+                    } else {
+                        header('Location: login.php?portal=patient');
+                        exit();
+                    }
                 }
 
                 mysqli_rollback($conn);
                 $message = 'Registration failed.';
             }
         }
+    }
     }
 }
 ?>
@@ -103,7 +172,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 
     <div class="main-container">
-        <p style="margin-bottom: 16px; width:100%; text-align:center;"><a href="../portal-select.php?action=register" style="color:#149385;text-decoration:none;font-size:14px;">&larr; Change registration type</a></p>
         <div class="brand-header">
             <div class="logo">
                 <img src="../assets/images/curora-logo-full.png" alt="Curora Logo" class="logo-img">
@@ -113,12 +181,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <?php if ($message !== ''): ?>
-            <div style="background:#fee2e2;color:#991b1b;padding:12px;border-radius:8px;margin-bottom:20px;text-align:center;">
+            <div style="background:<?php echo $messageType === 'success' ? '#dcfce7' : '#fee2e2'; ?>;color:<?php echo $messageType === 'success' ? '#166534' : '#991b1b'; ?>;padding:12px;border-radius:8px;margin-bottom:20px;text-align:center;">
                 <?php echo htmlspecialchars($message); ?>
+                <?php if ($verificationLink !== ''): ?>
+                    <br><br>
+                    <a href="<?php echo htmlspecialchars($verificationLink, ENT_QUOTES, 'UTF-8'); ?>" style="color:#166534;font-weight:600;word-break:break-all;">Verify my e-mail now</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
 
         <form class="form" action="signup.php" method="POST">
+            <?php echo csrfField(); ?>
             <div class="form-group">
                 <label class="form-label">Name</label>
                 <div class="name-row">

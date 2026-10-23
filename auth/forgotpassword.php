@@ -1,133 +1,116 @@
 <?php
-date_default_timezone_set('Asia/Manila');
+/**
+ * auth/forgotpassword.php
+ *
+ * Self-service password reset. Issues a single-use reset LINK by e-mail; the
+ * account's current password stays valid until the owner sets a new one on
+ * auth/reset_password.php. The response is always the same, so the page cannot
+ * be used to discover which e-mail addresses are registered.
+ *
+ * Administrator-driven resets (api/admin/accounts.php) still e-mail a random
+ * temporary password and force a change at next sign-in; this self-service flow
+ * deliberately does NOT touch the password so nobody can lock an account by
+ * typing its address here.
+ */
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/db_pdo.php';
+require_once __DIR__ . '/../includes/mailer.php';
+require_once __DIR__ . '/../includes/password_reset_tokens.php';
+require_once __DIR__ . '/../includes/audit_helper.php';
+require_once __DIR__ . '/../includes/csrf.php';
+require_once __DIR__ . '/../includes/rate_limit.php';
+require_once __DIR__ . '/../includes/security_config.php';
 
-require __DIR__ . '/../PHPMailer/src/Exception.php';
-require __DIR__ . '/../PHPMailer/src/PHPMailer.php';
-require __DIR__ . '/../PHPMailer/src/SMTP.php';
-
-$host = "localhost";
-$username = "root";
-$password = "";
-$database = "hoacrms";
-
-$conn = mysqli_connect($host, $username, $password, $database);
-
-if (!$conn) {
-    die("Database connection failed.");
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
 }
+
+header('Cache-Control: no-store');
+header('Referrer-Policy: no-referrer');
 
 $message = "";
 $messageType = "";
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $email = strtolower(trim((string) ($_POST['email'] ?? '')));
 
-    $email = trim($_POST['email']);
-
-    if (empty($email)) {
-
-        $message = "Please enter your email.";
-        $messageType = "error";
-
+    if (!csrfValidate($_POST['csrf_token'] ?? null)) {
+        $message = 'Your form session expired. Please refresh the page and try again.';
+        $messageType = 'error';
+    } elseif (
+        !rateLimitAllowed($conn, 'forgot_password_ip', $clientIp, (int) RATE_LIMIT_FORGOT_IP_PER_HOUR, 900, 900)
+        || ($email !== '' && !rateLimitAllowed($conn, 'forgot_password_email', $email, (int) RATE_LIMIT_FORGOT_EMAIL_PER_HOUR, 900, 900))
+    ) {
+        $message = 'Too many requests. Please wait a few minutes and try again.';
+        $messageType = 'error';
     } else {
-
-        // Check if email exists
-        $stmt = mysqli_prepare($conn, "SELECT UserID FROM users WHERE Email = ?");
-        mysqli_stmt_bind_param($stmt, "s", $email);
-        mysqli_stmt_execute($stmt);
-
-        $result = mysqli_stmt_get_result($stmt);
-
-        if (mysqli_num_rows($result) == 1) {
-
-            // Generate reset token
-            $token = bin2hex(random_bytes(32));
-            $expiry = date("Y-m-d H:i:s", strtotime("+1 hour"));
-
-            // Save token and expiry
-            $update = mysqli_prepare($conn,
-            "UPDATE users
-            SET ResetToken = ?, TokenExpiry = ?
-            WHERE Email = ?");
-
-            mysqli_stmt_bind_param($update, "sss", $token, $expiry, $email);
-
-            if (!mysqli_stmt_execute($update)) {
-                die("Update Failed: " . mysqli_stmt_error($update));
-            }
-
-            // Reset Link (builds from current folder so renaming won't break it)
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $baseUrl = $protocol . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
-            $resetLink = $baseUrl . '/resetpassword.php?token=' . $token;
-
-            // Send Email
-            $mail = new PHPMailer(true);
-
-            try {
-
-                $mail->isSMTP();
-                $mail->Host = 'smtp.gmail.com';
-                $mail->SMTPAuth = true;
-
-                $mail->Username = 'lagabanroz22@gmail.com';
-                $mail->Password = 'zpcf ojvz zkqh dwuq';
-
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port = 587;
-
-                $mail->setFrom('lagabanroz22@gmail.com', 'Curora');
-                $mail->addAddress($email);
-
-                $mail->isHTML(true);
-                $mail->Subject = 'Password Reset Request';
-
-                $mail->Body = "
-                <h2>Password Reset</h2>
-
-                <p>Hello,</p>
-
-                <p>We received a request to reset your password.</p>
-
-                <p>
-                    <a href='$resetLink'
-                    style='background:#2563eb;
-                    color:#ffffff;
-                    padding:12px 20px;
-                    text-decoration:none;
-                    border-radius:6px;'>
-                    Reset Password
-                    </a>
-                </p>
-
-                <p>This link will expire in <strong>1 hour</strong>.</p>
-
-                <p>If you didn't request this, you can safely ignore this email.</p>
-                ";
-
-                $mail->send();
-
-                $message = "Password reset link has been sent to your email.";
-                $messageType = "success";
-
-            } catch (Exception $e) {
-
-                $message = "Unable to send email. Error: " . $mail->ErrorInfo;
-                $messageType = "error";
-
-            }
-
-        } else {
-
-            $message = "If the email is registered, a password reset link has been sent.";
-            $messageType = "success";
-
+        rateLimitRecord($conn, 'forgot_password_ip', $clientIp, (int) RATE_LIMIT_FORGOT_IP_PER_HOUR, 900, 900);
+        if ($email !== '') {
+            rateLimitRecord($conn, 'forgot_password_email', $email, (int) RATE_LIMIT_FORGOT_EMAIL_PER_HOUR, 900, 900);
         }
 
-    }
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $stmt = mysqli_prepare(
+                $conn,
+                "SELECT UserID FROM users
+                  WHERE Email = ? AND DeletedAt IS NULL AND Status <> 'Inactive'
+                  LIMIT 1"
+            );
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, 's', $email);
+                mysqli_stmt_execute($stmt);
+                $user = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+                mysqli_stmt_close($stmt);
 
+                if ($user) {
+                    // Mint a single-use token and e-mail the link. The account's
+                    // current password is left untouched.
+                    $issued = passwordResetIssue($conn, (int) $user['UserID']);
+
+                    if (!empty($issued['success']) && !empty($issued['url'])) {
+                        $resetUrl = (string) $issued['url'];
+                        $name = '';
+                        $nameStmt = mysqli_prepare(
+                            $conn,
+                            'SELECT FirstName FROM users WHERE UserID = ? LIMIT 1'
+                        );
+                        if ($nameStmt) {
+                            mysqli_stmt_bind_param($nameStmt, 'i', $user['UserID']);
+                            mysqli_stmt_execute($nameStmt);
+                            $nameRow = mysqli_fetch_assoc(mysqli_stmt_get_result($nameStmt));
+                            mysqli_stmt_close($nameStmt);
+                            $name = (string) ($nameRow['FirstName'] ?? '');
+                        }
+
+                        $safeName = htmlspecialchars($name !== '' ? $name : $email, ENT_QUOTES, 'UTF-8');
+                        $html = '<p>Hi ' . $safeName . ',</p>'
+                            . '<p>We received a request to reset your Curora password.</p>'
+                            . '<p><a href="' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '">Choose a new password</a></p>'
+                            . '<p>This single-use link expires in 1 hour.</p>'
+                            . '<p>Your current password stays valid until you choose a new one.</p>'
+                            . '<p>If you did not request this, you can safely ignore this message.</p>';
+
+                        sendCuroraEmail($email, 'Reset your Curora password', $html);
+                    }
+
+                    logAudit(
+                        db_pdo(),
+                        'FORGOT_PASSWORD',
+                        'users',
+                        (int) $user['UserID'],
+                        null,
+                        json_encode(['email' => $email])
+                    );
+                }
+            }
+        }
+
+        // Identical response whether or not the address exists.
+        $message = "If the email is registered, a password reset link has been sent.";
+        $messageType = "success";
+    }
 }
 ?>
 
@@ -162,6 +145,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <?php endif; ?>
 
     <form class="form" method="POST" action="">
+        <?php echo csrfField(); ?>
         <div class="form-group">
             <label for="email" class="form-label">Email Address</label>
             <div class="input-wrapper">

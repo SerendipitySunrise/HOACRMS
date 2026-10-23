@@ -72,6 +72,14 @@ $emergencyContactName = trim($_POST['EmergencyContactName'] ?? '');
 $emergencyContactNo = trim($_POST['EmergencyContactNo'] ?? '');
 $emergencyRelation = trim($_POST['EmergencyRelation'] ?? '');
 
+// PWD status (checkbox: absent from the POST when unchecked).
+$isPwd = isset($_POST['IsPWD']) ? 1 : 0;
+$disabilityType = trim($_POST['DisabilityType'] ?? '');
+if ($isPwd === 0) {
+    $disabilityType = ''; // The kind of disability only applies when PWD.
+}
+$disabilityType = mb_substr($disabilityType, 0, 100);
+
 // Validation
 $errors = [];
 
@@ -136,20 +144,22 @@ if (!mysqli_stmt_execute($userStmt)) {
     respond(false, 'Failed to update basic information: ' . mysqli_error($conn));
 }
 
-// Update patients table
+// Update patients table (DateOfBirth synced here too: booking/age checks and
+// admin views read patients, while profile edits historically only wrote users)
 $patientStmt = mysqli_prepare(
     $conn,
     'UPDATE patients
      SET CivilStatus = ?, Religion = ?, BloodType = ?,
          Allergies = ?, PastMedicalCondition = ?, CurrentMedication = ?,
-         FamilyMedicalHistory = ?, EmergencyContactName = ?,
-         EmergencyContactNo = ?, EmergencyRelation = ?
+         FamilyMedicalHistory = ?, IsPWD = ?, DisabilityType = ?,
+         EmergencyContactName = ?, EmergencyContactNo = ?, EmergencyRelation = ?,
+         DateOfBirth = ?
      WHERE PatientID = ?'
 );
 
 mysqli_stmt_bind_param(
     $patientStmt,
-    'ssssssssssi',
+    'sssssssisssssi',
     $civilStatus,
     $religion,
     $bloodType,
@@ -157,9 +167,12 @@ mysqli_stmt_bind_param(
     $pastMedicalCondition,
     $currentMedication,
     $familyMedicalHistory,
+    $isPwd,
+    $disabilityType,
     $emergencyContactName,
     $emergencyContactNo,
     $emergencyRelation,
+    $dateOfBirth,
     $patientID
 );
 

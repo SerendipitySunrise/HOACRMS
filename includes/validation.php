@@ -1,5 +1,8 @@
 <?php
 
+require_once __DIR__ . '/security_config.php';
+require_once __DIR__ . '/common_passwords.php';
+
 function validatePasswordStrength(string $password): ?string
 {
     if (
@@ -10,6 +13,34 @@ function validatePasswordStrength(string $password): ?string
         !preg_match('/[\W]/', $password)
     ) {
         return 'Password must be at least 8 characters and contain uppercase, lowercase, number, and special character.';
+    }
+
+    return null;
+}
+
+/**
+ * Strong policy for the permanent password a user chooses after signing in
+ * with an administrator-issued temporary password: at least
+ * ACCOUNT_PASSWORD_MIN_LENGTH characters, mixed case, a digit, a symbol, and
+ * not a well-known password.
+ */
+function validateSetupPassword(string $password): ?string
+{
+    $min = defined('ACCOUNT_PASSWORD_MIN_LENGTH') ? (int) ACCOUNT_PASSWORD_MIN_LENGTH : 12;
+
+    if (strlen($password) < $min) {
+        return 'Password must be at least ' . $min . ' characters long.';
+    }
+    if (
+        !preg_match('/[A-Z]/', $password) ||
+        !preg_match('/[a-z]/', $password) ||
+        !preg_match('/[0-9]/', $password) ||
+        !preg_match('/[\W_]/', $password)
+    ) {
+        return 'Password must contain an uppercase letter, a lowercase letter, a number, and a special character.';
+    }
+    if (isCommonPassword($password)) {
+        return 'That password is too common or predictable. Please choose a different one.';
     }
 
     return null;

@@ -3,7 +3,7 @@ session_start();
 require_once __DIR__ . '/includes/db_pdo.php';
 
 if (!in_array((string) ($_SESSION['RoleName'] ?? ''), ['Admin', 'Doctor'], true)) {
-    header('Location: portal-select.php?action=login');
+    header('Location: auth/login.php');
     exit;
 }
 
@@ -125,6 +125,8 @@ function h($value): string
 const csrf = <?= json_encode($_SESSION['csrf_token']) ?>;
 let unavailabilityId = 0;
 let appointments = [];
+let creating = false;
+let sending = false;
 const $ = (id) => document.getElementById(id);
 
 function showMessage(id, text, error = false) {
@@ -157,27 +159,43 @@ $('scope').addEventListener('change', () => {
 
 $('disruption-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const body = new FormData();
-  body.append('csrf_token', csrf);
-  body.append('action', 'create');
-  Object.entries(scopePayload()).forEach(([key, value]) => body.append(key, value));
-  body.append('reason', $('reason').value.trim());
-  if ($('is_emergency').checked) body.append('is_emergency', '1');
+  if (creating) return;
+  creating = true;
+  const submitBtn = $('disruption-form').querySelector('button[type="submit"]');
+  const submitLabel = submitBtn ? submitBtn.textContent : '';
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Finding…'; }
 
-  const response = await fetch('api/schedule_disruptions.php', { method: 'POST', body });
-  const data = await response.json();
-  if (!data.success) {
-    showMessage('message', data.message, true);
-    return;
+  try {
+    const body = new FormData();
+    body.append('csrf_token', csrf);
+    body.append('action', 'create');
+    Object.entries(scopePayload()).forEach(([key, value]) => body.append(key, value));
+    body.append('reason', $('reason').value.trim());
+    if ($('is_emergency').checked) body.append('is_emergency', '1');
+
+    const response = await fetch('api/schedule_disruptions.php', { method: 'POST', body });
+    const data = await response.json();
+    if (!data.success) {
+      showMessage('message', data.message, true);
+      return;
+    }
+
+    unavailabilityId = data.unavailability_id;
+    appointments = data.appointments;
+    sending = false;
+    $('confirm-btn').disabled = false;
+    $('confirm-btn').textContent = 'Confirm cancellation and send notifications';
+    renderAppointments();
+    $('template').value = appointments[0] ? buildNotificationTemplate(appointments[0]) : '';
+    $('review').classList.add('visible');
+    showMessage('message', data.message);
+    $('review').scrollIntoView({ behavior: 'smooth' });
+  } catch (error) {
+    showMessage('message', 'We could not reach the server. Please try again.', true);
+  } finally {
+    creating = false;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitLabel; }
   }
-
-  unavailabilityId = data.unavailability_id;
-  appointments = data.appointments;
-  renderAppointments();
-  $('template').value = appointments[0] ? buildNotificationTemplate(appointments[0]) : '';
-  $('review').classList.add('visible');
-  showMessage('message', data.message);
-  $('review').scrollIntoView({ behavior: 'smooth' });
 });
 
 $('is_emergency').addEventListener('change', () => {
@@ -204,8 +222,20 @@ $('select-all').addEventListener('change', (event) => {
 });
 
 $('confirm-btn').addEventListener('click', async () => {
+  if (sending) return;
+
   const ids = [...document.querySelectorAll('.appointment-check:checked')].map((checkbox) => checkbox.value);
   const channels = [...document.querySelectorAll('input[name="channel"]:checked')].map((checkbox) => checkbox.value);
+
+  if (!ids.length) {
+    showMessage('review-message', 'Select at least one affected appointment.', true);
+    return;
+  }
+  if (!channels.length) {
+    showMessage('review-message', 'Select at least one notification channel.', true);
+    return;
+  }
+
   const body = new FormData();
   body.append('csrf_token', csrf);
   body.append('action', 'execute');
@@ -214,14 +244,38 @@ $('confirm-btn').addEventListener('click', async () => {
   ids.forEach((id) => body.append('appointment_ids[]', id));
   channels.forEach((channel) => body.append('channels[]', channel));
 
-  const response = await fetch('api/schedule_disruptions.php', { method: 'POST', body });
-  const data = await response.json();
-  if (!data.success) {
-    showMessage('review-message', data.message, true);
-    return;
+  // Lock the button before sending: email delivery can take a while, and a
+  // second click would re-submit an already-cancelled batch and fail.
+  sending = true;
+  const button = $('confirm-btn');
+  const previousLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Sending notifications…';
+
+  try {
+    const response = await fetch('api/schedule_disruptions.php', { method: 'POST', body });
+    const data = await response.json();
+    if (!data.success) {
+      showMessage('review-message', data.message, true);
+      sending = false;
+      $('confirm-btn').disabled = false;
+      $('confirm-btn').textContent = previousLabel;
+      return;
+    }
+
+    // Drop the appointments we just cancelled so they can never be sent twice.
+    const notified = new Set(ids);
+    appointments = appointments.filter((appointment) => !notified.has(String(appointment.AppointmentID)));
+    renderAppointments();
+    showMessage('review-message', `${data.message} ${data.sent} notification attempts succeeded; ${data.failed} failed.`);
+    $('review-message').classList.remove('error');
+    $('confirm-btn').textContent = 'Notifications sent';
+  } catch (error) {
+    showMessage('review-message', 'We could not reach the server. Please try again.', true);
+    sending = false;
+    $('confirm-btn').disabled = false;
+    $('confirm-btn').textContent = 'Confirm cancellation and send notifications';
   }
-  showMessage('review-message', `${data.message} ${data.sent} notification attempts succeeded; ${data.failed} failed.`);
-  $('confirm-btn').disabled = true;
 });
 </script>
 

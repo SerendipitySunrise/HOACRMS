@@ -678,6 +678,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('Failed to record no-show.');
                 }
 
+                // Keep the denormalised counter in sync with no_shows
+                // (same as no_show_helper markNoShow()).
+                $counterStmt = mysqli_prepare(
+                    $conn,
+                    'UPDATE patients SET NoShowCount = NoShowCount + 1 WHERE PatientID = ?'
+                );
+                mysqli_stmt_bind_param($counterStmt, 'i', $patientID);
+                if (!mysqli_stmt_execute($counterStmt)) {
+                    throw new Exception('Failed to update no-show counter.');
+                }
+                mysqli_stmt_close($counterStmt);
+
                 mysqli_commit($conn);
 
                 if ($statusChanged) {

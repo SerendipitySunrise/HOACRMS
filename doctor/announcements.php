@@ -31,7 +31,7 @@ $roleName = $_SESSION['RoleName']
     ?? null;
 
 if ($roleName !== null && strcasecmp(trim((string) $roleName), 'Doctor') !== 0) {
-    header('Location: ../portal-select.php?action=login');
+    header('Location: ../auth/login.php');
     exit;
 }
 

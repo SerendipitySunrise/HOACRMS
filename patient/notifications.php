@@ -9,7 +9,7 @@ if (!isset($_SESSION['UserID'])) {
 }
 
 if (($_SESSION['RoleName'] ?? '') !== 'Patient') {
-    header('Location: ../portal-select.php?action=login');
+    header('Location: ../auth/login.php');
     exit();
 }
 

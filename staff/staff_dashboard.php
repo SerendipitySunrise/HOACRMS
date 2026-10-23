@@ -3,6 +3,7 @@ session_start();
 
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/status_constants.php';
+require_once __DIR__ . '/../includes/password_gate.php';
 
 /* -------------------------------------------------------
    AUTH GUARD
@@ -17,6 +18,8 @@ if (!in_array($sessionRole, ['staff', 'nurse'], true)) {
     header('Location: ../auth/login.php?portal=staff');
     exit();
 }
+
+passwordGateEnforce();
 
 $userId = (int) $_SESSION['UserID'];
 

@@ -16,7 +16,7 @@ $userID = (int)$userID;
 
 $roleName = $_SESSION['RoleName'] ?? $_SESSION['role'] ?? $_SESSION['user_role'] ?? null;
 if ($roleName !== null && strcasecmp(trim((string)$roleName), 'Doctor') !== 0) {
-    header('Location: ../portal-select.php?action=login');
+    header('Location: ../auth/login.php');
     exit;
 }
 

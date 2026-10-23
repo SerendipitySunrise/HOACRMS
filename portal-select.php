@@ -1,10 +1,13 @@
 <?php
 
-$action = strtolower(trim((string) ($_GET['action'] ?? 'login')));
-
-if (!in_array($action, ['login', 'register'], true)) {
-    $action = 'login';
-}
+/**
+ * portal-select.php
+ *
+ * Portal chooser. Sign-in cards route to the unified login page. The only
+ * self-service account creation left on the public site is PATIENT sign-up.
+ * Administrator, Doctor, and Staff accounts are created by an authenticated
+ * administrator from Account Management.
+ */
 
 $portals = [
     [
@@ -46,28 +49,13 @@ function escapeHtml(string $value): string
     );
 }
 
-function getPortalTarget(string $portal, string $action): string
+function getPortalTarget(string $portal): string
 {
-    if ($action === 'login') {
-        return 'auth/login.php?portal=' . urlencode($portal);
-    }
-
-    return match ($portal) {
-        'patient' => 'auth/signup.php',
-        'admin' => 'auth/register_admin.php',
-        'staff' => 'auth/register_staff.php',
-        'doctor' => 'auth/register_doctor.php',
-        default => 'auth/signup.php',
-    };
+    return 'auth/login.php?portal=' . urlencode($portal);
 }
 
-$pageTitle = $action === 'register'
-    ? 'Create an Account'
-    : 'Choose Your Portal';
-
-$pageSubtitle = $action === 'register'
-    ? 'Select the type of account you want to create.'
-    : 'Select the portal that matches your account.';
+$pageTitle = 'Choose Your Portal';
+$pageSubtitle = 'Sign in to the portal that matches your account.';
 ?>
 
 <!DOCTYPE html>
@@ -125,29 +113,15 @@ $pageSubtitle = $action === 'register'
 
             <?php foreach ($portals as $portal): ?>
 
-                <?php
-                $target = getPortalTarget(
-                    $portal['key'],
-                    $action
-                );
-                ?>
-
                 <article class="portal-card
                     <?php
-                    echo in_array(
-                        $portal['key'],
-                        ['staff', 'admin'],
-                        true
-                    )
+                    echo in_array($portal['key'], ['staff', 'doctor'], true)
                         ? 'staff-admin'
                         : '';
-                    ?>"
-                >
+                    ?>">
 
                     <div class="card-icon">
-                        <i class="fas <?php
-                            echo escapeHtml($portal['icon']);
-                        ?>"></i>
+                        <i class="fas <?php echo escapeHtml($portal['icon']); ?>"></i>
                     </div>
 
                     <h2>
@@ -155,20 +129,14 @@ $pageSubtitle = $action === 'register'
                     </h2>
 
                     <p>
-                        <?php
-                        echo escapeHtml($portal['description']);
-                        ?>
+                        <?php echo escapeHtml($portal['description']); ?>
                     </p>
 
                     <a
-                        href="<?php echo escapeHtml($target); ?>"
                         class="btn-portal"
+                        href="<?php echo escapeHtml(getPortalTarget($portal['key'])); ?>"
                     >
-                        <?php
-                        echo $action === 'register'
-                            ? 'Register'
-                            : 'Sign In';
-                        ?>
+                        Sign in
                     </a>
 
                     <div class="hint">
@@ -179,6 +147,19 @@ $pageSubtitle = $action === 'register'
 
             <?php endforeach; ?>
 
+        </section>
+
+        <section style="margin-top:34px;text-align:center;">
+            <p style="color:#475569;margin:0 0 14px;">
+                New patient? Create your patient account. Doctor, staff, and
+                administrator accounts are created by an administrator.
+            </p>
+            <a
+                href="auth/signup.php"
+                style="display:inline-block;background:#149385;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:10px;"
+            >
+                Create Account
+            </a>
         </section>
 
     </main>

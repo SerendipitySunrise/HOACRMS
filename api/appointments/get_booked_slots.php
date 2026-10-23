@@ -1,231 +1,82 @@
 <?php
 session_start();
-
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/booking_session_capacity.php';
+require_once __DIR__ . '/../../includes/booking_settings.php';
+require_once __DIR__ . '/../../includes/appointment_assignment.php';
 
 header('Content-Type: application/json');
+function respond(bool $s, string $m, array $e=[]){ echo json_encode(array_merge(['success'=>$s,'message'=>$m],$e)); exit; }
+if (!isset($_SESSION['UserID'])) respond(false,'Session expired');
+if (($_SESSION['RoleName'] ?? '') !== 'Patient') respond(false,'Unauthorized');
 
-function respond(bool $success, array $data = [], string $message = ''): void
-{
-    $response = [
-        'success' => $success,
-        'message' => $message
-    ];
-
-    foreach ($data as $key => $value) {
-        $response[$key] = $value;
-    }
-
-    echo json_encode($response);
-    exit();
-}
-
-function timeLabel(string $time): string
-{
-    return date('g:i A', strtotime($time));
-}
-
-if (!isset($_SESSION['UserID'])) {
-    respond(false, [], 'Your session has expired. Please log in again.');
-}
-
-if (($_SESSION['RoleName'] ?? '') !== 'Patient') {
-    respond(false, [], 'Unauthorized access.');
-}
-
-$departmentID = (int) ($_POST['department_id'] ?? 0);
+$departmentID = (int)($_POST['department_id'] ?? 0);
 $appointmentDate = trim($_POST['appointment_date'] ?? '');
-$excludeAppointmentID = (int) ($_POST['exclude_appointment_id'] ?? 0);
+if ($departmentID <= 0 || $appointmentDate === '') respond(false,'Missing params');
 
-if ($departmentID <= 0 || $appointmentDate === '') {
-    respond(false, [], 'Please select a department and appointment date.');
-}
+$dt = DateTime::createFromFormat('Y-m-d', $appointmentDate);
+if (!$dt || $dt->format('Y-m-d') !== $appointmentDate) respond(false,'Invalid date');
+$dow = (int)$dt->format('N');
 
-// When rescheduling, the patient's own appointment must not count
-// against the slot it was originally booked for.
-if ($excludeAppointmentID > 0) {
-    $patientStmt = mysqli_prepare(
+// Same-day slots earlier than the booking window (min hours ahead) are shown disabled.
+$minHours = bookingSettingInt($conn, 'booking_window_min_hours', 2);
+$earliest = (new DateTimeImmutable('now'))->modify('+' . $minHours . ' hours');
+
+/*
+ * Build slots per session window. Capacity and "booked" are counted across
+ * the WHOLE session window (department-wide), never at a single clock time.
+ * Break slots are not offered. A slot is available only when the session is
+ * not full, the time honours the booking window, and at least one doctor
+ * (Available, not on leave, not already taken at that exact time) can take it.
+ */
+$sessions = departmentSessionsForDay($conn, $departmentID, $dow);
+$reportedCapacity = bookingSettingInt($conn, 'max_patients_per_session', 20);
+$out = [];
+
+foreach ($sessions as $session) {
+    $sessionName = (string)$session['SessionName'];
+    $cap = sessionMaxCapacity($conn, $departmentID, $dow, $sessionName);
+    $sessionBooked = sessionWindowBookedCount(
         $conn,
-        'SELECT PatientID
-         FROM patients
-         WHERE UserID = ?
-         LIMIT 1'
+        $departmentID,
+        $appointmentDate,
+        $session['StartTime'],
+        $session['EndTime']
     );
-
-    mysqli_stmt_bind_param($patientStmt, 'i', $_SESSION['UserID']);
-    mysqli_stmt_execute($patientStmt);
-
-    $patientResult = mysqli_stmt_get_result($patientStmt);
-    $patient = mysqli_fetch_assoc($patientResult);
-
-    mysqli_stmt_close($patientStmt);
-
-    if (!$patient) {
-        respond(false, [], 'Patient record not found.');
+    $sessionFull = $sessionBooked >= $cap;
+    if ($cap > $reportedCapacity) {
+        $reportedCapacity = $cap;
     }
 
-    $verifyStmt = mysqli_prepare(
-        $conn,
-        'SELECT AppointmentID
-         FROM appointments
-         WHERE AppointmentID = ?
-           AND PatientID = ?
-         LIMIT 1'
-    );
-
-    mysqli_stmt_bind_param(
-        $verifyStmt,
-        'ii',
-        $excludeAppointmentID,
-        $patient['PatientID']
-    );
-
-    mysqli_stmt_execute($verifyStmt);
-
-    $verifyResult = mysqli_stmt_get_result($verifyStmt);
-
-    mysqli_stmt_close($verifyStmt);
-
-    if (mysqli_num_rows($verifyResult) === 0) {
-        respond(false, [], 'Appointment not found or does not belong to you.');
-    }
-}
-
-$dateObject = DateTime::createFromFormat('Y-m-d', $appointmentDate);
-
-if (
-    !$dateObject ||
-    $dateObject->format('Y-m-d') !== $appointmentDate
-) {
-    respond(false, [], 'Invalid appointment date.');
-}
-
-$dayOfWeek = (int) $dateObject->format('N');
-
-$doctorStmt = mysqli_prepare(
-    $conn,
-    'SELECT COUNT(*) AS ActiveDoctorCount
-     FROM staff
-     WHERE DepartmentID = ?
-       AND AvailabilityStatus = "Available"
-       AND StaffRole = "Doctor"
-       AND EXISTS (
-           SELECT 1 FROM department_schedules ds
-           WHERE ds.DepartmentID = staff.DepartmentID
-             AND ds.DayOfWeek = ?
-       )'
-);
-
-mysqli_stmt_bind_param($doctorStmt, 'ii', $departmentID, $dayOfWeek);
-mysqli_stmt_execute($doctorStmt);
-
-$doctorResult = mysqli_stmt_get_result($doctorStmt);
-$doctor = mysqli_fetch_assoc($doctorResult);
-
-$capacity = (int) $doctor['ActiveDoctorCount'];
-
-if ($capacity === 0) {
-    respond(false, [], 'No active doctors are currently assigned to this department.');
-}
-
-$scheduleStmt = mysqli_prepare(
-    $conn,
-    'SELECT StartTime, EndTime
-     FROM department_schedules
-     WHERE DepartmentID = ?
-       AND DayOfWeek = ?
-     ORDER BY StartTime ASC'
-);
-
-mysqli_stmt_bind_param($scheduleStmt, 'ii', $departmentID, $dayOfWeek);
-mysqli_stmt_execute($scheduleStmt);
-
-$scheduleResult = mysqli_stmt_get_result($scheduleStmt);
-
-$slotTimes = [];
-
-while ($schedule = mysqli_fetch_assoc($scheduleResult)) {
-    $start = new DateTime($schedule['StartTime']);
-    $end = new DateTime($schedule['EndTime']);
-
+    $start = new DateTime($session['StartTime']);
+    $end = new DateTime($session['EndTime']);
     while ($start < $end) {
-        $slotTimes[] = $start->format('H:i:s');
+        $t = $start->format('H:i:s');
         $start->modify('+30 minutes');
+
+        if (timeInsideBreak($session, $t)) {
+            continue; // breaks are simply not offered
+        }
+
+        $slotMoment = new DateTimeImmutable($appointmentDate . ' ' . $t);
+        $inWindow = $slotMoment >= $earliest;
+        $assignable = !$sessionFull && $inWindow
+            && findAssignableDoctor($conn, $departmentID, $appointmentDate, $t) > 0;
+
+        $out[] = [
+            'time' => $t,
+            'label' => date('g:i A', strtotime($t)),
+            'session' => $sessionName,
+            'booked' => $sessionBooked,
+            'capacity' => $cap,
+            'available' => $assignable,
+        ];
     }
 }
 
-if (count($slotTimes) === 0) {
-    respond(false, [], 'This department has no service scheduled on the selected date.');
-}
+usort($out, function ($a, $b) {
+    return strcmp($a['time'], $b['time']);
+});
 
-$bookedSql = '
-    SELECT
-        AppointmentTime,
-        COUNT(*) AS BookedCount
-     FROM appointments
-     WHERE DepartmentID = ?
-       AND AppointmentDate = ?
-       AND Status NOT IN ("Cancelled", "Completed")
- ';
-
-$bookedParams = [$departmentID, $appointmentDate];
-
-if ($excludeAppointmentID > 0) {
-    $bookedSql .= ' AND AppointmentID <> ?';
-    $bookedParams[] = $excludeAppointmentID;
-}
-
-$bookedSql .= ' GROUP BY AppointmentTime';
-
-$bookedStmt = mysqli_prepare($conn, $bookedSql);
-
-if (!$bookedStmt) {
-    respond(false, [], 'Unable to prepare booked slots query.');
-}
-
-if ($excludeAppointmentID > 0) {
-    mysqli_stmt_bind_param(
-        $bookedStmt,
-        'isi',
-        $bookedParams[0],
-        $bookedParams[1],
-        $bookedParams[2]
-    );
-} else {
-    mysqli_stmt_bind_param(
-        $bookedStmt,
-        'is',
-        $bookedParams[0],
-        $bookedParams[1]
-    );
-}
-
-mysqli_stmt_execute($bookedStmt);
-
-$bookedResult = mysqli_stmt_get_result($bookedStmt);
-
-$bookedCounts = [];
-
-while ($booked = mysqli_fetch_assoc($bookedResult)) {
-    $bookedCounts[$booked['AppointmentTime']] =
-        (int) $booked['BookedCount'];
-}
-
-$slots = [];
-
-foreach ($slotTimes as $time) {
-    $bookedCount = $bookedCounts[$time] ?? 0;
-
-    $slots[] = [
-        'time' => $time,
-        'label' => timeLabel($time),
-        'booked' => $bookedCount,
-        'capacity' => $capacity,
-        'available' => $bookedCount < $capacity
-    ];
-}
-
-respond(true, [
-    'slots' => $slots,
-    'capacity' => $capacity
-]);
+echo json_encode(['success' => true, 'slots' => $out, 'capacity' => $reportedCapacity]);
+exit;

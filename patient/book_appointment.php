@@ -3,6 +3,7 @@ session_start();
 
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/appointment_assignment.php';
+require_once __DIR__ . '/../includes/booking_rules_core.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -16,7 +17,7 @@ if (!isset($_SESSION['UserID'])) {
 }
 
 if (($_SESSION['RoleName'] ?? '') !== 'Patient') {
-    header('Location: ../portal-select.php?action=login');
+    header('Location: ../auth/login.php');
     exit();
 }
 
@@ -122,77 +123,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
 
         /*
         |--------------------------------------------------------------------------
-        | FIND AVAILABLE DOCTOR
+        | SERVER-SIDE RULES (single source of truth)
         |
-        | Same rule as api/appointments/save_appointment.php: prefer the
-        | doctor the patient saw most recently, otherwise the least-loaded
-        | free doctor (tie -> lowest StaffID). One shared helper decides, so
-        | this fallback path can never diverge from the API again.
+        | bookingValidateCore is the same validator the API uses: age bands,
+        | booking window, no-show block, active/per-department limits,
+        | overlap, session hours + breaks + session capacity, doctor
+        | leave/holiday. This fallback path can never bypass a numbered
+        | booking rule, and the assigned doctor comes back in the result.
         |--------------------------------------------------------------------------
         */
 
-        $previousStaffID = findPatientPreviousDoctor($conn, $patientID, $departmentID);
+        // Follow-up is server-derived, same as the API path.
+        $isFollowup = hasDoctorSuggestedFollowUpOn($conn, $patientID, $departmentID, $appointmentDate);
 
-        $staffID = findAssignableDoctor(
-            $conn,
-            $departmentID,
-            $appointmentDate,
-            $appointmentTime,
-            $previousStaffID
-        );
+        list($valid, $result) = bookingValidateCore($conn, [
+            'patient_id'       => $patientID,
+            'department_id'    => $departmentID,
+            'appointment_date' => $appointmentDate,
+            'appointment_time' => $appointmentTime,
+        ], null, $isFollowup);
 
-        if ($staffID <= 0) {
+        if (!$valid) {
 
-            if (departmentHasDoctorForSlot($conn, $departmentID, $appointmentDate, $appointmentTime)) {
-                $bookingMessage =
-                    'This time slot is already booked. Please select another time.';
-            } else {
-                $bookingMessage =
-                    'No available doctor is currently assigned to this department.';
-            }
+            $bookingMessage = (string) $result;
 
         } else {
 
-            /*
-            |--------------------------------------------------------------------------
-            | INSERT APPOINTMENT
-            |--------------------------------------------------------------------------
-            */
+            $staffID = (int) ($result['doctor_id'] ?? 0);
 
-            $insertStmt = mysqli_prepare(
-                $conn,
-                'INSERT INTO appointments
-                (
-                    PatientID,
-                    StaffID,
-                    DepartmentID,
-                    AppointmentDate,
-                    AppointmentTime,
-                    Purpose,
-                    Status
-                )
-                VALUES (?, ?, ?, ?, ?, ?, "Pending")'
-            );
+            if ($staffID <= 0) {
 
-            mysqli_stmt_bind_param(
-                $insertStmt,
-                'iiisss',
-                $patientID,
-                $staffID,
-                $departmentID,
-                $appointmentDate,
-                $appointmentTime,
-                $purpose
-            );
-
-            if (mysqli_stmt_execute($insertStmt)) {
-
-                $bookingSuccess = true;
+                $bookingMessage =
+                    'No available doctor is currently assigned to this department.';
 
             } else {
 
-                $bookingMessage =
-                    'Unable to book the appointment. Please try again.';
+                /*
+                |--------------------------------------------------------------------------
+                | INSERT APPOINTMENT
+                |--------------------------------------------------------------------------
+                */
+
+                $sessionName = isset($result['session']) && $result['session'] !== ''
+                    ? mb_substr((string) $result['session'], 0, 50)
+                    : null;
+
+                $insertStmt = mysqli_prepare(
+                    $conn,
+                    'INSERT INTO appointments
+                    (
+                        PatientID,
+                        StaffID,
+                        DepartmentID,
+                        AppointmentDate,
+                        AppointmentTime,
+                        Session,
+                        Purpose,
+                        Status,
+                        BookedByUserID,
+                        IsFollowup
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, "Pending", ?, ?)'
+                );
+
+                $isFollowupFlag = $isFollowup ? 1 : 0;
+                mysqli_stmt_bind_param(
+                    $insertStmt,
+                    'iiisssssi',
+                    $patientID,
+                    $staffID,
+                    $departmentID,
+                    $appointmentDate,
+                    $appointmentTime,
+                    $sessionName,
+                    $purpose,
+                    $userID,
+                    $isFollowupFlag
+                );
+
+                if (mysqli_stmt_execute($insertStmt)) {
+
+                    $bookingSuccess = true;
+
+                } else {
+
+                    $bookingMessage =
+                        'Unable to book the appointment. Please try again.';
+                }
             }
         }
     }
@@ -286,12 +303,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_booking'])) {
     <a href="consultation_history.php" class="nav-item">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       Consultation History
-    </a>
-  </li>
-  <li>
-    <a href="announcements.php" class="nav-item">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-      Announcements
     </a>
   </li>
   <li>
